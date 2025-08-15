@@ -89,7 +89,7 @@ def bind(mcp, cfg):
             raise ValueError("No access token available")
 
         try:
-            # Use the client to get document groups
+            # Use the client to get document groups - API already applies limit and offset
             client = SignNowAPIClient(token_provider.signnow_config)
             full_response = client.get_document_groups(token, limit=limit, offset=offset)
             
@@ -115,15 +115,10 @@ def bind(mcp, cfg):
                 )
                 simplified_groups.append(simplified_group)
             
-            # Apply offset and limit for pagination
-            total_count = len(simplified_groups)
-            start_index = min(offset, total_count)
-            end_index = min(start_index + limit, total_count)
-            paginated_groups = simplified_groups[start_index:end_index]
-            
+            # Use the total count from API response, not the length of current page
             return SimplifiedDocumentGroupsResponse(
-                document_groups=paginated_groups,
-                document_group_total_count=total_count
+                document_groups=simplified_groups,
+                document_group_total_count=full_response.document_group_total_count
             )
         except ValueError as e:
             raise ValueError(f"Error getting document groups: {str(e)}")

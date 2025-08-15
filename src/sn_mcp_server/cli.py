@@ -33,8 +33,5 @@ def http(
 
 # ============= GLOBAL VARIABLES FOR UVICORN =============
 
-# Create HTTP app instance for uvicorn
-http_app = create_http_app()
-
 if __name__ == "__main__":
     app() 
