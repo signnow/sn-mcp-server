@@ -8,6 +8,15 @@ import httpx
 from typing import Optional, Dict, Any
 from .config import SignNowConfig, load_signnow_config
 from .models import DocumentGroupTemplatesResponse, DocumentGroupsResponse
+from .exceptions import (
+    SignNowAPIError,
+    SignNowAPITimeoutError,
+    SignNowAPIHTTPError,
+    SignNowAPIAuthenticationError,
+    SignNowAPINotFoundError,
+    SignNowAPIRateLimitError,
+    SignNowAPIServerError
+)
 import json
 
 
@@ -25,6 +34,7 @@ class SignNowAPIClient:
         self.cfg = cfg
         self.http = client or httpx.Client(
             base_url=str(cfg.api_base),
+            http2=True,
             timeout=httpx.Timeout(10.0, connect=3.0),
             headers={"User-Agent": "sn-mcp-server/0.1"},
         )
@@ -42,6 +52,75 @@ class SignNowAPIClient:
         if self.http:
             self.http.close()
     
+    def _handle_http_error(self, e: httpx.HTTPStatusError) -> SignNowAPIError:
+        """Convert httpx HTTPStatusError to appropriate SignNow API error"""
+        status_code = e.response.status_code
+        response_data = {}
+        
+        try:
+            response_data = e.response.json()
+        except (json.JSONDecodeError, ValueError):
+            response_data = {"text": e.response.text}
+        
+        # Extract error message from response if available
+        error_message = "Unknown error"
+        if isinstance(response_data, dict):
+            error_message = response_data.get("error", response_data.get("message", str(e)))
+        else:
+            error_message = str(e)
+        
+        # Map status codes to specific exception types
+        if status_code in (401, 403):
+            return SignNowAPIAuthenticationError(error_message, status_code, response_data)
+        elif status_code == 404:
+            return SignNowAPINotFoundError(error_message, status_code, response_data)
+        elif status_code == 429:
+            return SignNowAPIRateLimitError(error_message, status_code, response_data)
+        elif status_code >= 500:
+            return SignNowAPIServerError(error_message, status_code, response_data)
+        else:
+            return SignNowAPIHTTPError(error_message, status_code, response_data)
+    
+    def _get(self, url: str, headers: Optional[Dict[str, str]] = None, params: Optional[Dict[str, Any]] = None, validate_model=None) -> Any:
+        """Internal GET method with unified error handling and optional model validation"""
+        try:
+            response = self.http.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Validate with model if provided
+            if validate_model:
+                return validate_model.model_validate(data)
+            return data
+        except httpx.TimeoutException as e:
+            raise SignNowAPITimeoutError("SignNow API timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise self._handle_http_error(e)
+        except json.JSONDecodeError as e:
+            raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
+        except Exception as e:
+            raise SignNowAPIError(f"Unexpected error in GET request to {url}: {e}") from e
+    
+    def _post(self, url: str, headers: Optional[Dict[str, str]] = None, data: Optional[Dict[str, Any]] = None, json_data: Optional[Dict[str, Any]] = None, validate_model=None) -> Any:
+        """Internal POST method with unified error handling and optional model validation"""
+        try:
+            response = self.http.post(url, headers=headers, data=data, json=json_data)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Validate with model if provided
+            if validate_model:
+                return validate_model.model_validate(data)
+            return data
+        except httpx.TimeoutException as e:
+            raise SignNowAPITimeoutError("SignNow API timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise self._handle_http_error(e)
+        except json.JSONDecodeError as e:
+            raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
+        except Exception as e:
+            raise SignNowAPIError(f"Unexpected error in POST request to {url}: {e}") from e
+    
     def get_tokens(self, code: str) -> Optional[Dict[str, Any]]:
         """
         Get access and refresh tokens from SignNow API using authorization code
@@ -52,27 +131,17 @@ class SignNowAPIClient:
         Returns:
             Dictionary with tokens or None if failed
         """
-        try:
-            response = self.http.post(
-                "/oauth2/token",
-                data={
-                    'grant_type': 'authorization_code',
-                    'code': code,
-                    'scope': '*',
-                    'client_id': self.cfg.client_id,
-                    'client_secret': self.cfg.client_secret,
-                },
-                headers={'Content-Type': 'application/x-www-form-urlencoded'}
-            )
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"SignNow API error: {response.status_code} - {response.text}")
-                return None
-        except Exception as e:
-            print(f"Error calling SignNow API: {e}")
-            return None
+        return self._post(
+            "/oauth2/token",
+            data={
+                'grant_type': 'authorization_code',
+                'code': code,
+                'scope': '*',
+                'client_id': self.cfg.client_id,
+                'client_secret': self.cfg.client_secret,
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
     
     def refresh_tokens(self, refresh_token: str) -> Optional[Dict[str, Any]]:
         """
@@ -84,26 +153,16 @@ class SignNowAPIClient:
         Returns:
             Dictionary with new tokens or None if failed
         """
-        try:
-            response = self.http.post(
-                "/oauth2/token",
-                data={
-                    'grant_type': 'refresh_token',
-                    'refresh_token': refresh_token,
-                    'client_id': self.cfg.client_id,
-                    'client_secret': self.cfg.client_secret,
-                },
-                headers={'Content-Type': 'application/x-www-form-urlencoded'}
-            )
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"SignNow API error: {response.status_code} - {response.text}")
-                return None
-        except Exception as e:
-            print(f"Error refreshing token with SignNow API: {e}")
-            return None
+        return self._post(
+            "/oauth2/token",
+            data={
+                'grant_type': 'refresh_token',
+                'refresh_token': refresh_token,
+                'client_id': self.cfg.client_id,
+                'client_secret': self.cfg.client_secret,
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
     
     def revoke_token(self, token: str) -> bool:
         """
@@ -115,25 +174,16 @@ class SignNowAPIClient:
         Returns:
             True if successful, False otherwise
         """
-        try:
-            response = self.http.post(
-                "/oauth2/terminate",
-                headers={
-                    'Accept': 'application/json',
-                    'Authorization': f'Bearer {token}',
-                    'Content-Type': 'application/json'
-                },
-                json={}
-            )
-            
-            if response.status_code == 200:
-                return True
-            else:
-                print(f"SignNow API revoke error: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            print(f"Error calling SignNow revoke API: {e}")
-            return False
+        self._post(
+            "/oauth2/terminate",
+            headers={
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json'
+            },
+            json_data={}
+        )
+        return True
     
     def get_tokens_by_password(self, username: str, password: str, scope: str = None) -> Optional[Dict[str, Any]]:
         """
@@ -148,33 +198,23 @@ class SignNowAPIClient:
         Returns:
             Dictionary with tokens or None if failed
         """
-        try:
-            scope = scope or self.cfg.default_scope
-            basic_auth = self.cfg.basic_token
+        scope = scope or self.cfg.default_scope
+        basic_auth = self.cfg.basic_token
 
-            response = self.http.post(
-                "/oauth2/token",
-                headers={
-                    'Accept': 'application/json',
-                    'Authorization': 'Basic ' + basic_auth,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                data={
-                    'username': username,
-                    'password': password,
-                    'grant_type': 'password',
-                    'scope': scope
-                }
-            )
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"SignNow API password grant error: {response.status_code} - {response.text}")
-                return None
-        except Exception as e:
-            print(f"Error calling SignNow API with password grant: {e}")
-            return None
+        return self._post(
+            "/oauth2/token",
+            headers={
+                'Accept': 'application/json',
+                'Authorization': 'Basic ' + basic_auth,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            data={
+                'username': username,
+                'password': password,
+                'grant_type': 'password',
+                'scope': scope
+            }
+        )
 
     def get_document_template_groups(self, token: str, limit: int = 50, offset: int = 0) -> DocumentGroupTemplatesResponse:
         """
@@ -195,19 +235,12 @@ class SignNowAPIClient:
         }
         params = {"limit": limit, "offset": offset}
 
-        try:
-            response = self.http.get("/user/documentgroup/templates", headers=headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            # Validate and return the response as a model
-            return DocumentGroupTemplatesResponse.model_validate(data)
-        except httpx.HTTPStatusError as e:
-            raise ValueError(f"Error getting templates: {str(e)}")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error parsing response: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Error validating response: {str(e)}")
+        return self._get(
+            "/user/documentgroup/templates", 
+            headers=headers, 
+            params=params,
+            validate_model=DocumentGroupTemplatesResponse
+        )
 
     def get_document_groups(self, token: str, limit: int = 50, offset: int = 0) -> DocumentGroupsResponse:
         """
@@ -228,16 +261,9 @@ class SignNowAPIClient:
         }
         params = {"limit": limit, "offset": offset}
 
-        try:
-            response = self.http.get("/user/documentgroups", headers=headers, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            # Validate and return the response as a model
-            return DocumentGroupsResponse.model_validate(data)
-        except httpx.HTTPStatusError as e:
-            raise ValueError(f"Error getting document groups: {str(e)}")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Error parsing response: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Error validating response: {str(e)}")
+        return self._get(
+            "/user/documentgroups", 
+            headers=headers, 
+            params=params,
+            validate_model=DocumentGroupsResponse
+        )

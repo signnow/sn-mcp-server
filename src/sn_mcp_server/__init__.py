@@ -5,8 +5,9 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0"
 
-# Экспорт фабрики сервера, чтобы из кода можно было:
-#   from sn_mcp_server import create_server
-from .cli import create_server, create_http_app, app as cli_app
+# Export server and app factories from their respective modules
+from .server import create_server
+from .app import create_http_app
+from .cli import app as cli_app
 
 __all__ = ["__version__", "create_server", "create_http_app", "cli_app"]

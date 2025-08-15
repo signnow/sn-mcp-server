@@ -114,6 +114,20 @@ For advanced use cases, you can use OAuth authentication with the following conf
 - `OAUTH_RSA_PRIVATE_PEM` - RSA private key in PEM format
 - `OAUTH_JWK_KID` - JWK key ID
 
+## Production Deployment
+
+**Important**: When deploying to production, you **MUST** set the `OAUTH_RSA_PRIVATE_PEM` environment variable with a persistent RSA private key. 
+
+If `OAUTH_RSA_PRIVATE_PEM` is not provided, the server will generate a new RSA key on each restart, which will invalidate all previously issued tokens. This can cause authentication issues for existing users.
+
+For production environments:
+1. Generate a persistent RSA private key
+2. Store it securely (e.g., in a secret management system)
+3. Set `OAUTH_RSA_PRIVATE_PEM` environment variable
+4. Ensure the key is backed up and can be restored if needed
+
+**Security Note**: Never commit RSA private keys to version control. Always use environment variables or secure secret management systems.
+
 ## License
 
 MIT License - see LICENSE file for details.

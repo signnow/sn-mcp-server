@@ -29,7 +29,7 @@ def bind(mcp, cfg):
         name="list_templates",
         description="Get simplified list of templates with basic information"
     )
-    def list_template(ctx: Context) -> TemplateSummaryList:
+    def list_templates(ctx: Context) -> TemplateSummaryList:
         """Provide simplified list of templates with basic fields."""
         from signnow_client import SignNowAPIClient
         

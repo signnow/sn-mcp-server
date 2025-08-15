@@ -14,6 +14,15 @@ from .models import (
     DocumentGroupTemplate,
     DocumentGroupTemplatesResponse
 )
+from .exceptions import (
+    SignNowAPIError,
+    SignNowAPITimeoutError,
+    SignNowAPIHTTPError,
+    SignNowAPIAuthenticationError,
+    SignNowAPINotFoundError,
+    SignNowAPIRateLimitError,
+    SignNowAPIServerError
+)
 
 __all__ = [
     'SignNowAPIClient', 
@@ -25,6 +34,13 @@ __all__ = [
     'Thumbnail',
     'Template',
     'DocumentGroupTemplate',
-    'DocumentGroupTemplatesResponse'
+    'DocumentGroupTemplatesResponse',
+    'SignNowAPIError',
+    'SignNowAPITimeoutError',
+    'SignNowAPIHTTPError',
+    'SignNowAPIAuthenticationError',
+    'SignNowAPINotFoundError',
+    'SignNowAPIRateLimitError',
+    'SignNowAPIServerError'
 ]
 __version__ = '1.0.0' 

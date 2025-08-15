@@ -9,7 +9,6 @@ class Settings(BaseSettings):
     
     # OAuth server configuration
     oauth_issuer: AnyHttpUrl = Field(
-        default="https://lebedev.ngrok.app",
         description="OAuth issuer URL",
         alias="OAUTH_ISSUER"
     )
@@ -64,11 +63,15 @@ class Settings(BaseSettings):
     @property
     def effective_resource_http_url(self) -> str:
         """Get resource HTTP URL, auto-generated from oauth_issuer"""
+        if not self.oauth_issuer:
+            raise ValueError("OAUTH_ISSUER is required to generate resource URLs")
         return f"{str(self.oauth_issuer).rstrip('/')}/mcp"
     
     @property
     def effective_resource_sse_url(self) -> str:
         """Get resource SSE URL, auto-generated from oauth_issuer"""
+        if not self.oauth_issuer:
+            raise ValueError("OAUTH_ISSUER is required to generate resource URLs")
         return f"{str(self.oauth_issuer).rstrip('/')}/sse"
     
     def get_rsa_private_key(self) -> rsa.RSAPrivateKey:
