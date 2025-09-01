@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.24",
     "typer>=0.9",
     "mcp[cli]>=1.10,<2",
-    "httpx>=0.25",
+    "httpx[http2]>=0.25",
     "pyjwt[crypto]>=2.8",
     "cryptography>=42",
     "starlette>=0.27",
@@ -19,3 +19,9 @@ dependencies = [
 
 [project.scripts]
 sn-mcp = "sn_mcp_server.cli:app"
+
+[project.optional-dependencies]
+smolagents = [
+  "smolagents>=1.20",
+  "mcpadapt>=0.1.11",
+]

@@ -37,21 +37,15 @@ class TokenProvider:
     
     def _get_token_from_config(self) -> Optional[str]:
         """Get token using configured username and password"""
-        try:
-            # Get new token from SignNow API
-            response = self.signnow_client.get_tokens_by_password(
-                username=self.signnow_config.user_email,
-                password=self.signnow_config.password
-            )
-            
-            if response and "access_token" in response:
-                return response["access_token"]
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error getting token from config: {e}")
-            return None
+        response = self.signnow_client.get_tokens_by_password(
+            username=self.signnow_config.user_email,
+            password=self.signnow_config.password
+        )
+        
+        if response and "access_token" in response:
+            return response["access_token"]
+        
+        return None
     
     def _extract_token_from_headers(self, headers: Dict[str, str]) -> Optional[str]:
         """Extract token from request headers, checking multiple possible locations"""

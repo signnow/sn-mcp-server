@@ -12,7 +12,15 @@ from .models import (
     Thumbnail,
     Template,
     DocumentGroupTemplate,
-    DocumentGroupTemplatesResponse
+    DocumentGroupTemplatesResponse,
+    CreateDocumentGroupFromTemplateRequest,
+    CreateDocumentFromTemplateRequest,
+    CreateFieldInviteRequest,
+    FieldInviteStep,
+    FieldInviteAction,
+    FieldInviteEmail,
+    CreateDocumentFieldInviteRequest,
+    DocumentFieldInviteRecipient,
 )
 from .exceptions import (
     SignNowAPIError,
@@ -35,6 +43,14 @@ __all__ = [
     'Template',
     'DocumentGroupTemplate',
     'DocumentGroupTemplatesResponse',
+    'CreateDocumentGroupFromTemplateRequest',
+    'CreateDocumentFromTemplateRequest',
+    'CreateFieldInviteRequest',
+    'FieldInviteStep',
+    'FieldInviteAction',
+    'FieldInviteEmail',
+    'CreateDocumentFieldInviteRequest',
+    'DocumentFieldInviteRecipient',
     'SignNowAPIError',
     'SignNowAPITimeoutError',
     'SignNowAPIHTTPError',
@@ -43,4 +59,4 @@ __all__ = [
     'SignNowAPIRateLimitError',
     'SignNowAPIServerError'
 ]
-__version__ = '1.0.0' 
+__version__ = '1.0.0'

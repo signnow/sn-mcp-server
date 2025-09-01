@@ -1,0 +1,76 @@
+"""
+SignNow API Data Models - Other Models
+
+Pydantic models for SignNow API responses and requests not related to templates, documents, or document groups.
+"""
+
+from typing import Dict, List, Optional, Any, Union
+from pydantic import BaseModel, Field, EmailStr
+
+
+class OrganizationSetting(BaseModel):
+    """Organization setting from the response."""
+    setting: str = Field(..., description="Setting name")
+    value: str = Field(..., description="Setting value")
+
+
+class DocumentDownloadLinkResponse(BaseModel):
+    """Response model for document download link."""
+    link: str = Field(..., description="Download link for the document")
+
+
+class FolderSubFolder(BaseModel):
+    """Folder subfolder information."""
+    id: str = Field(..., description="Subfolder ID")
+    user_id: str = Field(..., description="User ID")
+    name: str = Field(..., description="Subfolder name")
+    created: str = Field(..., description="Creation timestamp")
+    shared: bool = Field(..., description="Shared status")
+    document_count: str = Field(..., description="Document count")
+    template_count: Optional[Union[int, str]] = Field(None, description="Template count")
+    folder_count: str = Field(..., description="Folder count")
+    sub_folders: Optional[List[Dict[str, Any]]] = Field(None, description="Sub folders")
+
+
+class Folder(BaseModel):
+    """Folder information."""
+    id: str = Field(..., description="Folder ID")
+    user_id: str = Field(..., description="User ID")
+    name: str = Field(..., description="Folder name")
+    created: str = Field(..., description="Creation timestamp")
+    shared: bool = Field(..., description="Shared status")
+    document_count: str = Field(..., description="Document count")
+    template_count: Optional[Union[int, str]] = Field(None, description="Template count")
+    folder_count: str = Field(..., description="Folder count")
+    sub_folders: Optional[List[Dict[str, Any]]] = Field(None, description="Sub folders")
+    team_name: Optional[str] = Field(None, description="Team name")
+    team_id: Optional[str] = Field(None, description="Team ID")
+    team_type: Optional[str] = Field(None, description="Team type")
+
+
+class GetFoldersResponse(BaseModel):
+    """Response model for getting all folders."""
+    id: str = Field(..., description="Root folder ID")
+    created: str = Field(..., description="Creation timestamp")
+    name: str = Field(..., description="Root folder name")
+    user_id: str = Field(..., description="User ID")
+    parent_id: Optional[str] = Field(None, description="Parent folder ID")
+    system_folder: bool = Field(..., description="System folder status")
+    shared: bool = Field(..., description="Shared status")
+    folders: List[Folder] = Field(..., description="List of folders")
+    total_documents: int = Field(..., description="Total documents count")
+    documents: List[Dict[str, Any]] = Field(..., description="Documents or document groups")
+
+
+class GetFolderByIdResponse(BaseModel):
+    """Response model for getting folder by ID."""
+    id: str = Field(..., description="Folder ID")
+    created: str = Field(..., description="Creation timestamp")
+    name: str = Field(..., description="Folder name")
+    user_id: str = Field(..., description="User ID")
+    parent_id: Optional[str] = Field(None, description="Parent folder ID")
+    system_folder: bool = Field(..., description="System folder status")
+    shared: bool = Field(..., description="Shared status")
+    folders: List[Dict[str, Any]] = Field(None, description="Subfolders")
+    total_documents: int = Field(..., description="Total documents count")
+    documents: List[Dict[str, Any]] = Field(..., description="Documents or document groups") 

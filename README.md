@@ -43,12 +43,18 @@ sn-mcp http --reload
 # Build the Docker image
 docker build -t sn-mcp-server .
 
-# Run MCP server (default)
-docker run --env-file .env sn-mcp-server
+# Run HTTP server (recommended for Docker)
+docker run --env-file .env -p 8000:8000 sn-mcp-server sn-mcp http --host 0.0.0.0 --port 8000
 
-# Run HTTP server
 docker run --env-file .env -p 8000:8000 sn-mcp-server sn-mcp http
+
+# Run MCP server in STDIO mode (NOT recommended for Docker)
+# Note: STDIO mode in Docker containers may not work properly with MCP clients
+# Use local installation instead: sn-mcp serve
+docker run -i --env-file .env sn-mcp-server sn-mcp serve
 ```
+
+**Important**: For MCP Inspector and other MCP clients, use local installation (`sn-mcp serve`) instead of Docker for STDIO mode. Docker is better suited for HTTP mode.
 
 ## Using Docker Compose
 

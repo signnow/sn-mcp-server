@@ -4,7 +4,7 @@ MCP Tools Data Models
 Pydantic models for MCP tools results and responses.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -44,4 +44,243 @@ class SimplifiedDocumentGroup(BaseModel):
 class SimplifiedDocumentGroupsResponse(BaseModel):
     """Simplified response for MCP tools with document groups"""
     document_groups: List[SimplifiedDocumentGroup]
-    document_group_total_count: int = Field(..., description="Total number of document groups") 
+    document_group_total_count: int = Field(..., description="Total number of document groups")
+
+
+# Invite sending models
+class InviteRecipient(BaseModel):
+    """Recipient information for invite."""
+    email: str = Field(..., description="Recipient's email address")
+    role_name: str = Field(..., description="Recipient's role name in the document")
+    message: Optional[str] = Field(None, description="Custom email message for the recipient")
+    subject: Optional[str] = Field(None, description="Custom email subject for the recipient")
+    action: str = Field(..., description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    redirect_uri: Optional[str] = Field(None, description="Link that opens after completion")
+    redirect_target: Optional[str] = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
+    decline_redirect_uri: Optional[str] = Field(None, description="URL that opens after decline")
+    close_redirect_uri: Optional[str] = Field(None, description="Link that opens when clicking 'Close' button")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and 'redirect_target' in data:
+            del data['redirect_target']
+        return data
+
+
+class InviteOrder(BaseModel):
+    """Order information for invite."""
+    order: int = Field(..., description="Order number for this step")
+    recipients: List[InviteRecipient] = Field(..., description="List of recipients for this order")
+
+class SendInviteResponse(BaseModel):
+    """Response model for sending invite."""
+    invite_id: str = Field(..., description="ID of the created invite")
+    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+
+
+# Embedded invite models
+class EmbeddedInviteRecipient(BaseModel):
+    """Recipient information for embedded invite."""
+    email: str = Field(..., description="Recipient's email address")
+    role_name: str = Field(..., description="Recipient's role name in the document")
+    action: str = Field(..., description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    auth_method: str = Field("none", description="Authentication method in integrated app: 'password', 'email', 'mfa', 'biometric', 'social', 'other', 'none'")
+    first_name: Optional[str] = Field(None, description="Recipient's first name")
+    last_name: Optional[str] = Field(None, description="Recipient's last name")
+    redirect_uri: Optional[str] = Field(None, description="Link that opens after completion")
+    decline_redirect_uri: Optional[str] = Field(None, description="URL that opens after decline")
+    close_redirect_uri: Optional[str] = Field(None, description="Link that opens when clicking 'Close' button")
+    redirect_target: Optional[str] = Field("self", description="Redirect target: 'blank' for new tab, 'self' for same tab")
+    subject: Optional[str] = Field(None, description="Invite email subject (max 1000 chars)")
+    message: Optional[str] = Field(None, description="Invite email message (max 5000 chars)")
+    delivery_type: Optional[str] = Field("link", description="Invite delivery method: 'email' or 'link'")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and 'redirect_target' in data:
+            del data['redirect_target']
+        return data
+
+
+class EmbeddedInviteOrder(BaseModel):
+    """Order information for embedded invite."""
+    order: int = Field(..., description="Order number for this step")
+    recipients: List[EmbeddedInviteRecipient] = Field(..., description="List of recipients for this order")
+
+
+class CreateEmbeddedInviteRequest(BaseModel):
+    """Request model for creating embedded invite."""
+    entity_id: str = Field(..., description="ID of the document or document group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'document' or 'document_group'")
+    orders: List[EmbeddedInviteOrder] = Field(..., description="List of orders with recipients")
+
+
+class CreateEmbeddedInviteResponse(BaseModel):
+    """Response model for creating embedded invite."""
+    invite_id: str = Field(..., description="ID of the created embedded invite")
+    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+    recipient_links: List[Dict[str, str]] = Field(..., description="Array of objects with role and link for recipients with delivery_type='link'")
+
+
+class CreateEmbeddedEditorRequest(BaseModel):
+    """Request model for creating embedded editor."""
+    entity_id: str = Field(..., description="ID of the document or document group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'document' or 'document_group'. If not provided, will be auto-detected")
+    redirect_uri: Optional[str] = Field(None, description="URL to redirect to after editing is complete")
+    redirect_target: Optional[str] = Field("self", description="Redirect target: 'self' for same tab, 'blank' for new tab")
+    link_expiration: Optional[int] = Field(None, ge=15, le=43200, description="Link expiration time in minutes (15-43200)")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and 'redirect_target' in data:
+            del data['redirect_target']
+        return data
+
+
+class CreateEmbeddedEditorResponse(BaseModel):
+    """Response model for creating embedded editor."""
+    editor_id: str = Field(..., description="ID of the created embedded editor")
+    editor_entity: str = Field(..., description="Type of editor entity: 'document' or 'document_group'")
+    editor_url: str = Field(..., description="URL for the embedded editor")
+
+
+class CreateEmbeddedSendingRequest(BaseModel):
+    """Request model for creating embedded sending."""
+    entity_id: str = Field(..., description="ID of the document or document group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'document' or 'document_group'. If not provided, will be auto-detected")
+    redirect_uri: Optional[str] = Field(None, description="URL to redirect to after sending is complete")
+    redirect_target: Optional[str] = Field("self", description="Redirect target: 'self' for same tab, 'blank' for new tab")
+    link_expiration: Optional[int] = Field(None, ge=14, le=45, description="Link expiration time in days (14-45)")
+    type: Optional[str] = Field("manage", description="Specifies the sending step: 'manage' (default), 'edit', 'send-invite'")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and 'redirect_target' in data:
+            del data['redirect_target']
+        return data
+
+
+class CreateEmbeddedSendingResponse(BaseModel):
+    """Response model for creating embedded sending."""
+    sending_id: str = Field(..., description="ID of the created embedded sending")
+    sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
+    sending_url: str = Field(..., description="URL for the embedded sending")
+
+# Template to invite workflow models
+class SendInviteFromTemplateRequest(BaseModel):
+    """Request model for creating document/group from template and sending invite immediately."""
+    entity_id: str = Field(..., description="ID of the template or template group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
+    name: Optional[str] = Field(None, description="Optional name for the new document or document group")
+    folder_id: Optional[str] = Field(None, description="Optional ID of the folder to store the document group")
+    orders: List[InviteOrder] = Field(default=[], description="List of orders with recipients for the invite")
+
+
+class SendInviteFromTemplateResponse(BaseModel):
+    """Response model for creating document/group from template and sending invite immediately."""
+    created_entity_id: str = Field(..., description="ID of the created document or document group")
+    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
+    created_entity_name: str = Field(..., description="Name of the created entity")
+    invite_id: str = Field(..., description="ID of the created invite")
+    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+
+
+# Template to embedded sending workflow models
+class CreateEmbeddedSendingFromTemplateRequest(BaseModel):
+    """Request model for creating document/group from template and creating embedded sending immediately."""
+    entity_id: str = Field(..., description="ID of the template or template group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
+    name: Optional[str] = Field(None, description="Optional name for the new document or document group")
+    redirect_uri: Optional[str] = Field(None, description="Optional redirect URI after completion")
+    redirect_target: Optional[str] = Field(None, description="Optional redirect target: 'self', 'blank', or 'self' (default)")
+    link_expiration: Optional[int] = Field(None, ge=14, le=45, description="Optional link expiration in days (14-45)")
+    type: Optional[str] = Field(None, description="Type of sending step: 'manage', 'edit', or 'send-invite'")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and 'redirect_target' in data:
+            del data['redirect_target']
+        return data
+
+
+class CreateEmbeddedSendingFromTemplateResponse(BaseModel):
+    """Response model for creating document/group from template and creating embedded sending immediately."""
+    created_entity_id: str = Field(..., description="ID of the created document or document group")
+    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
+    created_entity_name: str = Field(..., description="Name of the created entity")
+    sending_id: str = Field(..., description="ID of the created embedded sending")
+    sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
+    sending_url: str = Field(..., description="URL for the embedded sending")
+
+
+# Template to embedded invite workflow models
+class CreateEmbeddedInviteFromTemplateRequest(BaseModel):
+    """Request model for creating document/group from template and creating embedded invite immediately."""
+    entity_id: str = Field(..., description="ID of the template or template group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
+    name: Optional[str] = Field(None, description="Optional name for the new document or document group")
+    orders: List[EmbeddedInviteOrder] = Field(default=[], description="List of orders with recipients for the embedded invite")
+    redirect_uri: Optional[str] = Field(None, description="Optional redirect URI after completion")
+    redirect_target: Optional[str] = Field(None, description="Optional redirect target: 'self', 'blank', or 'self' (default)")
+    link_expiration: Optional[int] = Field(None, ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")
+    
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and 'redirect_target' in data:
+            del data['redirect_target']
+        return data
+
+
+class CreateEmbeddedInviteFromTemplateResponse(BaseModel):
+    """Response model for creating document/group from template and creating embedded invite immediately."""
+    created_entity_id: str = Field(..., description="ID of the created document or document group")
+    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
+    created_entity_name: str = Field(..., description="Name of the created entity")
+    invite_id: str = Field(..., description="ID of the created embedded invite")
+    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+    recipient_links: List[Dict[str, str]] = Field(..., description="Array of objects with role and link for recipients with delivery_type='link'")
+
+
+# Document group status models
+class DocumentGroupStatusAction(BaseModel):
+    """Action status within a document group invite step."""
+    action: str = Field(..., description="Action type: 'view', 'sign', 'approve'")
+    email: str = Field(..., description="Recipient's email address")
+    document_id: str = Field(..., description="ID of the document")
+    status: str = Field(..., description="Action status: 'created', 'pending', 'fulfilled'")
+    role_name: str = Field(..., description="Role name for this action")
+
+
+class DocumentGroupStatusStep(BaseModel):
+    """Step status within a document group invite."""
+    status: str = Field(..., description="Step status: 'created', 'pending', 'fulfilled'")
+    order: int = Field(..., description="Step order number")
+    actions: List[DocumentGroupStatusAction] = Field(..., description="List of actions in this step")
+
+
+class InviteStatus(BaseModel):
+    """Complete status information for an invite."""
+    invite_id: str = Field(..., description="ID of the invite")
+    status: str = Field(..., description="Overall invite status: 'created', 'pending', 'fulfilled'")
+    steps: List[DocumentGroupStatusStep] = Field(..., description="List of steps in the invite") 
+
+# Create from template models
+class CreateFromTemplateRequest(BaseModel):
+    """Request model for creating document/group from template."""
+    entity_id: str = Field(..., description="ID of the template or template group")
+    entity_type: Optional[str] = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
+    name: Optional[str] = Field(None, description="Optional name for the new document or document group")
+    folder_id: Optional[str] = Field(None, description="Optional ID of the folder to store the document group")
+
+
+class CreateFromTemplateResponse(BaseModel):
+    """Response model for creating document/group from template."""
+    entity_id: str = Field(..., description="ID of the created document or document group")
+    entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
+    name: str = Field(..., description="Name of the created entity")

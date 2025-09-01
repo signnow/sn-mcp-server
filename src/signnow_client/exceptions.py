@@ -37,7 +37,10 @@ class SignNowAPIHTTPError(SignNowAPIError):
         self.status_code = status_code
     
     def __str__(self):
-        return f"SignNow API HTTP Error {self.status_code}: {self.message}"
+        base_message = f"SignNow API HTTP Error {self.status_code}: {self.message}"
+        if self.response_data:
+            return f"{base_message}\nResponse body: {self.response_data}"
+        return base_message
 
 
 class SignNowAPIAuthenticationError(SignNowAPIHTTPError):
