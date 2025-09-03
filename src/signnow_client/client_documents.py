@@ -34,7 +34,9 @@ from .models import (
     CancelDocumentFieldInviteResponse,
     CreateDocumentFreeformInviteRequest,
     CreateDocumentFreeformInviteResponse,
-    DocumentDownloadLinkResponse
+    DocumentDownloadLinkResponse,
+    UploadDocumentRequest,
+    UploadDocumentResponse
 )
 from .exceptions import (
     SignNowAPIError,
@@ -49,6 +51,42 @@ from .exceptions import (
 
 class DocumentClientMixin:
     """Mixin class for document and template related methods"""
+    
+    def upload_document(self, token: str, file_content: bytes, filename: str, check_fields: bool = True) -> UploadDocumentResponse:
+        """
+        Upload a document to SignNow.
+        
+        This endpoint uploads a document file to SignNow and returns the document ID.
+        
+        Args:
+            token: Access token for authentication
+            file_content: Document file content as bytes
+            filename: Name of the file to upload
+            check_fields: Whether to check for fields in the document (default: True)
+            
+        Returns:
+            Validated UploadDocumentResponse model with the uploaded document ID
+        """
+        
+        headers = {
+            "Authorization": f"Bearer {token}"
+        }
+        
+        files = {
+            "file": (filename, file_content, "application/octet-stream")
+        }
+        
+        data = {
+            "check_fields": "true" if check_fields else "false"
+        }
+        
+        return self._post_multipart(
+            "/document",
+            headers=headers,
+            files=files,
+            data=data,
+            validate_model=UploadDocumentResponse
+        )
     
     def get_document_download_link(self, token: str, document_id: str) -> DocumentDownloadLinkResponse:
         """

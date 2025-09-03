@@ -12,6 +12,7 @@ class TemplateSummary(BaseModel):
     """Simplified template information for listing."""
     id: str = Field(..., description="Template group ID")
     name: str = Field(..., description="Template group name")
+    entity_type: str = Field(..., description="Type of entity: 'template' or 'template_group'")
     folder_id: Optional[str] = Field(None, description="Folder ID if stored in folder")
     last_updated: int = Field(..., description="Unix timestamp of last update")
     is_prepared: bool = Field(..., description="Whether the group is ready for sending")
@@ -23,6 +24,21 @@ class TemplateSummaryList(BaseModel):
     templates: List[TemplateSummary]
     total_count: int = Field(..., description="Total number of templates")
 
+class DocumentGroupDocument(BaseModel):
+    """Document information for MCP tools."""
+    id: str = Field(..., description="Document ID")
+    name: str = Field(..., description="Document name")
+    roles: List[str] = Field(..., description="Roles defined for this document")
+
+class DocumentGroup(BaseModel):
+    """Document group model with all fields."""
+    last_updated: int = Field(..., description="Unix timestamp of the last update")
+    group_id: str = Field(..., description="Document group ID")
+    group_name: str = Field(..., description="Name of the document group")
+    entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
+    invite_id: Optional[str] = Field(None, description="Invite ID for this group")
+    invite_status: Optional[str] = Field(None, description="Status of the invite (e.g., 'pending')")
+    documents: List[DocumentGroupDocument] = Field(..., description="List of documents in this group")
 
 class SimplifiedDocumentGroupDocument(BaseModel):
     """Simplified document information for MCP tools."""
@@ -94,7 +110,7 @@ class EmbeddedInviteRecipient(BaseModel):
     redirect_target: Optional[str] = Field("self", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     subject: Optional[str] = Field(None, description="Invite email subject (max 1000 chars)")
     message: Optional[str] = Field(None, description="Invite email message (max 5000 chars)")
-    delivery_type: Optional[str] = Field("link", description="Invite delivery method: 'email' or 'link'")
+    delivery_type: Optional[str] = Field("link", description="Invite delivery method: 'email' or 'link', use 'link' if you wand to get a link to sign. If you want to send an email, use 'email'")
     
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
@@ -142,7 +158,6 @@ class CreateEmbeddedEditorRequest(BaseModel):
 
 class CreateEmbeddedEditorResponse(BaseModel):
     """Response model for creating embedded editor."""
-    editor_id: str = Field(..., description="ID of the created embedded editor")
     editor_entity: str = Field(..., description="Type of editor entity: 'document' or 'document_group'")
     editor_url: str = Field(..., description="URL for the embedded editor")
 
@@ -166,7 +181,6 @@ class CreateEmbeddedSendingRequest(BaseModel):
 
 class CreateEmbeddedSendingResponse(BaseModel):
     """Response model for creating embedded sending."""
-    sending_id: str = Field(..., description="ID of the created embedded sending")
     sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
     sending_url: str = Field(..., description="URL for the embedded sending")
 
@@ -216,6 +230,16 @@ class CreateEmbeddedSendingFromTemplateResponse(BaseModel):
     sending_id: str = Field(..., description="ID of the created embedded sending")
     sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
     sending_url: str = Field(..., description="URL for the embedded sending")
+
+
+class CreateEmbeddedEditorFromTemplateResponse(BaseModel):
+    """Response model for creating document/group from template and creating embedded editor immediately."""
+    created_entity_id: str = Field(..., description="ID of the created document or document group")
+    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
+    created_entity_name: str = Field(..., description="Name of the created entity")
+    editor_id: str = Field(..., description="ID of the created embedded editor")
+    editor_entity: str = Field(..., description="Type of editor entity: 'document' or 'document_group'")
+    editor_url: str = Field(..., description="URL for the embedded editor")
 
 
 # Template to embedded invite workflow models
@@ -268,7 +292,12 @@ class InviteStatus(BaseModel):
     """Complete status information for an invite."""
     invite_id: str = Field(..., description="ID of the invite")
     status: str = Field(..., description="Overall invite status: 'created', 'pending', 'fulfilled'")
-    steps: List[DocumentGroupStatusStep] = Field(..., description="List of steps in the invite") 
+    steps: List[DocumentGroupStatusStep] = Field(..., description="List of steps in the invite")
+
+
+class DocumentDownloadLinkResponse(BaseModel):
+    """Response model for document download link."""
+    link: str = Field(..., description="Download link for the document") 
 
 # Create from template models
 class CreateFromTemplateRequest(BaseModel):
@@ -284,3 +313,10 @@ class CreateFromTemplateResponse(BaseModel):
     entity_id: str = Field(..., description="ID of the created document or document group")
     entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
     name: str = Field(..., description="Name of the created entity")
+
+
+class UploadDocumentResponse(BaseModel):
+    """Response model for uploading document."""
+    document_id: str = Field(..., description="ID of the uploaded document")
+    filename: str = Field(..., description="Name of the uploaded file")
+    check_fields: bool = Field(..., description="Whether fields were checked in the document")

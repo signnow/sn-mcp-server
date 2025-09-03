@@ -390,7 +390,7 @@ class DocumentEmbeddedInvite(BaseModel):
     redirect_uri: Optional[str] = Field(None, description="Link after signing completion")
     decline_redirect_uri: Optional[str] = Field(None, description="Link after signing decline")
     close_redirect_uri: Optional[str] = Field(None, description="Link after save progress or close")
-    redirect_target: Optional[str] = Field("self", description="Redirect target: 'blank' or 'self'")
+    redirect_target: Optional[str] = Field(None, description="Redirect target: 'blank' or 'self'")
     authentication: Optional[DocumentEmbeddedInviteAuthentication] = Field(None, description="Authentication settings")
     delivery_type: Optional[str] = Field("link", description="Delivery type: 'email' or 'link'")
     subject: Optional[str] = Field(None, description="Invite email subject (max 1000 chars)")
@@ -441,7 +441,7 @@ class CreateDocumentEmbeddedEditorRequest(BaseModel):
     """Request model for creating document embedded editor link."""
     redirect_uri: Optional[str] = Field(None, description="Page that opens after the editing session ends")
     link_expiration: Optional[int] = Field(15, description="Link expiration in minutes (default: 15, max: 43200 for Admin users)")
-    redirect_target: Optional[str] = Field("self", description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
+    redirect_target: Optional[str] = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
     
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
@@ -451,9 +451,14 @@ class CreateDocumentEmbeddedEditorRequest(BaseModel):
         return data
 
 
+class EmbeddedEditorData(BaseModel):
+    """Data model for embedded editor response."""
+    url: str = Field(..., description="Generated embedded editor URL")
+
+
 class CreateEmbeddedEditorResponse(BaseModel):
     """Response model for creating embedded editor link."""
-    data: Dict[str, str] = Field(..., description="Generated embedded editor URL")
+    data: EmbeddedEditorData = Field(..., description="Embedded editor data")
 
 
 class CreateDocumentEmbeddedSendingRequest(BaseModel):
@@ -461,7 +466,7 @@ class CreateDocumentEmbeddedSendingRequest(BaseModel):
     type: str = Field(..., description="Type of invite settings: 'invite' (Send Invite page) or 'document' (editor + Send Invite page)")
     redirect_uri: Optional[str] = Field(None, description="Page that opens after the signing session ends")
     link_expiration: Optional[str] = Field("15", description="Link expiration in minutes (default: 15, max: 43200 for Admin users)")
-    redirect_target: Optional[str] = Field("self", description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
+    redirect_target: Optional[str] = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
     
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
@@ -471,9 +476,14 @@ class CreateDocumentEmbeddedSendingRequest(BaseModel):
         return data
 
 
+class EmbeddedSendingData(BaseModel):
+    """Data model for embedded sending response."""
+    url: str = Field(..., description="Generated embedded sending URL")
+
+
 class CreateEmbeddedSendingResponse(BaseModel):
     """Response model for creating embedded sending link."""
-    data: Union[Dict[str, str], List[Dict[str, str]]] = Field(..., description="Generated embedded sending URL(s)")
+    data: EmbeddedSendingData = Field(..., description="Generated embedded sending URL(s)")
 
 
 class EmbeddedSendingError(BaseModel):
@@ -537,7 +547,7 @@ class DocumentFieldInviteRecipient(BaseModel):
     subject: Optional[str] = Field(None, description="Custom email subject for the recipient")
     message: Optional[str] = Field(None, description="Custom email message for the recipient")
     redirect_uri: Optional[str] = Field(None, description="When all the requested fields are completed and signed, the signer is redirected to this URI")
-    redirect_target: Optional[str] = Field("blank", description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab")
+    redirect_target: Optional[str] = Field(None, description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab")
     decline_redirect_uri: Optional[str] = Field(None, description="The link that opens after the signing session has been declined by the signer")
     close_redirect_uri: Optional[str] = Field(None, description="The link that opens when a signer clicks 'Save Progress and Finish Later' during a signing session or 'Close' in view mode")
     is_finish_redirect_canceled: Optional[bool] = Field(False, description="Specifies whether the completion redirect setting is canceled for the organization. 'true' – the redirect is canceled; 'false' – the redirect remains active")
@@ -599,7 +609,7 @@ class CreateDocumentFieldInviteRequest(BaseModel):
     document_id: str = Field(..., description="Path parameter: ID of the document")
     to: List[DocumentFieldInviteRecipient] = Field(..., description="Array[object]: email addresses and settings for all recipients")
     email_groups: Optional[List[DocumentFieldInviteEmailGroupItem]] = Field(None, description="A group of users that should receive the invite")
-    from_: Optional[str] = Field(None, alias="from", description="Sender's email address: you can use only the email address associated with your SignNow account (login email) as 'from' address")
+    from_: str = Field(None, alias="from", description="Sender's email address: you can use only the email address associated with your SignNow account (login email) as 'from' address")
     cc: Optional[List[str]] = Field(None, description="Array[string]: email addresses for CC recipients")
     cc_step: Optional[List[DocumentFieldInviteCCStep]] = Field(None, description="Array[string]: order and settings of sending the cc emails")
     approvers: Optional[List[DocumentFieldInviteApprover]] = Field(None, description="List of recipients who can review and approve the invite")
@@ -859,7 +869,7 @@ class EmbeddedInviteSigner(BaseModel):
     redirect_uri: Optional[str] = Field(None, description="Link that opens after signing completion")
     decline_redirect_uri: Optional[str] = Field(None, description="Link that opens after signing decline")
     close_redirect_uri: Optional[str] = Field(None, description="Link that opens when clicking 'Save Progress and Finish Later' or 'Close'")
-    redirect_target: Optional[str] = Field("self", description="Redirect target: 'blank' for new tab, 'self' for same tab")
+    redirect_target: Optional[str] = Field(None, description="Redirect target: 'blank' for new tab, 'self' for same tab")
     delivery_type: Optional[str] = Field(None, description="Invite delivery method: 'email' or 'link'")
     subject: Optional[str] = Field(None, description="Invite email subject (max 1000 chars)")
     message: Optional[str] = Field(None, description="Invite email message (max 5000 chars)")
@@ -871,19 +881,19 @@ class EmbeddedInviteSigner(BaseModel):
 
 class EmbeddedInviteStep(BaseModel):
     """Single signing step in embedded invite."""
-    order: str = Field(..., description="Signing order step number")
+    order: int = Field(..., description="Signing order step number")
     signers: List[EmbeddedInviteSigner] = Field(..., description="Signers for this step")
 
 
 class CreateEmbeddedInviteRequest(BaseModel):
     """Request model for creating embedded invite."""
     invites: List[EmbeddedInviteStep] = Field(..., description="Array of invite steps with signing order and signer settings")
-    sign_as_merged: Optional[str] = Field(None, description="Whether to send documents as merged file")
+    sign_as_merged: Optional[bool] = Field(None, description="Whether to send documents as merged file")
 
 
 class CreateEmbeddedInviteResponse(BaseModel):
     """Response model for creating embedded invite."""
-    data: Dict[str, str] = Field(..., description="Response data containing the invite ID")
+    id: str = Field(..., description="Invite ID")
 
 
 class EmbeddedInviteResponse(BaseModel):
@@ -901,7 +911,7 @@ class GenerateEmbeddedInviteLinkRequest(BaseModel):
 
 class GenerateEmbeddedInviteLinkResponse(BaseModel):
     """Response model for generating embedded invite link."""
-    data: Dict[str, str] = Field(..., description="Response data containing the generated link")
+    link: str = Field(..., description="Embedded signing link")
 
 
 class EmbeddedInviteLinkResponse(BaseModel):
@@ -915,7 +925,7 @@ class DocumentFreeformInviteRecipient(BaseModel):
     email: str = Field(..., description="Signer's email address")
     redirect_uri: Optional[str] = Field(None, description="Link that opens after signing completion. Overrides the general redirect_uri")
     close_redirect_uri: Optional[str] = Field(None, description="Link that opens when clicking 'Close' button")
-    redirect_target: Optional[str] = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
+    redirect_target: Optional[str] = Field(None, description="Redirect target: 'blank' for new tab, 'self' for same tab")
     language: Optional[str] = Field(None, description="Signing session and notification email language: 'en', 'es', 'fr'")
     
     def model_dump(self, **kwargs) -> Dict[str, Any]:
@@ -939,11 +949,23 @@ class CreateDocumentFreeformInviteRequest(BaseModel):
     language: Optional[str] = Field(None, description="Sets the language of the signing session and notification emails for the signer. Possible values: 'en' for English, 'es' for Spanish, and 'fr' for French")
     redirect_uri: Optional[str] = Field(None, description="When a document is signed, the signer is redirected to this URI")
     close_redirect_uri: Optional[str] = Field(None, description="The link that opens after a signer selects the 'Close' button")
-    redirect_target: Optional[str] = Field("blank", description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab")
+    redirect_target: Optional[str] = Field(None, description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab")
 
 
 class CreateDocumentFreeformInviteResponse(BaseModel):
     """Response model for creating document freeform invite."""
     result: str = Field(..., description="Result status")
     id: str = Field(..., description="Invite ID")
-    callback_url: str = Field(..., description="Callback URL") 
+    callback_url: str = Field(..., description="Callback URL")
+
+
+class UploadDocumentRequest(BaseModel):
+    """Request model for uploading document."""
+    file: bytes = Field(..., description="Document file content as bytes")
+    filename: str = Field(..., description="Name of the file to upload")
+    check_fields: bool = Field(True, description="Whether to check for fields in the document")
+
+
+class UploadDocumentResponse(BaseModel):
+    """Response model for uploading document."""
+    id: str = Field(..., description="ID of the uploaded document") 

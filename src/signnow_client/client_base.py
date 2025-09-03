@@ -137,4 +137,24 @@ class SignNowAPIClientBase:
         except json.JSONDecodeError as e:
             raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
         except Exception as e:
-            raise SignNowAPIError(f"Unexpected error in PUT request to {url}: {e}") from e 
+            raise SignNowAPIError(f"Unexpected error in PUT request to {url}: {e}") from e
+    
+    def _post_multipart(self, url: str, headers: Optional[Dict[str, str]] = None, files: Optional[Dict[str, Any]] = None, data: Optional[Dict[str, Any]] = None, validate_model=None) -> Any:
+        """Internal POST method with multipart form data and unified error handling"""
+        try:
+            response = self.http.post(url, headers=headers, files=files, data=data)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Validate with model if provided
+            if validate_model:
+                return validate_model.model_validate(data)
+            return data
+        except httpx.TimeoutException as e:
+            raise SignNowAPITimeoutError("SignNow API timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise self._handle_http_error(e)
+        except json.JSONDecodeError as e:
+            raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
+        except Exception as e:
+            raise SignNowAPIError(f"Unexpected error in POST multipart request to {url}: {e}") from e 

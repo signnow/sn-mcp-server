@@ -35,11 +35,9 @@ class DocumentGroupTemplatesResponse(BaseModel):
 class DocumentGroupDocument(BaseModel):
     """Document information within a document group."""
     id: str = Field(..., description="Document ID")
-    name: str = Field(..., alias="document_name", description="Document name")
+    document_name: str = Field(..., description="Document name")
     thumbnail: Dict[str, str] = Field(..., description="Document thumbnails")
-    has_credit_card_number: bool = Field(..., description="Whether document contains credit card numbers")
     roles: List[str] = Field(..., description="Roles defined for this document")
-    field_invites: List[Dict[str, Any]] = Field(default=[], description="Field invites for this document")
 
 
 class DocumentGroup(BaseModel):
@@ -56,9 +54,6 @@ class DocumentGroupsResponse(BaseModel):
     """Full JSON response from `/user/documentgroups`."""
     document_groups: List[DocumentGroup]
     document_group_total_count: int = Field(..., description="Total number of document groups")
-    originator_organization_settings: List[Dict[str, str]] = Field(
-        ..., description="Organization settings for the originator"
-    )
 
 
 class CreateDocumentGroupRequest(BaseModel):
@@ -143,7 +138,6 @@ class DocumentGroupTemplateRecipientAttributes(BaseModel):
     redirect_target: Optional[str] = Field(None, description="Redirect target: 'blank' or 'self'")
     decline_redirect_uri: Optional[str] = Field(None, description="URL after recipient declines document")
     close_redirect_uri: Optional[str] = Field(None, description="URL after save progress or close")
-    authentication: Optional[DocumentGroupTemplateRecipientAuthentication] = Field(None, description="Recipient authentication settings")
     
     def model_dump(self, **kwargs) -> Dict[str, Any]:
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""

@@ -9,7 +9,8 @@ from typing import Optional, Dict, Any
 from .config import SignNowConfig
 from .models import (
     GetFoldersResponse,
-    GetFolderByIdResponse
+    GetFolderByIdResponse,
+    User
 )
 from .exceptions import (
     SignNowAPIError,
@@ -227,4 +228,34 @@ class OtherClientMixin:
             headers=headers,
             params=params,
             validate_model=GetFolderByIdResponse
+        )
+
+    def get_user_info(self, token: str) -> User:
+        """
+        Get user information from SignNow API.
+        
+        This endpoint returns comprehensive user information including:
+        - Basic user details (name, email, etc.)
+        - Subscription information
+        - Billing details
+        - Team and organization information
+        - User settings and preferences
+        - Document counts and statistics
+        
+        Args:
+            token: Access token for authentication
+            
+        Returns:
+            Validated User model with complete user information
+        """
+        
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+
+        return self._get(
+            "/user",
+            headers=headers,
+            validate_model=User
         ) 

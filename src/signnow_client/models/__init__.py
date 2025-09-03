@@ -49,8 +49,10 @@ __all__ = [
     "GenerateDocumentEmbeddedInviteLinkRequest",
     "GenerateDocumentEmbeddedInviteLinkResponse",
     "CreateDocumentEmbeddedEditorRequest",
+    "EmbeddedEditorData",
     "CreateEmbeddedEditorResponse",
     "CreateDocumentEmbeddedSendingRequest",
+    "EmbeddedSendingData",
     "CreateEmbeddedSendingResponse",
     "EmbeddedSendingError",
     "EmbeddedSendingErrorResponse",
@@ -101,6 +103,10 @@ __all__ = [
     "DocumentFreeformInviteRecipient",
     "CreateDocumentFreeformInviteRequest",
     "CreateDocumentFreeformInviteResponse",
+    
+    # Document upload models
+    "UploadDocumentRequest",
+    "UploadDocumentResponse",
     
     # General Embedded Invite models (for document signing)
     "EmbeddedInviteAuthentication",
@@ -161,4 +167,7 @@ __all__ = [
     "Folder",
     "GetFoldersResponse",
     "GetFolderByIdResponse",
+    
+    # User API Models
+    "User",
 ] 
