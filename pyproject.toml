@@ -1,0 +1,27 @@
+[project]
+name = "sn-mcp-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2,<3",
+    "uvicorn[standard]>=0.24",
+    "typer>=0.9",
+    "mcp[cli]>=1.10,<2",
+    "httpx[http2]>=0.25",
+    "pyjwt[crypto]>=2.8",
+    "cryptography>=42",
+    "starlette>=0.27",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+
+[project.scripts]
+sn-mcp = "sn_mcp_server.cli:app"
+
+[project.optional-dependencies]
+smolagents = [
+  "smolagents>=1.20",
+  "mcpadapt>=0.1.11",
+]
