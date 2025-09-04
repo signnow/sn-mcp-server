@@ -4,9 +4,9 @@ SignNow API Data Models
 Pydantic models for SignNow API responses and requests.
 """
 
-from .templates_and_documents import *
 from .document_groups import *
 from .other_models import *
+from .templates_and_documents import *
 
 __all__ = [
     # Templates and Documents
@@ -38,7 +38,6 @@ __all__ = [
     "MergeDocumentsResponse",
     "PrefillTextField",
     "PrefillTextFieldsRequest",
-    
     # Document embedded models
     "DocumentEmbeddedInviteAuthentication",
     "DocumentEmbeddedInviteSignature",
@@ -56,7 +55,6 @@ __all__ = [
     "CreateEmbeddedSendingResponse",
     "EmbeddedSendingError",
     "EmbeddedSendingErrorResponse",
-    
     # Document field invite models
     "DocumentFieldInviteReminder",
     "DocumentFieldInviteAuthentication",
@@ -71,7 +69,6 @@ __all__ = [
     "CreateDocumentFieldInviteResponse",
     "CancelDocumentFieldInviteRequest",
     "CancelDocumentFieldInviteResponse",
-    
     # Field Invite models (for document field signing)
     "FieldInviteReminder",
     "FieldInviteEmailGroup",
@@ -92,22 +89,18 @@ __all__ = [
     "SendEmailRequest",
     "FieldInviteRecipient",
     "GetRecipientsResponse",
-    
     # Freeform Invite models (for document signing)
     "FreeformInviteRecipient",
     "CreateFreeformInviteRequest",
     "CreateFreeformInviteResponse",
     "CancelFreeformInviteRequest",
-    
     # Document Freeform Invite models (for document signing without fields)
     "DocumentFreeformInviteRecipient",
     "CreateDocumentFreeformInviteRequest",
     "CreateDocumentFreeformInviteResponse",
-    
     # Document upload models
     "UploadDocumentRequest",
     "UploadDocumentResponse",
-    
     # General Embedded Invite models (for document signing)
     "EmbeddedInviteAuthentication",
     "EmbeddedInviteDocument",
@@ -119,7 +112,6 @@ __all__ = [
     "GenerateEmbeddedInviteLinkRequest",
     "GenerateEmbeddedInviteLinkResponse",
     "EmbeddedInviteLinkResponse",
-    
     # Document Groups and Template Groups
     "DocumentGroupTemplate",
     "DocumentGroupTemplatesResponse",
@@ -155,11 +147,9 @@ __all__ = [
     "AllowedUnmappedSignDocument",
     "GetDocumentGroupTemplateRecipientsResponse",
     "EditDocumentGroupTemplateRecipientsRequest",
-    
     # Document group embedded models
     "CreateDocumentGroupEmbeddedEditorRequest",
     "CreateDocumentGroupEmbeddedSendingRequest",
-    
     # Other Models
     "OrganizationSetting",
     "DocumentDownloadLinkResponse",
@@ -167,7 +157,6 @@ __all__ = [
     "Folder",
     "GetFoldersResponse",
     "GetFolderByIdResponse",
-    
     # User API Models
     "User",
-] 
+]

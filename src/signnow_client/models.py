@@ -4,9 +4,9 @@ SignNow API Data Models
 Pydantic models for SignNow API responses and requests.
 """
 
-from .models.templates_and_documents import *
 from .models.document_groups import *
 from .models.other_models import *
+from .models.templates_and_documents import *
 
 __all__ = [
     # Templates and Documents
@@ -36,7 +36,6 @@ __all__ = [
     "MergeDocumentsResponse",
     "PrefillTextField",
     "PrefillTextFieldsRequest",
-    
     # Document Groups and Template Groups
     "DocumentGroupTemplate",
     "DocumentGroupTemplatesResponse",
@@ -62,7 +61,6 @@ __all__ = [
     "AllowedUnmappedSignDocument",
     "GetDocumentGroupTemplateRecipientsResponse",
     "EditDocumentGroupTemplateRecipientsRequest",
-    
     # Other Models
     "OrganizationSetting",
     "EmbeddedInviteAuthentication",
@@ -135,6 +133,3 @@ __all__ = [
     "CancelDocumentFieldInviteRequest",
     "CancelDocumentFieldInviteResponse",
 ]
-
-
- 
