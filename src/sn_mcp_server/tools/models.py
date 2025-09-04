@@ -24,11 +24,20 @@ class TemplateSummaryList(BaseModel):
     templates: List[TemplateSummary]
     total_count: int = Field(..., description="Total number of templates")
 
+class DocumentField(BaseModel):
+    """Document field information."""
+    id: str = Field(..., description="Field ID")
+    type: str = Field(..., description="Field type")
+    role_id: str = Field(..., description="Role ID associated with this field")
+    value: str = Field(..., description="Field value")
+    name: str = Field(..., description="Field name")
+
 class DocumentGroupDocument(BaseModel):
     """Document information for MCP tools."""
     id: str = Field(..., description="Document ID")
     name: str = Field(..., description="Document name")
     roles: List[str] = Field(..., description="Roles defined for this document")
+    fields: List[DocumentField] = Field(default=[], description="Fields defined in this document")
 
 class DocumentGroup(BaseModel):
     """Document group model with all fields."""
