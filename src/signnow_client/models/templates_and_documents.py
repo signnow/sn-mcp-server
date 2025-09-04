@@ -235,7 +235,6 @@ class DocumentFieldData(BaseModel):
 class GetDocumentFieldsResponse(BaseModel):
     """Response model for getting document fields."""
     data: List[DocumentFieldData] = Field(..., description="Document fields data")
-    meta: Dict[str, Any] = Field(..., description="Pagination metadata")
 
 
 class DocumentHistoryEvent(BaseModel):

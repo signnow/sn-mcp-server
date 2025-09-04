@@ -47,7 +47,7 @@ from .embedded_sending import _create_embedded_sending, _create_embedded_sending
 from .embedded_editor import _create_embedded_editor, _create_embedded_editor_from_template
 from .invite_status import _get_invite_status
 from .document_download_link import _get_document_download_link
-from .document import _upload_document
+from .upload_document import _upload_document
 
 
 def bind(mcp, cfg):
