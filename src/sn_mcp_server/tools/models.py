@@ -42,7 +42,7 @@ class DocumentGroupDocument(BaseModel):
 class DocumentGroup(BaseModel):
     """Document group model with all fields."""
     last_updated: int = Field(..., description="Unix timestamp of the last update")
-    group_id: str = Field(..., description="Document group ID")
+    entity_id: str = Field(..., description="Document group ID")
     group_name: str = Field(..., description="Name of the document group")
     entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
     invite_id: Optional[str] = Field(None, description="Invite ID for this group")
@@ -314,7 +314,6 @@ class CreateFromTemplateRequest(BaseModel):
     entity_id: str = Field(..., description="ID of the template or template group")
     entity_type: Optional[str] = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
     name: Optional[str] = Field(None, description="Optional name for the new document or document group")
-    folder_id: Optional[str] = Field(None, description="Optional ID of the folder to store the document group")
 
 
 class CreateFromTemplateResponse(BaseModel):
@@ -329,3 +328,27 @@ class UploadDocumentResponse(BaseModel):
     document_id: str = Field(..., description="ID of the uploaded document")
     filename: str = Field(..., description="Name of the uploaded file")
     check_fields: bool = Field(..., description="Whether fields were checked in the document")
+
+
+class FieldToUpdate(BaseModel):
+    """Single field to update in a document."""
+    name: str = Field(..., description="Name of the field to update")
+    value: str = Field(..., description="New value for the field")
+
+
+class UpdateDocumentFields(BaseModel):
+    """Request model for updating document fields."""
+    document_id: str = Field(..., description="ID of the document to update")
+    fields: List[FieldToUpdate] = Field(..., description="Array of fields to update with their new values")
+
+
+class UpdateDocumentFieldsResult(BaseModel):
+    """Result of updating document fields."""
+    document_id: str = Field(..., description="ID of the document that was updated")
+    updated: bool = Field(..., description="Whether the document fields were successfully updated")
+    reason: Optional[str] = Field(None, description="Reason for failure if updated is false")
+
+
+class UpdateDocumentFieldsResponse(BaseModel):
+    """Response model for updating document fields."""
+    results: List[UpdateDocumentFieldsResult] = Field(..., description="Array of update results for each document")

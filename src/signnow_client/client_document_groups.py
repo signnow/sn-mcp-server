@@ -7,6 +7,10 @@ Methods for working with document groups and document group templates.
 import httpx
 from typing import Optional, Dict, Any
 from .config import SignNowConfig
+from .exceptions import (
+    SignNowAPIError,
+    SignNowAPITimeoutError
+)
 from .models import (
     DocumentGroupTemplatesResponse, 
     DocumentGroupsResponse,
@@ -650,13 +654,21 @@ class DocumentGroupClientMixin:
             "Authorization": f"Bearer {token}"
         }
 
-        response = self._put(
-            f"/v2/document-group-templates/{doc_group_template_id}/recipients",
-            headers=headers,
-            json_data=request_data.model_dump(exclude_none=True)
-        )
-        
-        return True
+        try:
+            response = self.http.put(
+                f"/v2/document-group-templates/{doc_group_template_id}/recipients",
+                headers=headers,
+                json=request_data.model_dump(exclude_none=True)
+            )
+            response.raise_for_status()
+            # For 204 No Content, we don't need to parse JSON
+            return True
+        except httpx.TimeoutException as e:
+            raise SignNowAPITimeoutError("SignNow API timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise self._handle_http_error(e)
+        except Exception as e:
+            raise SignNowAPIError(f"Unexpected error in edit_document_group_template_recipients request: {e}") from e
 
     def create_document_group_from_template(
         self, 

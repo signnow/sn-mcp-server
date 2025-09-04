@@ -7,6 +7,10 @@ Methods for working with individual documents and templates.
 import httpx
 from typing import Optional, Dict, Any
 from .config import SignNowConfig
+from .exceptions import (
+    SignNowAPIError,
+    SignNowAPITimeoutError
+)
 from .models import (
     CreateDocumentFromUrlRequest,
     CreateDocumentFromUrlResponse,
@@ -163,12 +167,22 @@ class DocumentClientMixin:
             "Authorization": f"Bearer {token}"
         }
 
-        self._put(
-            f"/v2/documents/{document_id}/prefill-texts",
-            headers=headers,
-            json_data=request_data.model_dump(exclude_none=True)
-        )
-        return True
+        try:
+            print(request_data.model_dump(exclude_none=True))
+            response = self.http.put(
+                f"/v2/documents/{document_id}/prefill-texts",
+                headers=headers,
+                json=request_data.model_dump(exclude_none=True)
+            )
+            response.raise_for_status()
+            # For 204 No Content, we don't need to parse JSON
+            return True
+        except httpx.TimeoutException as e:
+            raise SignNowAPITimeoutError("SignNow API timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise self._handle_http_error(e)
+        except Exception as e:
+            raise SignNowAPIError(f"Unexpected error in prefill_text_fields request: {e}") from e
 
     def get_document(self, token: str, document_id: str, include_integration_objects: bool = False) -> DocumentResponse:
         """

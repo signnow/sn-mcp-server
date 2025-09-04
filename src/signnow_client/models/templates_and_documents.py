@@ -43,21 +43,24 @@ class DocumentSignature(BaseModel):
     created: str = Field(..., description="Creation timestamp")
     data: str = Field(..., description="Signature data")
 
+class DocumentFieldJsonAttributes(BaseModel):
+    """Document field JSON attributes."""
+    name: str = Field(..., description="Field name")
+    prefilled_text: Optional[str] = Field(None, description="Prefilled text")
+
 
 class DocumentField(BaseModel):
     """Document field information."""
     id: str = Field(..., description="Field ID")
     type: str = Field(..., description="Field type")
     role_id: str = Field(..., description="Role ID")
-    json_attributes: Dict[str, Any] = Field(..., description="Field attributes")
+    json_attributes: DocumentFieldJsonAttributes = Field(..., description="Field attributes")
     role: str = Field(..., description="Role name")
     originator: str = Field(..., description="Originator email")
     fulfiller: Optional[str] = Field(None, description="Fulfiller email")
-    field_request_id: str = Field(..., description="Field request ID")
-    element_id: str = Field(..., description="Element ID")
     field_request_canceled: Optional[str] = Field(None, description="Field request canceled")
     template_field_id: Optional[str] = Field(None, description="Template field ID")
-    field_id: str = Field(..., description="Field ID")
+    field_id: Optional[str] = Field(..., description="Field ID")
 
 
 class DocumentRole(BaseModel):
@@ -72,63 +75,6 @@ class DocumentPage(BaseModel):
     src: str = Field(..., description="Page source URL")
     size: Dict[str, int] = Field(..., description="Page size")
 
-
-class DocumentShareInfo(BaseModel):
-    """Document share information."""
-    is_team_shared: bool = Field(..., description="Team shared status")
-    role: str = Field(..., description="User role")
-    is_personally_shared_to_others: bool = Field(..., description="Personally shared status")
-
-
-class DocumentSettings(BaseModel):
-    """Document settings."""
-    no_document_attachment: bool = Field(..., description="No document attachment")
-    copy_export: bool = Field(..., description="Copy export")
-    no_document_file_attachments: bool = Field(..., description="No document file attachments")
-    no_user_signature_return: bool = Field(..., description="No user signature return")
-    mobileweb_option: bool = Field(..., description="Mobile web option")
-    require_drawn_signatures: bool = Field(..., description="Require drawn signatures")
-    org_allowed_team_admins: bool = Field(..., description="Organization allowed team admins")
-    cloud_auto_export: bool = Field(..., description="Cloud auto export")
-    digitally_sign_dowloaded_docs: bool = Field(..., description="Digitally sign downloaded docs")
-    invite_completion_redirect_url: bool = Field(..., description="Invite completion redirect URL")
-    invite_decline_redirect_url: bool = Field(..., description="Invite decline redirect URL")
-    add_signature_stamp: bool = Field(..., description="Add signature stamp")
-    pending_invite_document_view_notification: bool = Field(..., description="Pending invite document view notification")
-    signing_link_document_download: bool = Field(..., description="Signing link document download")
-    required_preset_signature_name: bool = Field(..., description="Required preset signature name")
-    cloud_export_with_history: bool = Field(..., description="Cloud export with history")
-    emailed_docs_include_history: bool = Field(..., description="Emailed docs include history")
-    require_email_subject: bool = Field(..., description="Require email subject")
-    document_completion_retention_days: bool = Field(..., description="Document completion retention days")
-    enable_hyperlink_protection: bool = Field(..., description="Enable hyperlink protection")
-    enable_advanced_threat_protection: bool = Field(..., description="Enable advanced threat protection")
-    require_login_for_signing: bool = Field(..., description="Require login for signing")
-    logout_on_signing: bool = Field(..., description="Logout on signing")
-    audit_trail_completion_retention_days: bool = Field(..., description="Audit trail completion retention days")
-    front_end_session_length: bool = Field(..., description="Front end session length")
-    email_admin_on_banned_login: bool = Field(..., description="Email admin on banned login")
-    add_signature_stamp_with_name: bool = Field(..., description="Add signature stamp with name")
-    cfr_title_21_part_11: bool = Field(..., description="CFR Title 21 Part 11")
-    unsuccessful_logout_attempts_allowed: bool = Field(..., description="Unsuccessful logout attempts allowed")
-    require_authentication_for_invites: bool = Field(..., description="Require authentication for invites")
-    electronic_consent_required: bool = Field(..., description="Electronic consent required")
-    electronic_consent_text: bool = Field(..., description="Electronic consent text")
-    document_guide: bool = Field(..., description="Document guide")
-    watermark_downloaded_document: bool = Field(..., description="Watermark downloaded document")
-    restrict_download: bool = Field(..., description="Restrict download")
-    disable_email_notifications: bool = Field(..., description="Disable email notifications")
-    upload_limit: bool = Field(..., description="Upload limit")
-    document_schema_extended: bool = Field(..., description="Document schema extended")
-    invite_update_notifications_for_all_invites_at_invite_create: bool = Field(..., description="Invite update notifications for all invites at invite create")
-    enable_full_story_tracker: bool = Field(..., description="Enable full story tracker")
-    document_attachment_only_for_signer: bool = Field(..., description="Document attachment only for signer")
-    sso_only_login: bool = Field(..., description="SSO only login")
-    block_export_options_when_credit_card_validation_is_used: bool = Field(..., description="Block export options when credit card validation is used")
-    only_administrator_is_able_to_invite_to_the_team: bool = Field(..., description="Only administrator is able to invite to the team")
-    block_login_via_social_networks: bool = Field(..., description="Block login via social networks")
-
-
 # Document field invite models (detailed from /document endpoint)
 class DocumentFieldInviteEmailGroup(BaseModel):
     """Email group information in document field invite."""
@@ -141,23 +87,7 @@ class DocumentFieldInviteStatus(BaseModel):
     id: str = Field(..., description="Field invite ID")
     status: str = Field(..., description="Invite status: 'fulfilled', 'pending', 'created'")
     is_document_locked: str = Field(..., description="Whether document is locked ('0' or '1')")
-    password_protected: str = Field(..., description="Whether invite is password protected ('0' or '1')")
-    password_type: str = Field(..., description="Password type")
-    password_method: str = Field(..., description="Password method")
     reassign: str = Field(..., description="Whether reassign is allowed ('0' or '1')")
-    pfrid: Optional[str] = Field(None, description="Payment request ID")
-    pfrtype: Optional[str] = Field(None, description="Payment request type")
-    pfrmerchant_id: Optional[str] = Field(None, description="Payment request merchant ID")
-    pfrstatus: Optional[str] = Field(None, description="Payment request status")
-    pframount: Optional[str] = Field(None, description="Payment request amount")
-    pfrpayment_transaction_id: Optional[str] = Field(None, description="Payment transaction ID")
-    pfrcreated: Optional[str] = Field(None, description="Payment request created timestamp")
-    pfrmerchant_type: Optional[str] = Field(None, description="Payment request merchant type")
-    pfrmerchant_account_name: Optional[str] = Field(None, description="Payment request merchant account name")
-    pfrcurrency_name: Optional[str] = Field(None, description="Payment request currency name")
-    pfrjson_attributes: Optional[str] = Field(None, description="Payment request JSON attributes")
-    id_verification_required: str = Field(..., description="ID verification required: 'YES', 'NO'")
-    id_verified: str = Field(..., description="ID verification status: 'VERIFIED', 'UNVERIFIED'")
     created: str = Field(..., description="Creation timestamp")
     email_group: Optional[DocumentFieldInviteEmailGroup] = Field(None, description="Email group if used")
     email: str = Field(..., description="Recipient email address")
@@ -216,12 +146,10 @@ class DocumentResponse(BaseModel):
     document_group_template_info: List[Dict[str, Any]] = Field(..., description="Document group template info")
     originator_organization_settings: List[Dict[str, str]] = Field(..., description="Originator organization settings")
     document_group_info: Dict[str, Any] = Field(..., description="Document group info")
-    settings: DocumentSettings = Field(..., description="Document settings")
     parent_id: str = Field(..., description="Parent ID")
     originator_logo: str = Field(..., description="Originator logo")
     pages: List[DocumentPage] = Field(..., description="Document pages")
     lines: List[Dict[str, Any]] = Field(..., description="Document lines")
-    share_info: DocumentShareInfo = Field(..., description="Share information")
 
 
 class DocumentFieldData(BaseModel):

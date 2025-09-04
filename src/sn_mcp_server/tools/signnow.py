@@ -36,7 +36,10 @@ from .models import (
     DocumentGroupStatusStep,
     InviteStatus,
     DocumentDownloadLinkResponse,
-    UploadDocumentResponse
+    UploadDocumentResponse,
+    DocumentGroup,
+    UpdateDocumentFields,
+    UpdateDocumentFieldsResponse
 )
 from .list_templates import _list_all_templates
 from .list_documents import _list_document_groups
@@ -47,7 +50,7 @@ from .embedded_sending import _create_embedded_sending, _create_embedded_sending
 from .embedded_editor import _create_embedded_editor, _create_embedded_editor_from_template
 from .invite_status import _get_invite_status
 from .document_download_link import _get_document_download_link
-from .upload_document import _upload_document
+from .document import _upload_document, _get_document, _update_document_fields
 
 
 def bind(mcp, cfg):
@@ -85,8 +88,8 @@ def bind(mcp, cfg):
     )
     def list_document_groups(
         ctx: Context, 
-        limit: Annotated[int, Field(description="Maximum number of document groups to return (default: 50, max: 50)")] = 50, 
-        offset: Annotated[int, Field(description="Number of document groups to skip for pagination (default: 0)")] = 0
+        limit: Annotated[int, Field(ge=1, le=50, description="Maximum number of document groups to return (default: 50, max: 50)")] = 50, 
+        offset: Annotated[int, Field(ge=0, description="Number of document groups to skip for pagination (default: 0)")] = 0
     ) -> SimplifiedDocumentGroupsResponse:
         """Provide simplified list of document groups with basic fields.
         
@@ -151,7 +154,7 @@ def bind(mcp, cfg):
     ) -> CreateEmbeddedInviteResponse:
         """Create embedded invite for signing a document or document group.
         This tool is ONLY for documents and document groups.
-        If you hve template or template group, you have to convert it to document or document group first, using create_from_template tool
+        If you have template or template group, you have to convert it to document or document group first, using create_from_template tool
         
         Args:
             entity_id: ID of the document or document group
@@ -182,13 +185,13 @@ def bind(mcp, cfg):
         entity_id: Annotated[str, Field(description="ID of the document or document group")], 
         entity_type: Annotated[Optional[Literal["document", "document_group"]], Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.")] = None,
         redirect_uri: Annotated[Optional[str], Field(description="Optional redirect URI after completion")] = None,
-        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self', 'blank', or 'self' (default)")] = None,
-        link_expiration: Annotated[Optional[int], Field(description="Optional link expiration in days (14-45)")] = None,
-        type: Annotated[Optional[str], Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage"
+        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
+        link_expiration: Annotated[Optional[int], Field(ge=14, le=45, description="Optional link expiration in days (14-45)")] = None,
+        type: Annotated[Optional[Literal["manage", "edit", "send-invite"]], Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage"
     ) -> CreateEmbeddedSendingResponse:
         """Create embedded sending for managing, editing, or sending invites for a document or document group.
         This tool is ONLY for documents and document groups.
-        If you hve template or template group, you have to convert it to document or document group first, using create_from_template tool
+        If you have template or template group, you have to convert it to document or document group first, using create_from_template tool
         
         Args:
             entity_id: ID of the document or document group
@@ -221,12 +224,12 @@ def bind(mcp, cfg):
         entity_id: Annotated[str, Field(description="ID of the document or document group")], 
         entity_type: Annotated[Optional[Literal["document", "document_group"]], Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.")] = None,
         redirect_uri: Annotated[Optional[str], Field(description="Optional redirect URI after completion")] = None,
-        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self', 'blank', or 'self' (default)")] = None,
-        link_expiration: Annotated[Optional[int], Field(description="Optional link expiration in minutes (15-43200)")] = None
+        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
+        link_expiration: Annotated[Optional[int], Field(ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")] = None
     ) -> CreateEmbeddedEditorResponse:
         """Create embedded editor for editing a document or document group.
         This tool is ONLY for documents and document groups.
-        If you hve template or template group, you have to convert it to document or document group first, using create_from_template tool
+        If you have template or template group, you have to convert it to document or document group first, using create_from_template tool
         
         Args:
             entity_id: ID of the document or document group
@@ -266,7 +269,6 @@ def bind(mcp, cfg):
             entity_id: ID of the template or template group
             entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             name: Optional name for the new document group or document (required for template groups)
-            folder_id: Optional ID of the folder to store the document group
             
         Returns:
             CreateFromTemplateResponse with created entity ID, type and name
@@ -305,7 +307,6 @@ def bind(mcp, cfg):
             entity_id: ID of the template or template group
             entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             name: Optional name for the new document or document group
-            folder_id: Optional ID of the folder to store the document group
             orders: List of orders with recipients for the invite
             
         Returns:
@@ -333,9 +334,9 @@ def bind(mcp, cfg):
         entity_type: Annotated[Optional[Literal["template", "template_group"]], Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.")] = None,
         name: Annotated[Optional[str], Field(description="Optional name for the new document or document group")] = None,
         redirect_uri: Annotated[Optional[str], Field(description="Optional redirect URI after completion")] = None,
-        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self', 'blank', or 'self' (default)")] = None,
-        link_expiration: Annotated[Optional[int], Field(description="Optional link expiration in days (14-45)")] = None,
-        type: Annotated[Optional[str], Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None
+        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
+        link_expiration: Annotated[Optional[int], Field(ge=14, le=45, description="Optional link expiration in days (14-45)")] = None,
+        type: Annotated[Optional[Literal["manage", "edit", "send-invite"]], Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None
     ) -> CreateEmbeddedSendingFromTemplateResponse:
         """Create document or document group from template and create embedded sending immediately.
         
@@ -374,10 +375,10 @@ def bind(mcp, cfg):
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         entity_type: Annotated[Optional[Literal["template", "template_group"]], Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.")] = None,
-        name: Annotated[str, Field(description="Name for the new document or document group")] = None,
+        name: Annotated[Optional[str], Field(description="Name for the new document or document group")] = None,
         redirect_uri: Annotated[Optional[str], Field(description="Optional redirect URI after completion")] = None,
-        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self', 'blank', or 'self' (default)")] = None,
-        link_expiration: Annotated[Optional[int], Field(description="Optional link expiration in minutes (15-43200)")] = None
+        redirect_target: Annotated[Optional[str], Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
+        link_expiration: Annotated[Optional[int], Field(ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")] = None
     ) -> CreateEmbeddedEditorFromTemplateResponse:
         """Create document or document group from template and create embedded editor immediately.
         
@@ -506,6 +507,78 @@ def bind(mcp, cfg):
         # Initialize client and use the imported function from document_download_link module
         client = SignNowAPIClient(token_provider.signnow_config)
         return _get_document_download_link(entity_id, entity_type, token, client)
+
+    @mcp.tool(
+        name="get_document",
+        description="Get full document or document group information with field values",
+        tags=["document", "document_group", "get", "fields"]
+    )
+    def get_document(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group to retrieve")],
+        entity_type: Annotated[Optional[Literal["document", "document_group"]], Field(description="Type of entity: 'document' or 'document_group' (optional). If not provided, will be determined automatically")] = None
+    ) -> DocumentGroup:
+        """Get full document or document group information with field values.
+        
+        Always returns a unified DocumentGroup wrapper even for a single document.
+        
+        This tool retrieves complete information about a document or document group,
+        including all field values, roles, and metadata. If entity_type is not provided,
+        the tool will automatically determine whether the entity is a document or document group.
+        
+        For documents, returns a DocumentGroup with a single document.
+        For document groups, returns a DocumentGroup with all documents in the group.
+        
+        Args:
+            entity_id: ID of the document or document group to retrieve
+            entity_type: Type of entity: 'document' or 'document_group' (optional)
+            
+        Returns:
+            DocumentGroup with complete information including field values for all documents
+        """
+        headers = get_http_headers()
+        token = token_provider.get_access_token(headers)
+        
+        if not token:
+            raise ValueError("No access token available")
+
+        # Initialize client and use the imported function from document module
+        client = SignNowAPIClient(token_provider.signnow_config)
+        return _get_document(client, token, entity_id, entity_type)
+
+    @mcp.tool(
+        name="update_document_fields",
+        description="Update text fields in multiple documents (only individual documents, not document groups)",
+        tags=["document", "fields", "update", "prefill"]
+    )
+    def update_document_fields(
+        ctx: Context,
+        update_requests: Annotated[List[UpdateDocumentFields], Field(description="Array of document field update requests")]
+    ) -> UpdateDocumentFieldsResponse:
+        """Update text fields in multiple documents.
+        
+        This tool updates text fields in multiple documents using the SignNow API.
+        Only text fields can be updated using the prefill_text_fields endpoint.
+        
+        IMPORTANT: This tool works only with individual documents, not document groups.
+        To find out what fields are available in a document or document group,
+        use the get_document tool first.
+        
+        Args:
+            update_requests: Array of UpdateDocumentFields with document IDs and fields to update
+            
+        Returns:
+            UpdateDocumentFieldsResponse with results for each document update
+        """
+        headers = get_http_headers()
+        token = token_provider.get_access_token(headers)
+        
+        if not token:
+            raise ValueError("No access token available")
+
+        # Initialize client and use the imported function from document module
+        client = SignNowAPIClient(token_provider.signnow_config)
+        return _update_document_fields(client, token, update_requests)
 
     # @mcp.tool(
     #     name="upload_document",
