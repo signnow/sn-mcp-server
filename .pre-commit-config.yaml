@@ -3,7 +3,7 @@ repos:
     rev: v0.6.9
     hooks:
       - id: ruff
-      - id: ruff-format    # можешь удалить, если используешь Black
+      - id: ruff-format
   - repo: https://github.com/psf/black
     rev: 24.8.0
     hooks:
