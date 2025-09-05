@@ -134,6 +134,55 @@ For production environments:
 
 **Security Note**: Never commit RSA private keys to version control. Always use environment variables or secure secret management systems.
 
+## MCP Tools
+
+The server exposes the following tools (brief purpose-oriented descriptions):
+
+### list_all_templates
+Lists all templates and template groups across folders with simplified metadata. Use it to choose a starting point for creating documents or groups.
+
+### list_document_groups
+Shows your document groups with basic info and statuses. Useful for browsing, monitoring, or selecting a group to manage.
+
+### send_invite
+Sends a signing or viewing invite for a document or document group with ordered recipients. Use it to kick off a signing workflow via email.
+
+### create_embedded_invite
+Creates an embedded signing session (and links if needed) for a document or group, without email delivery. Ideal for hosting signing inside your app.
+
+### create_embedded_sending
+Opens an embedded management/sending experience for a document or group. Use it in-app to configure, edit, or send invites.
+
+### create_embedded_editor
+Generates an embedded editor URL to place or adjust fields on a document or group. Great for letting users edit documents within your app.
+
+### create_from_template
+Instantiates a document or document group from a template or template group. Typically the first step before inviting or embedding when starting from a template.
+
+### send_invite_from_template
+One-shot flow: creates from a template and immediately sends an invite. Fastest way to start signing from a template.
+
+### create_embedded_sending_from_template
+One-shot flow: creates from a template and opens embedded sending. Streamlines configuring and sending invites in-app.
+
+### create_embedded_editor_from_template
+One-shot flow: creates from a template and returns an embedded editor link. Useful for laying out fields before inviting.
+
+### create_embedded_invite_from_template
+One-shot flow: creates from a template and sets up an embedded invite. Perfect for link-based, in-app signing.
+
+### get_invite_status
+Retrieves current invite status, including steps and actions, for a document or group. Use it to track progress and drive UI or reminders.
+
+### get_document_download_link
+Returns a direct download link for a document; for groups, provides a link to the merged output. Handy for exporting or archiving.
+
+### get_document
+Returns a complete, normalized structure of a document or group, including field values (always a unified DocumentGroup). Use it to inspect roles/fields and decide what to prefill or edit.
+
+### update_document_fields
+Prefills text fields in one or more individual documents (not groups). Use it to populate values before sending invites.
+
 ## License
 
 MIT License - see LICENSE file for details.

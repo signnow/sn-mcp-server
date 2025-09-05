@@ -1,39 +1,42 @@
 import os
+
 from dotenv import dotenv_values, find_dotenv
-from smolagents import ToolCollection, CodeAgent, InferenceClientModel, OpenAIServerModel
 from mcp import StdioServerParameters
+from smolagents import (
+    CodeAgent,
+    OpenAIServerModel,
+    ToolCollection,
+)
+
 
 def main():
-    # Модель: провайдеры HF Inference; достаточно задать HF_TOKEN для приватных/гейтед моделей
+    # Model: HF Inference providers; just set HF_TOKEN for private/gated models
     model = OpenAIServerModel(
-        model_id="gpt-4o-mini",                         # можно "gpt-4o-mini" для дешевле
+        model_id="gpt-4o-mini",  # can use "gpt-4o-mini" for cheaper
         api_base="https://api.openai.com/v1",
         api_key=os.environ["OPENAI_API_KEY"],
-        # organization="org_...",                  # опционально
-        # project="proj_...",                      # опционально
+        # organization="org_...",                  # optional
+        # project="proj_...",                      # optional
     )
 
-    env_path = find_dotenv(usecwd=True)  # ищет вверх от текущей cwd
+    env_path = find_dotenv(usecwd=True)  # searches upward from current cwd
     env = dict(os.environ)
     if env_path:
         env.update(dotenv_values(env_path))
 
-    # Поднимаем локальный MCP-сервер через твой CLI (STDIO-режим)
-    params = StdioServerParameters(
-        command="sn-mcp",
-        args=["serve"],            # это твоя команда MCP(stdio)
-        env=env            # пробрасываем ENV
-    )
+    # Start local MCP server via your CLI (STDIO mode)
+    params = StdioServerParameters(command="sn-mcp", args=["serve"], env=env)  # this is your MCP(stdio) command  # pass ENV
 
-    # Важно: trust_remote_code=True только если доверяешь серверу/инструментам
+    # Important: trust_remote_code=True only if you trust the server/tools
     with ToolCollection.from_mcp(params, trust_remote_code=True) as tcoll:
         agent = CodeAgent(
             model=model,
-            tools=[*tcoll.tools],  # все инструменты MCP-сервера доступны агенту
-            add_base_tools=False,  # отключаем базовые инструменты smolagents
+            tools=[*tcoll.tools],  # all MCP server tools are available to the agent
+            add_base_tools=False,  # disable smolagents base tools
             max_steps=8,
         )
         print(agent.run("Show me list of templates and its names"))
+
 
 if __name__ == "__main__":
     main()

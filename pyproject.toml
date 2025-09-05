@@ -25,3 +25,29 @@ smolagents = [
   "smolagents>=1.20",
   "mcpadapt>=0.1.11",
 ]
+test = [
+  "pytest>=7.0",
+  "pytest-asyncio>=0.21",
+  "pytest-mock>=3.10",
+  "httpx>=0.25",
+]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 200
+
+[tool.ruff]
+line-length = 200
+lint.select = ["E","F","W","I","N","B","UP","S","ASYNC","ANN"]
+lint.ignore = ["S101"] # assert allowed in tests
+format.preview = true
+
+[tool.mypy]
+python_version = "3.11"
+show_error_codes = true
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
