@@ -1,0 +1,53 @@
+[project]
+name = "sn-mcp-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2,<3",
+    "uvicorn[standard]>=0.24",
+    "typer>=0.9",
+    "mcp[cli]>=1.10,<2",
+    "httpx[http2]>=0.25",
+    "pyjwt[crypto]>=2.8",
+    "cryptography>=42",
+    "starlette>=0.27",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+
+[project.scripts]
+sn-mcp = "sn_mcp_server.cli:app"
+
+[project.optional-dependencies]
+smolagents = [
+  "smolagents>=1.20",
+  "mcpadapt>=0.1.11",
+]
+test = [
+  "pytest>=7.0",
+  "pytest-asyncio>=0.21",
+  "pytest-mock>=3.10",
+  "httpx>=0.25",
+]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 200
+
+[tool.ruff]
+line-length = 200
+lint.select = ["E","F","W","I","N","B","UP","S","ASYNC","ANN"]
+lint.ignore = ["S101"] # assert allowed in tests
+format.preview = true
+
+[tool.mypy]
+python_version = "3.11"
+show_error_codes = true
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]

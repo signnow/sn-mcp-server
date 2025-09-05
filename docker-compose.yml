@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  sn-mcp-server:
+    build: .
+    container_name: sn-mcp-server
+    environment:
+      # SignNow API configuration
+      - SIGNNOW_TOKEN=${SIGNNOW_TOKEN}
+      - SIGNNOW_APP_BASE=${SIGNNOW_APP_BASE}
+      - SIGNNOW_API_BASE=${SIGNNOW_API_BASE}
+      - SIGNNOW_CLIENT_ID=${SIGNNOW_CLIENT_ID}
+      - SIGNNOW_CLIENT_SECRET=${SIGNNOW_CLIENT_SECRET}
+      - SIGNNOW_API_BASIC_TOKEN=${SIGNNOW_API_BASIC_TOKEN}
+      - SIGNNOW_PASSWORD=${SIGNNOW_PASSWORD}
+      - SIGNNOW_USER_EMAIL=${SIGNNOW_USER_EMAIL}
+      
+      # OAuth server configuration
+      - OAUTH_ISSUER=${OAUTH_ISSUER}
+      - RESOURCE_HTTP_URL=${RESOURCE_HTTP_URL}
+      - RESOURCE_SSE_URL=${RESOURCE_SSE_URL}
+      - ACCESS_TTL=${ACCESS_TTL}
+      - REFRESH_TTL=${REFRESH_TTL}
+      - ALLOWED_REDIRECTS=${ALLOWED_REDIRECTS}
+      
+      # OAuth RSA key configuration
+      - OAUTH_RSA_PRIVATE_PEM=${OAUTH_RSA_PRIVATE_PEM}
+      - OAUTH_JWK_KID=${OAUTH_JWK_KID}
+    command: ["sn-mcp", "serve"]
+    restart: unless-stopped
+
+  sn-mcp-http:
+    build: .
+    container_name: sn-mcp-http
+    ports:
+      - "8000:8000"
+    environment:
+      # SignNow API configuration
+      - SIGNNOW_TOKEN=${SIGNNOW_TOKEN}
+      - SIGNNOW_APP_BASE=${SIGNNOW_APP_BASE}
+      - SIGNNOW_API_BASE=${SIGNNOW_API_BASE}
+      - SIGNNOW_CLIENT_ID=${SIGNNOW_CLIENT_ID}
+      - SIGNNOW_CLIENT_SECRET=${SIGNNOW_CLIENT_SECRET}
+      - SIGNNOW_API_BASIC_TOKEN=${SIGNNOW_API_BASIC_TOKEN}
+      - SIGNNOW_PASSWORD=${SIGNNOW_PASSWORD}
+      - SIGNNOW_USER_EMAIL=${SIGNNOW_USER_EMAIL}
+      
+      # OAuth server configuration
+      - OAUTH_ISSUER=${OAUTH_ISSUER}
+      - RESOURCE_HTTP_URL=${RESOURCE_HTTP_URL}
+      - RESOURCE_SSE_URL=${RESOURCE_SSE_URL}
+      - ACCESS_TTL=${ACCESS_TTL}
+      - REFRESH_TTL=${REFRESH_TTL}
+      - ALLOWED_REDIRECTS=${ALLOWED_REDIRECTS}
+      
+      # OAuth RSA key configuration
+      - OAUTH_RSA_PRIVATE_PEM=${OAUTH_RSA_PRIVATE_PEM}
+      - OAUTH_JWK_KID=${OAUTH_JWK_KID}
+    command: ["sn-mcp", "http"]
+    restart: unless-stopped 
