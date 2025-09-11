@@ -1,7 +1,11 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
 [project]
-name = "sn-mcp-server"
-version = "0.1.0"
-description = "Add your description here"
+name = "signnow-mcp-server"
+dynamic = ["version"]
+description = "A Model Context Protocol (MCP) server that provides SignNow API integration capabilities."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -51,3 +55,10 @@ warn_redundant_casts = true
 warn_return_any = true
 disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
+
+[tool.hatch.version]
+source = "vcs"
+tag-pattern = "^v?(?P<version>.*)$"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/sn_mcp_server/_version.py"
