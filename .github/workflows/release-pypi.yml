@@ -1,0 +1,68 @@
+name: Release to PyPI (stable)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade build twine hatchling hatch-vcs packaging
+
+      - name: Ensure tag is a stable PEP 440 release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          from packaging.version import Version, InvalidVersion
+
+          tag = os.environ["TAG"]
+          if tag.startswith("v"):
+              ver_str = tag[1:]
+          else:
+              ver_str = tag
+
+          try:
+              v = Version(ver_str)
+          except InvalidVersion:
+              print(f"❌ Tag '{tag}' is not a valid PEP 440 version.", file=sys.stderr)
+              sys.exit(1)
+
+          if v.is_prerelease or v.is_devrelease or v.local is not None:
+              print(f"❌ '{tag}' is not a stable release (pre/dev/local detected).", file=sys.stderr)
+              sys.exit(1)
+
+          print(f"✅ Stable release detected: {v}")
+          PY
+
+      - name: Build sdist and wheel
+        run: |
+          rm -rf dist/
+          python -m build
+
+      - name: Twine check metadata
+        run: python -m twine check dist/*
+
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m twine upload --non-interactive --repository-url https://upload.pypi.org/legacy/ dist/*
