@@ -29,6 +29,18 @@ smolagents = [
   "smolagents>=1.20",
   "mcpadapt>=0.1.11",
 ]
+llamaindex = [
+  "llama-index-tools-mcp>=0.1.0",
+  "llama-index-core>=0.10.0",
+  "llama-index-llms-openai>=0.1.0",
+  "python-dotenv>=1.0.0",
+]
+langchain = [
+  "langchain>=0.1.0",
+  "langchain-openai>=0.1.0",
+  "langchain-mcp-adapters>=0.1.0",
+  "langchain-core>=0.1.0",
+]
 test = [
   "pytest>=7.0",
   "pytest-asyncio>=0.21",
@@ -54,7 +66,6 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 warn_return_any = true
 disallow_untyped_defs = true
-plugins = ["pydantic.mypy"]
 
 [tool.hatch.version]
 source = "vcs"

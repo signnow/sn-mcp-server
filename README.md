@@ -9,19 +9,39 @@ A Model Context Protocol (MCP) server that provides SignNow API integration capa
 - Python 3.11+ installed on your system
 - Environment variables configured
 
-### 1. Clone and Setup
+### 1. Setup Environment Variables
 
 ```bash
-git clone <your-repo>
-cd sn-mcp-server
-cp env.example .env
-# Edit .env file with your actual values
+# Create .env file with your SignNow credentials
+# You can copy from env.example if you have the source code
+# Or create .env file manually with required variables (see Environment Variables section below)
 ```
 
 ### 2. Install and Run
 
+#### Option A: Install from PyPI (Recommended)
+
 ```bash
-# Install the package
+# Install the package from PyPI
+pip install signnow-mcp-server
+
+# Run MCP server in standalone mode
+sn-mcp serve
+
+# Run HTTP server with MCP endpoints
+sn-mcp http
+
+# Run HTTP server on custom host/port
+sn-mcp http --host 127.0.0.1 --port 8080
+
+# Run HTTP server with auto-reload (for development)
+sn-mcp http --reload
+```
+
+#### Option B: Install from Source (Development)
+
+```bash
+# Install the package in development mode
 pip install -e .
 
 # Run MCP server in standalone mode
@@ -135,6 +155,8 @@ For production environments:
 **Security Note**: Never commit RSA private keys to version control. Always use environment variables or secure secret management systems.
 
 ## MCP Tools
+<details>
+<summary>Tools list</summary>
 
 The server exposes the following tools (brief purpose-oriented descriptions):
 
@@ -183,6 +205,33 @@ Returns a complete, normalized structure of a document or group, including field
 ### update_document_fields
 Prefills text fields in one or more individual documents (not groups). Use it to populate values before sending invites.
 
-## License
+</details>
 
-MIT License - see LICENSE file for details.
+## Examples
+
+The `examples/` directory contains working examples of how to integrate the SignNow MCP Server with popular AI agent frameworks:
+
+- **[LangChain](examples/langchain/langchain_example.py)** - Integration with LangChain agents using `langchain-mcp-adapters`
+- **[LlamaIndex](examples/llamaindex/llamaindex_example.py)** - Integration with LlamaIndex agents using `llama-index-tools-mcp`
+- **[SmolAgents](examples/smolagents/stdio_demo.py)** - Integration with SmolAgents framework using native MCP support
+
+Each example demonstrates how to:
+- Start the MCP server as a subprocess
+- Convert MCP tools to framework-specific tool formats
+- Create agents that can use SignNow functionality
+- Handle environment variable configuration
+
+To run an example:
+```bash
+# Make sure you have the required dependencies installed
+pip install langchain-openai langchain-mcp-adapters  # for LangChain example
+pip install llama-index-tools-mcp                   # for LlamaIndex example  
+pip install smolagents                              # for SmolAgents example
+
+# Set up your .env file with SignNow credentials and LLM configuration
+# Then run the example
+python examples/langchain/langchain_example.py
+python examples/llamaindex/llamaindex_example.py
+python examples/smolagents/stdio_demo.py
+```
+
