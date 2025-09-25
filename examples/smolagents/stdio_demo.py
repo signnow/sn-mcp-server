@@ -17,7 +17,7 @@ def main() -> None:
 
     model = OpenAIServerModel(
         model_id=os.environ["LLM_MODEL"],  # can use "gpt-4o-mini" for cheaper
-        api_base=f"{os.environ['LLM_API_HOST']}/v1",
+        api_base=os.environ["LLM_API_HOST"],
         api_key=os.environ["LLM_KEY"],
         # organization="org_...",                  # optional
         # project="proj_...",                      # optional

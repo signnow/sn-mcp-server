@@ -32,7 +32,7 @@ async def main() -> None:
     llm = ChatOpenAI(
         model=os.getenv("LLM_MODEL"),
         api_key=os.getenv("LLM_KEY"),
-        base_url=f"{os.getenv('LLM_API_HOST')}/v1",
+        base_url=os.getenv("LLM_API_HOST"),
         temperature=0,
     )
 

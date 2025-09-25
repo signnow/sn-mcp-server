@@ -28,7 +28,7 @@ async def main() -> None:
     agent = FunctionAgent(
         name="MCP Agent",
         description="Agent with tools from sn-mcp",
-        llm=OpenAI(model=os.environ["LLM_MODEL"], api_base=f"{os.environ['LLM_API_HOST']}/v1", api_key=os.environ["LLM_KEY"]),
+        llm=OpenAI(model=os.environ["LLM_MODEL"], api_base=os.environ["LLM_API_HOST"], api_key=os.environ["LLM_KEY"]),
         tools=tools,
         system_prompt="Be helpful.",
     )
