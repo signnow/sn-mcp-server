@@ -9,21 +9,19 @@ from smolagents import (
 )
 
 
-def main():
-    # Model: HF Inference providers; just set HF_TOKEN for private/gated models
-    model = OpenAIServerModel(
-        model_id="gpt-4o-mini",  # can use "gpt-4o-mini" for cheaper
-        api_base="https://api.openai.com/v1",
-        api_key=os.environ["OPENAI_API_KEY"],
-        # organization="org_...",                  # optional
-        # project="proj_...",                      # optional
-    )
-
+def main() -> None:
     env_path = find_dotenv(usecwd=True)  # searches upward from current cwd
     env = dict(os.environ)
     if env_path:
         env.update(dotenv_values(env_path))
 
+    model = OpenAIServerModel(
+        model_id=os.environ["LLM_MODEL"],  # can use "gpt-4o-mini" for cheaper
+        api_base=os.environ["LLM_API_HOST"],
+        api_key=os.environ["LLM_KEY"],
+        # organization="org_...",                  # optional
+        # project="proj_...",                      # optional
+    )
     # Start local MCP server via your CLI (STDIO mode)
     params = StdioServerParameters(command="sn-mcp", args=["serve"], env=env)  # this is your MCP(stdio) command  # pass ENV
 
