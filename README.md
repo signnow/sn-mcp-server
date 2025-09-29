@@ -1,8 +1,60 @@
 # SignNow MCP Server
 
-A Model Context Protocol (MCP) server that provides SignNow API integration capabilities.
+> A Model Context Protocol (MCP) server that gives AI agents secure, structured access to **SignNow** e-signature workflows — templates, embedded signing, invites, status tracking, and document downloads — over **STDIO** or **Streamable HTTP**.
 
-## Quick Start
+---
+
+## Table of contents
+
+* [Features](#features)
+* [Quick start](#quick-start)
+
+  * [Local (STDIO)](#local-stdio)
+  * [Local/Remote (HTTP)](#localremote-http)
+  * [Docker](#docker)
+  * [Docker Compose](#docker-compose)
+* [Configuration](#configuration)
+
+  * [Authentication options](#authentication-options)
+  * [SignNow & OAuth settings](#signnow--oauth-settings)
+  * [Production key management](#production-key-management)
+* [Client setup](#client-setup)
+
+  * [VS Code — GitHub Copilot (Agent Mode)](#vs-code--github-copilot-agent-mode)
+  * [Claude Desktop](#claude-desktop)
+  * [Cursor](#cursor)
+  * [MCP Inspector (testing)](#mcp-inspector-testing)
+* [Tools](#tools)
+* [Security notes](#security-notes)
+* [FAQ / tips](#faq--tips)
+* [License](#license)
+* [Examples](#examples)
+
+---
+
+## Features
+
+* **Templates & groups**
+
+  * Browse all templates and template groups
+  * Create documents or groups from templates (one-shot flows included)
+* **Invites & embedded UX**
+
+  * Email invites and ordered recipients
+  * **Embedded signing/sending/editor** links for in-app experiences
+* **Status & retrieval**
+
+  * Check invite status and step details
+  * Download final documents (single or merged)
+  * Read normalized document/group structure for programmatic decisions
+* **Transports**
+
+  * **STDIO** (best for local clients)
+  * **Streamable HTTP** (best for Docker/remote)
+
+---
+
+## Quick start
 
 ### Prerequisites
 
@@ -27,185 +79,232 @@ pip install signnow-mcp-server
 
 # Run MCP server in standalone mode
 sn-mcp serve
-
-# Run HTTP server with MCP endpoints
-sn-mcp http
-
-# Run HTTP server on custom host/port
-sn-mcp http --host 127.0.0.1 --port 8080
-
-# Run HTTP server with auto-reload (for development)
-sn-mcp http --reload
 ```
 
 #### Option B: Install from Source (Development)
 
 ```bash
-# Install the package in development mode
+# 1) Clone & configure
+git clone https://github.com/signnow/sn-mcp-server.git
+cd sn-mcp-server
+cp .env.example .env
+# fill in your values in .env
+
+# 2) Install (editable for dev)
 pip install -e .
 
-# Run MCP server in standalone mode
+# 3) Run as STDIO MCP server (recommended for local tools & Inspector)
 sn-mcp serve
+```
 
-# Run HTTP server with MCP endpoints
+> STDIO is ideal for desktop clients and local testing.
+
+### Local/Remote (HTTP)
+
+```bash
+# Start HTTP server on 127.0.0.1:8000
 sn-mcp http
 
-# Run HTTP server on custom host/port
-sn-mcp http --host 127.0.0.1 --port 8080
+# Custom host/port
+sn-mcp http --host 0.0.0.0 --port 8000
 
-# Run HTTP server with auto-reload (for development)
+# Dev reload
 sn-mcp http --reload
 ```
 
-### 3. Using Docker (Alternative)
+By default, the **Streamable HTTP** MCP endpoint is served under `/mcp`. Example URL:
+
+```
+http://localhost:8000/mcp
+```
+
+### Docker
 
 ```bash
-# Build the Docker image
+# Build
 docker build -t sn-mcp-server .
 
-# Run HTTP server (recommended for Docker)
+# Run HTTP mode (recommended for containers)
 docker run --env-file .env -p 8000:8000 sn-mcp-server sn-mcp http --host 0.0.0.0 --port 8000
-
-docker run --env-file .env -p 8000:8000 sn-mcp-server sn-mcp http
-
-# Run MCP server in STDIO mode (NOT recommended for Docker)
-# Note: STDIO mode in Docker containers may not work properly with MCP clients
-# Use local installation instead: sn-mcp serve
-docker run -i --env-file .env sn-mcp-server sn-mcp serve
 ```
 
-**Important**: For MCP Inspector and other MCP clients, use local installation (`sn-mcp serve`) instead of Docker for STDIO mode. Docker is better suited for HTTP mode.
+> STDIO inside containers is unreliable with many clients. Prefer HTTP when using Docker.
 
-## Using Docker Compose
-
-### Run sn-mcp-server (MCP Server)
+### Docker Compose
 
 ```bash
-# Start the MCP server
+# Only the MCP server
 docker-compose up sn-mcp-server
 
-# Or run in background
-docker-compose up -d sn-mcp-server
+# Both services (if defined)
+docker-compose up
 ```
 
-### Run Both Services
+---
+
+## Configuration
+
+Copy `.env.example` → `.env` and fill in values. All settings are validated via **pydantic-settings** at startup.
+
+### Authentication options
+
+**1) Username / Password (recommended for desktop dev flows)**
+
+```
+SIGNNOW_USER_EMAIL=<email>
+SIGNNOW_PASSWORD=<password>
+SIGNNOW_API_BASIC_TOKEN=<base64 basic token>
+```
+
+**2) OAuth 2.0 (for hosted/advanced scenarios)**
+
+```
+SIGNNOW_CLIENT_ID=<client_id>
+SIGNNOW_CLIENT_SECRET=<client_secret>
+# + OAuth server & RSA settings below
+```
+
+> When running via some desktop clients, only user/password may be supported.
+
+### SignNow & OAuth settings
+
+```
+# SignNow endpoints (defaults shown)
+SIGNNOW_APP_BASE=https://app.signnow.com
+SIGNNOW_API_BASE=https://api.signnow.com
+
+# Optional direct API token (not required for normal use)
+SIGNNOW_TOKEN=<access_token>
+
+# OAuth server (if you enable OAuth mode)
+OAUTH_ISSUER=<your_issuer_url>
+ACCESS_TTL=3600
+REFRESH_TTL=2592000
+ALLOWED_REDIRECTS=<comma,separated,uris>
+
+# RSA keys for OAuth (critical in production)
+OAUTH_RSA_PRIVATE_PEM=<PEM content>
+OAUTH_JWK_KID=<key id>
+```
+
+### Production key management
+
+If `OAUTH_RSA_PRIVATE_PEM` is missing in production, a new RSA key will be generated on each restart, **invalidating all existing tokens**. Always provide a persistent private key via secrets management in prod.
+
+---
+
+## Client setup
+
+### VS Code — GitHub Copilot (Agent Mode)
+
+Create `.vscode/mcp.json` in your workspace:
+
+**STDIO (local):**
+
+```json
+{
+  "servers": {
+    "signnow": {
+      "command": "sn-mcp",
+      "args": ["serve"],
+      "env": {
+        "SIGNNOW_USER_EMAIL": "${env:SIGNNOW_USER_EMAIL}",
+        "SIGNNOW_PASSWORD": "${env:SIGNNOW_PASSWORD}",
+        "SIGNNOW_API_BASIC_TOKEN": "${env:SIGNNOW_API_BASIC_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+**HTTP (remote or Docker):**
+
+```json
+{
+  "servers": {
+    "signnow": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+Then open Chat → **Agent mode**, enable the **signnow** tools, and use them in prompts.
+
+### Claude Desktop
+
+Use Desktop Extensions or the manual MCP config (Developer → Edit config) to add either:
+
+* **STDIO** command: `sn-mcp serve`
+* **HTTP** endpoint: `http://localhost:8000/mcp`
+
+Follow Claude’s MCP guide for exact steps and secure secret handling.
+
+### Cursor
+
+Add the server in Cursor’s MCP settings using either **STDIO** (`sn-mcp serve`) or the **HTTP URL** (`http://localhost:8000/mcp`).
+
+### MCP Inspector (testing)
+
+Great for exploring tools & schemas visually.
 
 ```bash
-# Start both services
-docker-compose up
+# Start Inspector (opens UI on localhost)
+npx @modelcontextprotocol/inspector
 
-# Or run in background
-docker-compose up -d
+# Connect (STDIO): run your server locally and attach
+sn-mcp serve
+
+# Or connect (HTTP): use http://localhost:8000/mcp
 ```
 
-## Environment Variables
+You can list tools, call them with JSON args, and inspect responses.
 
-The application uses `pydantic-settings` for configuration management with automatic validation. 
-Copy `env.example` to `.env` and configure the following variables:
+---
 
-### Authentication Methods
+## Tools
 
-The SignNow MCP Server supports two authentication methods:
+Each tool is described concisely; use an MCP client (e.g., Inspector) to view exact JSON schemas.
 
-#### 1. Username/Password Authentication (Recommended for MCP Studio)
-When running the MCP server through MCP Studio or other MCP clients, use username/password authentication. This method requires the following environment variables:
-- `SIGNNOW_USER_EMAIL` - SignNow user email
-- `SIGNNOW_PASSWORD` - SignNow user password
-- `SIGNNOW_API_BASIC_TOKEN` - SignNow API basic token
+* **`list_all_templates`** — List templates & template groups with simplified metadata.
+* **`list_document_groups`** — Browse your document groups and statuses.
+* **`create_from_template`** — Make a document or a group from a template/group.
+* **`send_invite`** — Email invites (documents or groups), ordered recipients supported.
+* **`create_embedded_invite`** — Embedded signing session without email delivery.
+* **`create_embedded_sending`** — Embedded “sending/management” experience.
+* **`create_embedded_editor`** — Embedded editor link to place/adjust fields.
+* **`send_invite_from_template`** — One-shot: create from template and invite.
+* **`create_embedded_sending_from_template`** — One-shot: template → embedded sending.
+* **`create_embedded_editor_from_template`** — One-shot: template → embedded editor.
+* **`create_embedded_invite_from_template`** — One-shot: template → embedded signing.
+* **`get_invite_status`** — Current invite status/steps for document or group.
+* **`get_document_download_link`** — Direct download link (merged output for groups).
+* **`get_document`** — Normalized document/group structure with field values.
+* **`update_document_fields`** — Prefill text fields in individual documents.
 
-#### 2. OAuth Authentication
-For advanced use cases, you can use OAuth authentication with the following configuration:
-- `SIGNNOW_CLIENT_ID` - SignNow client ID
-- `SIGNNOW_CLIENT_SECRET` - SignNow client secret
-- OAuth server configuration (see below)
+> Tip: Start with `list_all_templates` → `create_from_template` → `create_embedded_*` / `send_invite`, then `get_invite_status` and `get_document_download_link`.
 
-**Note**: When running the MCP server through MCP Studio, only username/password authentication is supported.
+---
 
-### SignNow API Configuration
-- `SIGNNOW_APP_BASE` - SignNow app base URL (default: https://app.signnow.com)
-- `SIGNNOW_API_BASE` - SignNow API base URL (default: https://api.signnow.com)
-- `SIGNNOW_TOKEN` - Your SignNow API token (Optional, for direct API access)
+## Security notes
 
-### OAuth Configuration
-- `SIGNNOW_CLIENT_ID` - SignNow client ID (required for OAuth)
-- `SIGNNOW_CLIENT_SECRET` - SignNow client secret (required for OAuth)
+* **Never commit secrets**; use environment variables or your secret manager.
+* Scope credentials with least privilege; rotate regularly.
+* **HTTP mode:** serve over HTTPS behind a reverse proxy in production; prefer short-lived tokens.
+* The server performs state-changing operations (invites, embedded links). Most clients will ask you to **confirm tool calls** — review carefully.
+* Follow MCP server **security best practices** (secure session IDs, auth verification, secret scanning, etc.).
 
-### OAuth Server Configuration
-- `OAUTH_ISSUER` - OAuth issuer URL (default: https://lebedev.ngrok.app)
-- `ACCESS_TTL` - Access token TTL in seconds (default: 3600)
-- `REFRESH_TTL` - Refresh token TTL in seconds (default: 2592000)
-- `ALLOWED_REDIRECTS` - Comma-separated list of allowed redirect URIs
+---
 
-### OAuth RSA Key Configuration
-- `OAUTH_RSA_PRIVATE_PEM` - RSA private key in PEM format
-- `OAUTH_JWK_KID` - JWK key ID
+## FAQ / tips
 
-## Production Deployment
+* **STDIO vs Docker?** Prefer **STDIO** for local dev; inside Docker, use **HTTP**.
+* **Sandbox vs production?** Start with SignNow’s sandbox/dev credentials; production requires proper OAuth and persistent RSA private key.
+* **Where do I see exact tool schemas?** Use **MCP Inspector** or your client’s “tool details” view.
+* **Where are examples?** See `examples/` in this repo for starter integrations.
 
-**Important**: When deploying to production, you **MUST** set the `OAUTH_RSA_PRIVATE_PEM` environment variable with a persistent RSA private key. 
-
-If `OAUTH_RSA_PRIVATE_PEM` is not provided, the server will generate a new RSA key on each restart, which will invalidate all previously issued tokens. This can cause authentication issues for existing users.
-
-For production environments:
-1. Generate a persistent RSA private key
-2. Store it securely (e.g., in a secret management system)
-3. Set `OAUTH_RSA_PRIVATE_PEM` environment variable
-4. Ensure the key is backed up and can be restored if needed
-
-**Security Note**: Never commit RSA private keys to version control. Always use environment variables or secure secret management systems.
-
-## MCP Tools
-<details>
-<summary>Tools list</summary>
-
-The server exposes the following tools (brief purpose-oriented descriptions):
-
-### list_all_templates
-Lists all templates and template groups across folders with simplified metadata. Use it to choose a starting point for creating documents or groups.
-
-### list_document_groups
-Shows your document groups with basic info and statuses. Useful for browsing, monitoring, or selecting a group to manage.
-
-### send_invite
-Sends a signing or viewing invite for a document or document group with ordered recipients. Use it to kick off a signing workflow via email.
-
-### create_embedded_invite
-Creates an embedded signing session (and links if needed) for a document or group, without email delivery. Ideal for hosting signing inside your app.
-
-### create_embedded_sending
-Opens an embedded management/sending experience for a document or group. Use it in-app to configure, edit, or send invites.
-
-### create_embedded_editor
-Generates an embedded editor URL to place or adjust fields on a document or group. Great for letting users edit documents within your app.
-
-### create_from_template
-Instantiates a document or document group from a template or template group. Typically the first step before inviting or embedding when starting from a template.
-
-### send_invite_from_template
-One-shot flow: creates from a template and immediately sends an invite. Fastest way to start signing from a template.
-
-### create_embedded_sending_from_template
-One-shot flow: creates from a template and opens embedded sending. Streamlines configuring and sending invites in-app.
-
-### create_embedded_editor_from_template
-One-shot flow: creates from a template and returns an embedded editor link. Useful for laying out fields before inviting.
-
-### create_embedded_invite_from_template
-One-shot flow: creates from a template and sets up an embedded invite. Perfect for link-based, in-app signing.
-
-### get_invite_status
-Retrieves current invite status, including steps and actions, for a document or group. Use it to track progress and drive UI or reminders.
-
-### get_document_download_link
-Returns a direct download link for a document; for groups, provides a link to the merged output. Handy for exporting or archiving.
-
-### get_document
-Returns a complete, normalized structure of a document or group, including field values (always a unified DocumentGroup). Use it to inspect roles/fields and decide what to prefill or edit.
-
-### update_document_fields
-Prefills text fields in one or more individual documents (not groups). Use it to populate values before sending invites.
-
-</details>
+---
 
 ## Examples
 
@@ -235,3 +334,15 @@ python examples/llamaindex/llamaindex_example.py
 python examples/smolagents/stdio_demo.py
 ```
 
+---
+
+## License
+
+MIT — see [LICENSE.md](./LICENSE.md).
+
+---
+
+**About**
+SignNow MCP Server — maintained by the SignNow team. Issues and contributions welcome via GitHub pull requests.
+
+---
