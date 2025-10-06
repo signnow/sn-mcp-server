@@ -47,7 +47,8 @@ class SignNowConfig(BaseSettings):
         if not (has_password_grant or has_client_credentials):
             # Build helpful error message similar to JSON Schema oneOf
             missing_a = [
-                name for name, val in (
+                name
+                for name, val in (
                     ("SIGNNOW_USER_EMAIL", self.user_email),
                     ("SIGNNOW_PASSWORD", self.password),
                     ("SIGNNOW_API_BASIC_TOKEN", self.basic_token),
@@ -55,7 +56,8 @@ class SignNowConfig(BaseSettings):
                 if not val
             ]
             missing_b = [
-                name for name, val in (
+                name
+                for name, val in (
                     ("SIGNNOW_CLIENT_ID", self.client_id),
                     ("SIGNNOW_CLIENT_SECRET", self.client_secret),
                 )
