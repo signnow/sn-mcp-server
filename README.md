@@ -1,3 +1,9 @@
+# About SignNow
+
+> The SignNow REST API empowers users to deliver a seamless eSignature experience for signers, preparers, and senders. Pre-fill documents, create embedded branded workflows for multiple signers, request payments, and track signature status in real-time. Ensure signing is simple, secure, and intuitive on any device.
+
+---
+
 # SignNow MCP Server
 
 > A Model Context Protocol (MCP) server that gives AI agents secure, structured access to **SignNow** e-signature workflows — templates, embedded signing, invites, status tracking, and document downloads — over **STDIO** or **Streamable HTTP**.
@@ -287,6 +293,17 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 
 ---
 
+## What you can do with the SignNow API:
+
+* Send documents and document groups for signature in a role-based order
+* Create reusable templates from documents
+* Pre-fill document fields with data and extract the filled-in information
+* Collect payments along with signatures
+* Embed the document sending, signing, or editing experience into your website, application, or any system of record
+* Track the signing progress and download the completed documents
+
+---
+
 ## Security notes
 
 * **Never commit secrets**; use environment variables or your secret manager.
@@ -333,6 +350,26 @@ python examples/langchain/langchain_example.py
 python examples/llamaindex/llamaindex_example.py
 python examples/smolagents/stdio_demo.py
 ```
+
+---
+
+## Useful resources
+
+### Sample apps
+
+Explore ready-to-use sample apps to quickly test preparing, signing, and sending documents from your software using the SignNow API.
+
+Try the [sample apps](https://docs.signnow.com/docs/signnow/sample-apps).
+
+### API documentation
+Find technical details on SignNow API requests, parameters, code examples, and possible errors. Learn more about the API functionality in detailed guides and use cases.
+
+Read the [API documentation](https://docs.signnow.com/docs/signnow/welcome).
+
+### GitHub Copilot extension
+Develop eSignature integrations directly in GitHub using AI-powered code suggestions. Copilot recommends API calls and code snippets that align with SignNow API guidelines.
+
+Get SignNow for [GitHub Copilot](https://github.com/apps/signnow).
 
 ---
 
