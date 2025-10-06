@@ -31,10 +31,16 @@
   * [Cursor](#cursor)
   * [MCP Inspector (testing)](#mcp-inspector-testing)
 * [Tools](#tools)
+* [What you can do with the SignNow API](#what-you-can-do-with-the-signnow-api)
 * [Security notes](#security-notes)
 * [FAQ / tips](#faq--tips)
-* [License](#license)
 * [Examples](#examples)
+* [Useful resources](#useful-resources)
+
+  * [Sample apps](#sample-apps)
+  * [API documentation](#api-documentation)
+  * [GitHub Copilot extension](#github-copilot-extension)
+* [License](#license)
 
 ---
 
@@ -293,14 +299,14 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 
 ---
 
-## What you can do with the SignNow API:
+## What you can do with the SignNow API
 
 * Send documents and document groups for signature in a role-based order
 * Create reusable templates from documents
-* Pre-fill document fields with data and extract the filled-in information
-* Collect payments along with signatures
+* Pre-fill document fields with data
+* Collect payments as part of the signing flow
 * Embed the document sending, signing, or editing experience into your website, application, or any system of record
-* Track the signing progress and download the completed documents
+*Track signing progress and download the completed documents
 
 ---
 
