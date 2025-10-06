@@ -3,7 +3,7 @@
 
 > The SignNow REST API empowers users to deliver a seamless eSignature experience for signers, preparers, and senders. Pre-fill documents, create embedded branded workflows for multiple signers, request payments, and track signature status in real-time. Ensure signing is simple, secure, and intuitive on any device.
 
-## What you can do with the SignNow API
+## What you can do with the SignNow API:
 
 * Send documents and document groups for signature in a role-based order
 * Create reusable templates from documents
