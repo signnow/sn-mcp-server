@@ -73,3 +73,9 @@ tag-pattern = "^v?(?P<version>.*)$"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/sn_mcp_server/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "src/sn_mcp_server",
+  "src/signnow_client",
+]

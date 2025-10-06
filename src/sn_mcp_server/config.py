@@ -7,8 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # OAuth server configuration
-    oauth_issuer: AnyHttpUrl = Field(description="OAuth issuer URL", alias="OAUTH_ISSUER")
+    # OAuth server configuration (optional with sensible default)
+    oauth_issuer: AnyHttpUrl = Field(
+        default=AnyHttpUrl("http://localhost:8000"),
+        description="OAuth issuer URL",
+        alias="OAUTH_ISSUER",
+    )
     access_ttl: int = Field(default=3600, description="Access token TTL in seconds", alias="ACCESS_TTL")
     refresh_ttl: int = Field(default=2592000, description="Refresh token TTL in seconds", alias="REFRESH_TTL")  # 30 days
     allowed_redirects: str = Field(default="http://localhost,http://127.0.0.1", description="Comma-separated list of allowed redirect URIs", alias="ALLOWED_REDIRECTS")
