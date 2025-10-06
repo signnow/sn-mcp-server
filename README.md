@@ -1,5 +1,5 @@
 <details>
-<summary>About SignNow API</summary>
+<summary><h1>About SignNow API</h1></summary>
 
 > The SignNow REST API empowers users to deliver a seamless eSignature experience for signers, preparers, and senders. Pre-fill documents, create embedded branded workflows for multiple signers, request payments, and track signature status in real-time. Ensure signing is simple, secure, and intuitive on any device.
 
@@ -44,7 +44,6 @@
   * [Cursor](#cursor)
   * [MCP Inspector (testing)](#mcp-inspector-testing)
 * [Tools](#tools)
-* [Security notes](#security-notes)
 * [FAQ / tips](#faq--tips)
 * [Examples](#examples)
 * [Useful resources](#useful-resources)
@@ -308,16 +307,6 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`update_document_fields`** — Prefill text fields in individual documents.
 
 > Tip: Start with `list_all_templates` → `create_from_template` → `create_embedded_*` / `send_invite`, then `get_invite_status` and `get_document_download_link`.
-
----
-
-## Security notes
-
-* **Never commit secrets**; use environment variables or your secret manager.
-* Scope credentials with least privilege; rotate regularly.
-* **HTTP mode:** serve over HTTPS behind a reverse proxy in production; prefer short-lived tokens.
-* The server performs state-changing operations (invites, embedded links). Most clients will ask you to **confirm tool calls** — review carefully.
-* Follow MCP server **security best practices** (secure session IDs, auth verification, secret scanning, etc.).
 
 ---
 
