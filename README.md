@@ -44,7 +44,6 @@
   * [Cursor](#cursor)
   * [MCP Inspector (testing)](#mcp-inspector-testing)
 * [Tools](#tools)
-* [What you can do with the SignNow API](#what-you-can-do-with-the-signnow-api)
 * [Security notes](#security-notes)
 * [FAQ / tips](#faq--tips)
 * [Examples](#examples)
