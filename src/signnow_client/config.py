@@ -36,7 +36,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("api_base", mode="before")
     @classmethod
-    def validate_api_base(cls, v):
+    def validate_api_base(cls: type["SignNowConfig"], v: str | None) -> AnyHttpUrl:
         """Handle empty string for api_base"""
         if v == "" or v is None:
             return AnyHttpUrl("https://api.signnow.com")
@@ -44,7 +44,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("app_base", mode="before")
     @classmethod
-    def validate_app_base(cls, v):
+    def validate_app_base(cls: type["SignNowConfig"], v: str | None) -> AnyHttpUrl:
         """Handle empty string for app_base"""
         if v == "" or v is None:
             return AnyHttpUrl("https://app.signnow.com")
@@ -52,7 +52,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("client_id", mode="before")
     @classmethod
-    def validate_client_id(cls, v):
+    def validate_client_id(cls: type["SignNowConfig"], v: str | None) -> str | None:
         """Handle empty string for client_id"""
         if v == "":
             return None
@@ -60,7 +60,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("client_secret", mode="before")
     @classmethod
-    def validate_client_secret(cls, v):
+    def validate_client_secret(cls: type["SignNowConfig"], v: str | None) -> str | None:
         """Handle empty string for client_secret"""
         if v == "":
             return None
@@ -68,7 +68,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("basic_token", mode="before")
     @classmethod
-    def validate_basic_token(cls, v):
+    def validate_basic_token(cls: type["SignNowConfig"], v: str | None) -> str | None:
         """Handle empty string for basic_token"""
         if v == "":
             return None
@@ -76,7 +76,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("user_email", mode="before")
     @classmethod
-    def validate_user_email(cls, v):
+    def validate_user_email(cls: type["SignNowConfig"], v: str | None) -> str | None:
         """Handle empty string for user_email"""
         if v == "":
             return None
@@ -84,7 +84,7 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("password", mode="before")
     @classmethod
-    def validate_password(cls, v):
+    def validate_password(cls: type["SignNowConfig"], v: str | None) -> str | None:
         """Handle empty string for password"""
         if v == "":
             return None
@@ -92,14 +92,14 @@ class SignNowConfig(BaseSettings):
 
     @field_validator("default_scope", mode="before")
     @classmethod
-    def validate_default_scope(cls, v):
+    def validate_default_scope(cls: type["SignNowConfig"], v: str | None) -> str:
         """Handle empty string for default_scope"""
         if v == "" or v is None:
             return "*"
         return v
 
     @model_validator(mode="after")
-    def validate_one_of_credentials(self) -> "SignNowConfig":
+    def validate_one_of_credentials(self: "SignNowConfig") -> "SignNowConfig":
         """Ensure that either password grant set or client credentials set is fully provided.
 
         Option A (password grant): SIGNNOW_USER_EMAIL, SIGNNOW_PASSWORD, SIGNNOW_API_BASIC_TOKEN
