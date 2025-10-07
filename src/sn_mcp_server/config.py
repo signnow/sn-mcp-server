@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     @field_validator("oauth_issuer", mode="before")
     @classmethod
-    def validate_oauth_issuer(cls, v):
+    def validate_oauth_issuer(cls: type["Settings"], v: str | None) -> AnyHttpUrl:
         """Handle empty string for oauth_issuer"""
         if v == "" or v is None:
             return AnyHttpUrl("http://localhost:8000")
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     @field_validator("access_ttl", mode="before")
     @classmethod
-    def validate_access_ttl(cls, v):
+    def validate_access_ttl(cls: type["Settings"], v: str | None) -> int:
         """Handle empty string for access_ttl"""
         if v == "" or v is None:
             return 3600
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     @field_validator("refresh_ttl", mode="before")
     @classmethod
-    def validate_refresh_ttl(cls, v):
+    def validate_refresh_ttl(cls: type["Settings"], v: str | None) -> int:
         """Handle empty string for refresh_ttl"""
         if v == "" or v is None:
             return 2592000
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     @field_validator("allowed_redirects")
     @classmethod
-    def validate_redirects(cls, v: str) -> str:
+    def validate_redirects(cls: type["Settings"], v: str) -> str:
         """Validate that all redirect URIs are valid"""
         if not v:
             return v
@@ -57,29 +57,29 @@ class Settings(BaseSettings):
             try:
                 AnyHttpUrl(uri)
             except ValueError as e:
-                raise ValueError(f"Invalid redirect URI '{uri}': {e}")
+                raise ValueError(f"Invalid redirect URI '{uri}': {e}") from e
         return v
 
     @property
-    def allowed_redirects_list(self) -> list[str]:
+    def allowed_redirects_list(self: "Settings") -> list[str]:
         """Convert comma-separated redirects string to list"""
         return [uri.strip() for uri in self.allowed_redirects.split(",") if uri.strip()]
 
     @property
-    def effective_resource_http_url(self) -> str:
+    def effective_resource_http_url(self: "Settings") -> str:
         """Get resource HTTP URL, auto-generated from oauth_issuer"""
         if not self.oauth_issuer:
             raise ValueError("OAUTH_ISSUER is required to generate resource URLs")
         return f"{str(self.oauth_issuer).rstrip('/')}/mcp"
 
     @property
-    def effective_resource_sse_url(self) -> str:
+    def effective_resource_sse_url(self: "Settings") -> str:
         """Get resource SSE URL, auto-generated from oauth_issuer"""
         if not self.oauth_issuer:
             raise ValueError("OAUTH_ISSUER is required to generate resource URLs")
         return f"{str(self.oauth_issuer).rstrip('/')}/sse"
 
-    def get_rsa_private_key(self) -> rsa.RSAPrivateKey:
+    def get_rsa_private_key(self: "Settings") -> rsa.RSAPrivateKey:
         """Get RSA private key - either from config or generate new one"""
         if self.oauth_rsa_private_pem:
             try:
