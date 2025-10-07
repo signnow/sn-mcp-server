@@ -4,7 +4,7 @@ SignNow API Configuration
 Configuration settings for the SignNow API client.
 """
 
-from pydantic import AnyHttpUrl, Field, ValidationError, model_validator
+from pydantic import AnyHttpUrl, Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +33,70 @@ class SignNowConfig(BaseSettings):
 
     # Default scope
     default_scope: str = Field(default="*", description="Default OAuth scope")
+
+    @field_validator("api_base", mode="before")
+    @classmethod
+    def validate_api_base(cls, v):
+        """Handle empty string for api_base"""
+        if v == "" or v is None:
+            return AnyHttpUrl("https://api.signnow.com")
+        return v
+
+    @field_validator("app_base", mode="before")
+    @classmethod
+    def validate_app_base(cls, v):
+        """Handle empty string for app_base"""
+        if v == "" or v is None:
+            return AnyHttpUrl("https://app.signnow.com")
+        return v
+
+    @field_validator("client_id", mode="before")
+    @classmethod
+    def validate_client_id(cls, v):
+        """Handle empty string for client_id"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator("client_secret", mode="before")
+    @classmethod
+    def validate_client_secret(cls, v):
+        """Handle empty string for client_secret"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator("basic_token", mode="before")
+    @classmethod
+    def validate_basic_token(cls, v):
+        """Handle empty string for basic_token"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator("user_email", mode="before")
+    @classmethod
+    def validate_user_email(cls, v):
+        """Handle empty string for user_email"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def validate_password(cls, v):
+        """Handle empty string for password"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator("default_scope", mode="before")
+    @classmethod
+    def validate_default_scope(cls, v):
+        """Handle empty string for default_scope"""
+        if v == "" or v is None:
+            return "*"
+        return v
 
     @model_validator(mode="after")
     def validate_one_of_credentials(self) -> "SignNowConfig":

@@ -21,6 +21,30 @@ class Settings(BaseSettings):
     oauth_rsa_private_pem: str | None = Field(default=None, description="OAuth RSA private key in PEM format", alias="OAUTH_RSA_PRIVATE_PEM")
     oauth_jwk_kid: str = Field(default="mcp-dev-key", description="OAuth JWK key ID", alias="OAUTH_JWK_KID")
 
+    @field_validator("oauth_issuer", mode="before")
+    @classmethod
+    def validate_oauth_issuer(cls, v):
+        """Handle empty string for oauth_issuer"""
+        if v == "" or v is None:
+            return AnyHttpUrl("http://localhost:8000")
+        return v
+
+    @field_validator("access_ttl", mode="before")
+    @classmethod
+    def validate_access_ttl(cls, v):
+        """Handle empty string for access_ttl"""
+        if v == "" or v is None:
+            return 3600
+        return v
+
+    @field_validator("refresh_ttl", mode="before")
+    @classmethod
+    def validate_refresh_ttl(cls, v):
+        """Handle empty string for refresh_ttl"""
+        if v == "" or v is None:
+            return 2592000
+        return v
+
     @field_validator("allowed_redirects")
     @classmethod
     def validate_redirects(cls, v: str) -> str:
