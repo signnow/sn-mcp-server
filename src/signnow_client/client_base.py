@@ -8,7 +8,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from typing import Self
+    pass
 
 import httpx
 
@@ -42,7 +42,7 @@ class SignNowAPIClientBase:
             headers={"User-Agent": "sn-mcp-server/0.1"},
         )
 
-    def __enter__(self) -> "Self":
+    def __enter__(self) -> "SignNowAPIClientBase":
         """Context manager entry"""
         return self
 
