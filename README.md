@@ -28,7 +28,10 @@ The SignNow REST API empowers users to deliver a seamless eSignature experience 
 * [Features](#features)
 * [Quick start](#quick-start)
 
-  * [Local (STDIO)](#local-stdio)
+  * [Prerequisites](#prerequisites)
+  * [Quick run (uvx)](#quick-run-uvx)
+  * [1. Setup Environment Variables](#1-setup-environment-variables)
+  * [2. Install and Run](#2-install-and-run)
   * [Local/Remote (HTTP)](#localremote-http)
   * [Docker](#docker)
   * [Docker Compose](#docker-compose)
@@ -39,9 +42,9 @@ The SignNow REST API empowers users to deliver a seamless eSignature experience 
   * [Production key management](#production-key-management)
 * [Client setup](#client-setup)
 
-  * [VS Code — GitHub Copilot (Agent Mode)](#vs-code--github-copilot-agent-mode)
+  * [VS Code — GitHub Copilot (Agent Mode) / Cursor](#vs-code--github-copilot-agent-mode--cursor)
   * [Claude Desktop](#claude-desktop)
-  * [Cursor](#cursor)
+  * [Glama (hosted MCP)](#glama-hosted-mcp)
   * [MCP Inspector (testing)](#mcp-inspector-testing)
 * [Tools](#tools)
 * [FAQ / tips](#faq--tips)
