@@ -84,6 +84,14 @@ The SignNow REST API empowers users to deliver a seamless eSignature experience 
 - Python 3.11+ installed on your system
 - Environment variables configured
 
+### Quick run (uvx)
+
+If you use `uv`, you can run the server without installing the package:
+
+```bash
+uvx --from signnow-mcp-server sn-mcp serve
+```
+
 ### 1. Setup Environment Variables
 
 ```bash
@@ -218,9 +226,9 @@ If `OAUTH_RSA_PRIVATE_PEM` is missing in production, a new RSA key will be gener
 
 ## Client setup
 
-### VS Code — GitHub Copilot (Agent Mode)
+### VS Code — GitHub Copilot (Agent Mode) / Cursor
 
-Create `.vscode/mcp.json` in your workspace:
+Create `.vscode/mcp.json` / `.cursor/mcp.json` in your workspace:
 
 **STDIO (local):**
 
@@ -230,6 +238,24 @@ Create `.vscode/mcp.json` in your workspace:
     "signnow": {
       "command": "sn-mcp",
       "args": ["serve"],
+      "env": {
+        "SIGNNOW_USER_EMAIL": "${env:SIGNNOW_USER_EMAIL}",
+        "SIGNNOW_PASSWORD": "${env:SIGNNOW_PASSWORD}",
+        "SIGNNOW_API_BASIC_TOKEN": "${env:SIGNNOW_API_BASIC_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+**STDIO (uvx — no local install):**
+
+```json
+{
+  "servers": {
+    "signnow": {
+      "command": "uvx",
+      "args": ["--from", "signnow-mcp-server", "sn-mcp", "serve"],
       "env": {
         "SIGNNOW_USER_EMAIL": "${env:SIGNNOW_USER_EMAIL}",
         "SIGNNOW_PASSWORD": "${env:SIGNNOW_PASSWORD}",
@@ -255,18 +281,91 @@ Create `.vscode/mcp.json` in your workspace:
 
 Then open Chat → **Agent mode**, enable the **signnow** tools, and use them in prompts.
 
+Note: The same configuration applies in Cursor — add it under MCP settings (STDIO or HTTP). For STDIO, you can also use `uvx` as shown above.
+
 ### Claude Desktop
 
-Use Desktop Extensions or the manual MCP config (Developer → Edit config) to add either:
+Use Desktop Extensions or the manual MCP config (Developer → Edit config).
 
-* **STDIO** command: `sn-mcp serve`
-* **HTTP** endpoint: `http://localhost:8000/mcp`
+Steps:
 
-Follow Claude’s MCP guide for exact steps and secure secret handling.
+1. Open Claude Desktop → Developer → Edit config
+2. Add a new server entry under `mcpServers`
+3. Save and restart Claude Desktop
 
-### Cursor
+Examples:
 
-Add the server in Cursor’s MCP settings using either **STDIO** (`sn-mcp serve`) or the **HTTP URL** (`http://localhost:8000/mcp`).
+**STDIO (local install):**
+
+```json
+{
+  "mcpServers": {
+    "signnow": {
+      "command": "sn-mcp",
+      "args": ["serve"],
+      "env": {
+        "SIGNNOW_USER_EMAIL": "${env:SIGNNOW_USER_EMAIL}",
+        "SIGNNOW_PASSWORD": "${env:SIGNNOW_PASSWORD}",
+        "SIGNNOW_API_BASIC_TOKEN": "${env:SIGNNOW_API_BASIC_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+**STDIO (uvx — no local install):**
+
+```json
+{
+  "mcpServers": {
+    "signnow": {
+      "command": "uvx",
+      "args": ["--from", "signnow-mcp-server", "sn-mcp", "serve"],
+      "env": {
+        "SIGNNOW_USER_EMAIL": "${env:SIGNNOW_USER_EMAIL}",
+        "SIGNNOW_PASSWORD": "${env:SIGNNOW_PASSWORD}",
+        "SIGNNOW_API_BASIC_TOKEN": "${env:SIGNNOW_API_BASIC_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+**HTTP (remote or Docker):**
+
+```json
+{
+  "mcpServers": {
+    "signnow": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+Then enable the server in Claude’s chat and start using the tools.
+
+### Glama (hosted MCP)
+
+Deploy and run this server on Glama with minimal setup:
+
+Steps:
+
+1. Open the server page on Glama: [sn-mcp-server on Glama](https://glama.ai/mcp/servers/@mihasicehcek/sn-mcp-server)
+2. Click the red "Deploy Server" button
+3. In environment variables, provide:
+   - `SIGNNOW_USER_EMAIL`
+   - `SIGNNOW_PASSWORD`
+   - `SIGNNOW_API_BASIC_TOKEN`
+   - (other variables can be left as defaults)
+4. Create an access token in Glama and copy the endpoint URL. It will look like:
+
+```
+https://glama.ai/endpoints/{someId}/mcp?token={glama-mcp-token}
+```
+
+Use this HTTP MCP URL in any client that supports HTTP transport (e.g., VS Code/Cursor JSON config or Claude Desktop HTTP example above).
 
 ### MCP Inspector (testing)
 
