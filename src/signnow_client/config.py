@@ -146,6 +146,46 @@ class SignNowConfig(BaseSettings):
         return self
 
 
+def _mask_secret_value(value: str) -> str:
+    """Mask secret values for logging"""
+    if not value or len(value) < 4:
+        return "***"
+    return value[:2] + "*" * (len(value) - 4) + value[-2:]
+
+
+def _print_config_values(config: SignNowConfig) -> None:
+    """Print all config values that were loaded from environment variables"""
+    print("=" * 80)
+    print("Configuration values loaded from environment (SignNow):")
+    print("=" * 80)
+
+    # Fields that contain secrets and should be masked
+    secret_fields = {
+        "SIGNNOW_CLIENT_SECRET",
+        "SIGNNOW_API_BASIC_TOKEN",
+        "SIGNNOW_PASSWORD",
+    }
+
+    # Use model_dump with by_alias=True to get values by their env var names
+    config_dict = config.model_dump(by_alias=True)
+
+    # Print all config values using their aliases (env var names)
+    for env_var_name, value in sorted(config_dict.items()):
+        if value is None:
+            print(f"  {env_var_name}=<not set>")
+        else:
+            if env_var_name in secret_fields:
+                str_value = str(value)
+                masked = _mask_secret_value(str_value)
+                print(f"  {env_var_name}={masked}")
+            else:
+                print(f"  {env_var_name}={value}")
+
+    print("=" * 80)
+
+
 def load_signnow_config() -> SignNowConfig:
     """Load SignNow configuration from environment variables"""
-    return SignNowConfig()
+    config = SignNowConfig()
+    _print_config_values(config)
+    return config
