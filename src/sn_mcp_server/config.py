@@ -93,5 +93,41 @@ class Settings(BaseSettings):
         return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
+def _mask_secret_value(value: str) -> str:
+    """Mask secret values for logging"""
+    if not value or len(value) < 4:
+        return "***"
+    return value[:2] + "*" * (len(value) - 4) + value[-2:]
+
+
+def _print_config_values(settings: Settings) -> None:
+    """Print all config values that were loaded from environment variables"""
+    print("=" * 80)
+    print("Configuration values loaded from environment (sn_mcp_server):")
+    print("=" * 80)
+
+    # Get field aliases (which are the env variable names)
+    secret_fields = {"OAUTH_RSA_PRIVATE_PEM"}
+
+    # Use model_dump with by_alias=True to get values by their env var names
+    config_dict = settings.model_dump(by_alias=True)
+
+    # Print all config values using their aliases (env var names)
+    for env_var_name, value in sorted(config_dict.items()):
+        if value is None:
+            print(f"  {env_var_name}=<not set>")
+        else:
+            if env_var_name in secret_fields:
+                str_value = str(value)
+                masked = _mask_secret_value(str_value)
+                print(f"  {env_var_name}={masked}")
+            else:
+                print(f"  {env_var_name}={value}")
+
+    print("=" * 80)
+
+
 def load_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    _print_config_values(settings)
+    return settings
