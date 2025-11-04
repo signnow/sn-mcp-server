@@ -143,7 +143,7 @@ class DocumentResponse(BaseModel):
     document_group_template_info: list[dict[str, Any]] = Field(..., description="Document group template info")
     originator_organization_settings: list[dict[str, str]] = Field(..., description="Originator organization settings")
     document_group_info: dict[str, Any] = Field(..., description="Document group info")
-    parent_id: str = Field(..., description="Parent ID")
+    parent_id: str | None = Field(None, description="Parent ID")
     originator_logo: str = Field(..., description="Originator logo")
     pages: list[DocumentPage] = Field(..., description="Document pages")
     lines: list[dict[str, Any]] = Field(..., description="Document lines")
@@ -230,7 +230,7 @@ class FolderDocument(BaseModel):
     enumeration_options: list[dict[str, Any]] = Field(..., description="Enumeration options")
     attachments: list[dict[str, Any]] = Field(..., description="Document attachments")
     exported_to: list[dict[str, Any]] = Field(..., description="Export information")
-    parent_id: str = Field(..., description="Parent ID")
+    parent_id: str | None = Field(None, description="Parent ID")
     entity_labels: list[dict[str, Any]] = Field(..., description="Entity labels")
 
 

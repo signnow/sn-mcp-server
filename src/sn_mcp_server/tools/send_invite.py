@@ -37,11 +37,11 @@ def _send_document_group_field_invite(client: SignNowAPIClient, token: str, enti
             # Create FieldInviteAction only for documents with matching roles
             for document in document_group.documents:
                 # Only create action if the document has the required role
-                if recipient.role_name in document.roles:
+                if recipient.role in document.roles:
                     # Only include redirect_target if redirect_uri is provided
                     action_data = {
                         "email": recipient.email,
-                        "role_name": recipient.role_name,
+                        "role_name": recipient.role,
                         "action": recipient.action,
                         "document_id": document.id,  # Use actual document ID from the group
                         "redirect_uri": recipient.redirect_uri,
@@ -84,7 +84,7 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
             # Create DocumentFieldInviteRecipient for each recipient
             recipient_data = {
                 "email": recipient.email,
-                "role": recipient.role_name,
+                "role": recipient.role,
                 "order": order_info.order,
                 "redirect_uri": recipient.redirect_uri,
                 "decline_by_signature": "1" if recipient.decline_redirect_uri else "0",

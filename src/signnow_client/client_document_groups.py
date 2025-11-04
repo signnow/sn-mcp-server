@@ -38,6 +38,7 @@ from .models import (
     GenerateEmbeddedInviteLinkRequest,
     GetDocumentGroupResponse,
     GetDocumentGroupTemplateRecipientsResponse,
+    GetDocumentGroupTemplateResponse,
     GetDocumentGroupV2Response,
     GetFieldInviteResponse,
     GetRecipientsResponse,
@@ -65,6 +66,22 @@ class DocumentGroupClientMixin:
         params = {"limit": limit, "offset": offset}
 
         return self._get("/user/documentgroup/templates", headers=headers, params=params, validate_model=DocumentGroupTemplatesResponse)
+
+    def get_document_group_template(self, token: str, template_group_id: str) -> GetDocumentGroupTemplateResponse:
+        """
+        Get a specific document group template by ID from SignNow API.
+
+        Args:
+            token: Access token for authentication
+            template_group_id: ID of the document group template to retrieve
+
+        Returns:
+            Validated GetDocumentGroupTemplateResponse model
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._get(f"/documentgroup/template/{template_group_id}", headers=headers, validate_model=GetDocumentGroupTemplateResponse)
 
     def get_document_groups(self, token: str, limit: int = 50, offset: int = 0) -> DocumentGroupsResponse:
         """
