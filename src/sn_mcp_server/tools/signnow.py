@@ -1,3 +1,4 @@
+import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
@@ -46,6 +47,63 @@ from .models import (
     UpdateDocumentFieldsResponse,
 )
 from .send_invite import _send_invite, _send_invite_from_template
+
+
+def _normalize_orders(orders: Any, order_type: type) -> list[Any]:
+    """Normalize orders parameter - handle both list and JSON string inputs.
+
+    Args:
+        orders: Input orders - can be a list, JSON string, dict, or None
+        order_type: Type of order model (InviteOrder or EmbeddedInviteOrder)
+
+    Returns:
+        List of order objects (Pydantic models)
+    """
+    if orders is None:
+        return []
+
+    # If it's already a list, validate and convert items if needed
+    if isinstance(orders, list):
+        result = []
+        for item in orders:
+            if isinstance(item, order_type):
+                # Already a Pydantic model of the correct type
+                result.append(item)
+            elif isinstance(item, dict):
+                # Convert dict to Pydantic model
+                result.append(order_type(**item))
+            else:
+                # Try to convert other types
+                result.append(order_type(**item) if hasattr(item, "__dict__") else item)
+        return result
+
+    # If it's a string, try to parse as JSON
+    if isinstance(orders, str):
+        try:
+            parsed = json.loads(orders)
+            if isinstance(parsed, list):
+                result = []
+                for item in parsed:
+                    if isinstance(item, dict):
+                        result.append(order_type(**item))
+                    elif isinstance(item, order_type):
+                        result.append(item)
+                    else:
+                        raise ValueError(f"Invalid order item type in list: {type(item)}")
+                return result
+            elif isinstance(parsed, dict):
+                # Single order object
+                return [order_type(**parsed)]
+            else:
+                raise ValueError(f"Parsed JSON is neither a list nor a dict: {type(parsed)}")
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            raise ValueError(f"Invalid orders format: {e}") from e
+
+    # If it's a dict, wrap in list
+    if isinstance(orders, dict):
+        return [order_type(**orders)]
+
+    raise ValueError(f"Invalid orders type: {type(orders)}")
 
 
 def bind(mcp: Any, cfg: Any) -> None:
@@ -97,7 +155,16 @@ def bind(mcp: Any, cfg: Any) -> None:
     def send_invite(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
-        orders: Annotated[list[InviteOrder] | None, Field(description="List of orders with recipients")],
+        orders: Annotated[
+            list[InviteOrder] | str | None,
+            Field(
+                description="List of orders with recipients (can be a list or JSON string)",
+                examples=[
+                    [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
+                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}]',
+                ],
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -107,7 +174,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the document or document group
-            orders: List of orders with recipients
+            orders: List of orders with recipients (can be a list or JSON string)
             entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
 
         Returns:
@@ -119,9 +186,12 @@ def bind(mcp: Any, cfg: Any) -> None:
         if not token:
             raise ValueError("No access token available")
 
+        # Normalize orders parameter (handle JSON string input)
+        normalized_orders = _normalize_orders(orders, InviteOrder)
+
         # Initialize client and use the imported function from send_invite module
         client = SignNowAPIClient(token_provider.signnow_config)
-        return _send_invite(entity_id, entity_type, orders or [], token, client)
+        return _send_invite(entity_id, entity_type, normalized_orders, token, client)
 
     @mcp.tool(
         name="create_embedded_invite",
@@ -131,7 +201,16 @@ def bind(mcp: Any, cfg: Any) -> None:
     def create_embedded_invite(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
-        orders: Annotated[list[EmbeddedInviteOrder] | None, Field(description="List of orders with recipients")],
+        orders: Annotated[
+            list[EmbeddedInviteOrder] | str | None,
+            Field(
+                description="List of orders with recipients (can be a list or JSON string)",
+                examples=[
+                    [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}],
+                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}]',
+                ],
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -143,7 +222,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the document or document group
-            orders: List of orders with recipients
+            orders: List of orders with recipients (can be a list or JSON string)
             entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
 
         Returns:
@@ -155,9 +234,12 @@ def bind(mcp: Any, cfg: Any) -> None:
         if not token:
             raise ValueError("No access token available")
 
+        # Normalize orders parameter (handle JSON string input)
+        normalized_orders = _normalize_orders(orders, EmbeddedInviteOrder)
+
         # Initialize client and use the imported function from embedded_invite module
         client = SignNowAPIClient(token_provider.signnow_config)
-        return _create_embedded_invite(entity_id, entity_type, orders or [], token, client)
+        return _create_embedded_invite(entity_id, entity_type, normalized_orders, token, client)
 
     @mcp.tool(
         name="create_embedded_sending",
@@ -279,7 +361,16 @@ def bind(mcp: Any, cfg: Any) -> None:
     async def send_invite_from_template(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
-        orders: Annotated[list[InviteOrder], Field(description="List of orders with recipients for the invite")],
+        orders: Annotated[
+            list[InviteOrder] | str,
+            Field(
+                description="List of orders with recipients for the invite (can be a list or JSON string)",
+                examples=[
+                    [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
+                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}]',
+                ],
+            ),
+        ],
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -294,7 +385,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the template or template group
-            orders: List of orders with recipients for the invite
+            orders: List of orders with recipients for the invite (can be a list or JSON string)
             entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             name: Optional name for the new document or document group
 
@@ -307,9 +398,12 @@ def bind(mcp: Any, cfg: Any) -> None:
         if not token:
             raise ValueError("No access token available")
 
+        # Normalize orders parameter (handle JSON string input)
+        normalized_orders = _normalize_orders(orders, InviteOrder)
+
         # Initialize client and use the imported function from send_invite module
         client = SignNowAPIClient(token_provider.signnow_config)
-        return await _send_invite_from_template(entity_id, entity_type, name, orders or [], token, client, ctx)
+        return await _send_invite_from_template(entity_id, entity_type, name, normalized_orders, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_sending_from_template",
@@ -409,7 +503,16 @@ def bind(mcp: Any, cfg: Any) -> None:
     async def create_embedded_invite_from_template(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
-        orders: Annotated[list[EmbeddedInviteOrder] | None, Field(description="List of orders with recipients for the embedded invite")],
+        orders: Annotated[
+            list[EmbeddedInviteOrder] | str | None,
+            Field(
+                description="List of orders with recipients for the embedded invite (can be a list or JSON string)",
+                examples=[
+                    [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}],
+                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}]',
+                ],
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -424,7 +527,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the template or template group
-            orders: List of orders with recipients for the embedded invite
+            orders: List of orders with recipients for the embedded invite (can be a list or JSON string)
             entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             name: Optional name for the new document or document group
 
@@ -437,9 +540,12 @@ def bind(mcp: Any, cfg: Any) -> None:
         if not token:
             raise ValueError("No access token available")
 
+        # Normalize orders parameter (handle JSON string input)
+        normalized_orders = _normalize_orders(orders, EmbeddedInviteOrder)
+
         # Initialize client and use the imported function from embedded_invite module
         client = SignNowAPIClient(token_provider.signnow_config)
-        return await _create_embedded_invite_from_template(entity_id, entity_type, name, orders or [], token, client, ctx)
+        return await _create_embedded_invite_from_template(entity_id, entity_type, name, normalized_orders, token, client, ctx)
 
     @mcp.tool(name="get_invite_status", description="Get invite status for a document or document group", tags=["invite", "status", "document", "document_group", "workflow"])
     def get_invite_status(
@@ -500,7 +606,11 @@ def bind(mcp: Any, cfg: Any) -> None:
         client = SignNowAPIClient(token_provider.signnow_config)
         return _get_document_download_link(entity_id, entity_type, token, client)
 
-    @mcp.tool(name="get_document", description="Get full document, template, template group or document group information with field values", tags=["document", "document_group", "template", "template_group", "get", "fields"])
+    @mcp.tool(
+        name="get_document",
+        description="Get full document, template, template group or document group information with field values",
+        tags=["document", "document_group", "template", "template_group", "get", "fields"],
+    )
     def get_document(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
@@ -544,7 +654,30 @@ def bind(mcp: Any, cfg: Any) -> None:
         description="Update text fields in multiple documents (only individual documents, not document groups)",
         tags=["document", "fields", "update", "prefill"],
     )
-    def update_document_fields(ctx: Context, update_requests: Annotated[list[UpdateDocumentFields], Field(description="Array of document field update requests")]) -> UpdateDocumentFieldsResponse:
+    def update_document_fields(
+        ctx: Context,
+        update_requests: Annotated[
+            list[UpdateDocumentFields],
+            Field(
+                description="Array of document field update requests",
+                examples=[
+                    [
+                        {
+                            "document_id": "abc123",
+                            "fields": [
+                                {"name": "FieldName1", "value": "New Value 1"},
+                                {"name": "FieldName2", "value": "New Value 2"},
+                            ],
+                        },
+                        {
+                            "document_id": "def456",
+                            "fields": [{"name": "FieldName3", "value": "New Value 3"}],
+                        },
+                    ],
+                ],
+            ),
+        ],
+    ) -> UpdateDocumentFieldsResponse:
         """Update text fields in multiple documents.
 
         This tool updates text fields in multiple documents using the SignNow API.

@@ -5,9 +5,8 @@ This module contains functions for retrieving documents and document groups
 from the SignNow API and converting them to simplified formats for MCP tools.
 """
 
-from typing import Any
-
 from signnow_client import SignNowAPIClient
+from signnow_client.config import SignNowConfig
 
 from .models import (
     SimplifiedDocumentGroup,
@@ -16,7 +15,7 @@ from .models import (
 )
 
 
-def _list_document_groups(token: str, signnow_config: Any, limit: int = 50, offset: int = 0) -> SimplifiedDocumentGroupsResponse:
+def _list_document_groups(token: str, signnow_config: SignNowConfig, limit: int = 50, offset: int = 0) -> SimplifiedDocumentGroupsResponse:
     """Provide simplified list of document groups with basic fields.
 
     Args:
@@ -37,7 +36,9 @@ def _list_document_groups(token: str, signnow_config: Any, limit: int = 50, offs
     for group in full_response.document_groups:
         simplified_docs = []
         for doc in group.documents:
-            simplified_doc = SimplifiedDocumentGroupDocument(id=doc.id, name=doc.document_name, roles=doc.roles)
+            # Use document_name if available, otherwise fallback to document ID
+            document_name = doc.document_name if doc.document_name is not None else doc.id
+            simplified_doc = SimplifiedDocumentGroupDocument(id=doc.id, name=document_name, roles=doc.roles)
             simplified_docs.append(simplified_doc)
 
         simplified_group = SimplifiedDocumentGroup(

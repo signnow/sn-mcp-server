@@ -6,6 +6,8 @@ Pydantic models for SignNow API responses and requests related to document group
 
 from typing import Any
 
+from typing_extensions import Self
+
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
 
@@ -32,7 +34,7 @@ class DocumentGroupDocument(BaseModel):
     """Document information within a document group."""
 
     id: str = Field(..., description="Document ID")
-    document_name: str = Field(..., description="Document name")
+    document_name: str | None = Field(None, description="Document name")
     thumbnail: dict[str, str] = Field(..., description="Document thumbnails")
     roles: list[str] = Field(..., description="Roles defined for this document")
 
@@ -150,7 +152,7 @@ class DocumentGroupTemplateRecipientAttributes(BaseModel):
     decline_redirect_uri: str | None = Field(None, description="URL after recipient declines document")
     close_redirect_uri: str | None = Field(None, description="URL after save progress or close")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self: Self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -213,7 +215,7 @@ class CreateDocumentGroupEmbeddedEditorRequest(BaseModel):
     link_expiration: int | None = Field(15, description="Link expiration in minutes (default: 15, max: 43200 for Admin users)")
     redirect_target: str | None = Field("self", description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self: Self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -229,7 +231,7 @@ class CreateDocumentGroupEmbeddedSendingRequest(BaseModel):
     link_expiration: int | None = Field(15, description="Link expiration in minutes (15-45, max: 43200 for Admin users)")
     type: str | None = Field("manage", description="Sending step: 'manage' (Add documents), 'edit' (editor), 'send-invite' (Send Invite page)")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self: Self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
