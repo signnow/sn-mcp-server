@@ -132,7 +132,7 @@ class DocumentClientMixin:
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in prefill_text_fields request: {e}") from e
 
-    def get_document(self, token: str, document_id: str, include_integration_objects: bool = False) -> DocumentResponse:
+    def get_document(self, token: str, document_id: str) -> DocumentResponse:
         """
         Get document details.
 
@@ -151,8 +151,6 @@ class DocumentClientMixin:
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
 
         params = {}
-        if include_integration_objects:
-            params["include"] = "integration_objects"
 
         return self._get(f"/document/{document_id}", headers=headers, params=params, validate_model=DocumentResponse)
 

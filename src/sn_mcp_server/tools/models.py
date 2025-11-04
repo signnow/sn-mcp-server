@@ -90,10 +90,10 @@ class InviteRecipient(BaseModel):
     """Recipient information for invite."""
 
     email: str = Field(..., description="Recipient's email address")
-    role_name: str = Field(..., description="Recipient's role name in the document")
+    role: str = Field(..., description="Recipient's role name in the document")
     message: str | None = Field(None, description="Custom email message for the recipient")
     subject: str | None = Field(None, description="Custom email subject for the recipient")
-    action: str = Field(..., description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    action: str = Field(default='sign', description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
     redirect_uri: str | None = Field(None, description="Link that opens after completion")
     redirect_target: str | None = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     decline_redirect_uri: str | None = Field(None, description="URL that opens after decline")
@@ -126,8 +126,8 @@ class EmbeddedInviteRecipient(BaseModel):
     """Recipient information for embedded invite."""
 
     email: str = Field(..., description="Recipient's email address")
-    role_name: str = Field(..., description="Recipient's role name in the document")
-    action: str = Field(..., description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    role: str = Field(..., description="Recipient's role name in the document")
+    action: str = Field(default='sign', description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
     auth_method: str = Field("none", description="Authentication method in integrated app: 'password', 'email', 'mfa', 'biometric', 'social', 'other', 'none'")
     first_name: str | None = Field(None, description="Recipient's first name")
     last_name: str | None = Field(None, description="Recipient's last name")
@@ -321,7 +321,7 @@ class DocumentGroupStatusAction(BaseModel):
     email: str = Field(..., description="Recipient's email address")
     document_id: str = Field(..., description="ID of the document")
     status: str = Field(..., description="Action status: 'created', 'pending', 'fulfilled'")
-    role_name: str = Field(..., description="Role name for this action")
+    role: str = Field(..., description="Role name for this action")
 
 
 class DocumentGroupStatusStep(BaseModel):

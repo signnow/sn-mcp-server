@@ -44,7 +44,7 @@ def _create_document_group_embedded_invite(client: SignNowAPIClient, token: str,
                 "delivery_type": recipient.delivery_type,
                 "subject": recipient.subject,
                 "message": recipient.message,
-                "documents": [{"id": doc.id, "role": recipient.role_name, "action": recipient.action} for doc in document_group.documents if recipient.role_name in doc.roles],
+                "documents": [{"id": doc.id, "role": recipient.role, "action": recipient.action} for doc in document_group.documents if recipient.role in doc.roles],
             }
 
             # Only add redirect_target if redirect_uri is provided and not empty
@@ -70,7 +70,7 @@ def _create_document_group_embedded_invite(client: SignNowAPIClient, token: str,
 
                 link_request = GenerateEmbeddedInviteLinkRequest(email=recipient.email, auth_method=recipient.auth_method)
                 link_response = client.generate_embedded_invite_link(token, entity_id, response.data.id, link_request)
-                recipient_links.append({"role": recipient.role_name, "link": link_response.data.link})
+                recipient_links.append({"role": recipient.role, "link": link_response.data.link})
 
     return CreateEmbeddedInviteResponse(invite_id=response.data.id, invite_entity="document_group", recipient_links=recipient_links)
 
@@ -101,7 +101,7 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
                 "delivery_type": recipient.delivery_type,
                 "subject": recipient.subject,
                 "message": recipient.message,
-                "documents": [{"id": entity_id, "role": recipient.role_name, "action": recipient.action}],
+                "documents": [{"id": entity_id, "role": recipient.role, "action": recipient.action}],
             }
 
             # Only add redirect_target if redirect_uri is provided and not empty
@@ -126,7 +126,7 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
 
                 link_request = GenerateDocumentEmbeddedInviteLinkRequest(email=recipient.email, auth_method=recipient.auth_method)
                 link_response = client.generate_document_embedded_invite_link(token, entity_id, response.data.id, link_request)
-                recipient_links.append({"role": recipient.role_name, "link": link_response.data.link})
+                recipient_links.append({"role": recipient.role, "link": link_response.data.link})
 
     return CreateEmbeddedInviteResponse(invite_id=response.data.id, invite_entity="document", recipient_links=recipient_links)
 

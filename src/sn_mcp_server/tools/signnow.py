@@ -97,18 +97,18 @@ def bind(mcp: Any, cfg: Any) -> None:
     def send_invite(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        orders: Annotated[list[InviteOrder] | None, Field(description="List of orders with recipients")],
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
-        orders: Annotated[list[InviteOrder] | None, Field(description="List of orders with recipients")] = None,
     ) -> SendInviteResponse:
         """Send invite to sign a document or document group.
 
         Args:
             entity_id: ID of the document or document group
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             orders: List of orders with recipients
+            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
 
         Returns:
             SendInviteResponse with invite ID and entity type
@@ -131,11 +131,11 @@ def bind(mcp: Any, cfg: Any) -> None:
     def create_embedded_invite(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        orders: Annotated[list[EmbeddedInviteOrder] | None, Field(description="List of orders with recipients")],
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
-        orders: Annotated[list[EmbeddedInviteOrder] | None, Field(description="List of orders with recipients")] = None,
     ) -> CreateEmbeddedInviteResponse:
         """Create embedded invite for signing a document or document group.
         This tool is ONLY for documents and document groups.
@@ -143,8 +143,8 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the document or document group
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             orders: List of orders with recipients
+            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
 
         Returns:
             CreateEmbeddedInviteResponse with invite ID and entity type
@@ -279,12 +279,12 @@ def bind(mcp: Any, cfg: Any) -> None:
     async def send_invite_from_template(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
+        orders: Annotated[list[InviteOrder], Field(description="List of orders with recipients for the invite")],
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
-        orders: Annotated[list[InviteOrder] | None, Field(description="List of orders with recipients for the invite")] = None,
     ) -> SendInviteFromTemplateResponse:
         """Create document or document group from template and send invite immediately.
 
@@ -294,9 +294,9 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the template or template group
+            orders: List of orders with recipients for the invite
             entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             name: Optional name for the new document or document group
-            orders: List of orders with recipients for the invite
 
         Returns:
             SendInviteFromTemplateResponse with created entity info and invite details
@@ -409,12 +409,12 @@ def bind(mcp: Any, cfg: Any) -> None:
     async def create_embedded_invite_from_template(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
+        orders: Annotated[list[EmbeddedInviteOrder] | None, Field(description="List of orders with recipients for the embedded invite")],
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
-        orders: Annotated[list[EmbeddedInviteOrder] | None, Field(description="List of orders with recipients for the embedded invite")] = None,
     ) -> CreateEmbeddedInviteFromTemplateResponse:
         """Create document or document group from template and create embedded invite immediately.
 
@@ -424,9 +424,9 @@ def bind(mcp: Any, cfg: Any) -> None:
 
         Args:
             entity_id: ID of the template or template group
+            orders: List of orders with recipients for the embedded invite
             entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             name: Optional name for the new document or document group
-            orders: List of orders with recipients for the embedded invite
 
         Returns:
             CreateEmbeddedInviteFromTemplateResponse with created entity info and embedded invite details
@@ -500,29 +500,31 @@ def bind(mcp: Any, cfg: Any) -> None:
         client = SignNowAPIClient(token_provider.signnow_config)
         return _get_document_download_link(entity_id, entity_type, token, client)
 
-    @mcp.tool(name="get_document", description="Get full document or document group information with field values", tags=["document", "document_group", "get", "fields"])
+    @mcp.tool(name="get_document", description="Get full document, template, template group or document group information with field values", tags=["document", "document_group", "template", "template_group", "get", "fields"])
     def get_document(
         ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group to retrieve")],
+        entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
         entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If not provided, will be determined automatically"),
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional). If not provided, will be determined automatically"),
         ] = None,
     ) -> DocumentGroup:
-        """Get full document or document group information with field values.
+        """Get full document, template, template group or document group information with field values.
 
         Always returns a unified DocumentGroup wrapper even for a single document.
 
-        This tool retrieves complete information about a document or document group,
+        This tool retrieves complete information about a document, template, template group or document group,
         including all field values, roles, and metadata. If entity_type is not provided,
-        the tool will automatically determine whether the entity is a document or document group.
+        the tool will automatically determine whether the entity is a document, template, template group or document group.
 
         For documents, returns a DocumentGroup with a single document.
+        For templates, returns a DocumentGroup with a single template.
+        For template groups, returns a DocumentGroup with all templates in the group.
         For document groups, returns a DocumentGroup with all documents in the group.
 
         Args:
-            entity_id: ID of the document or document group to retrieve
-            entity_type: Type of entity: 'document' or 'document_group' (optional)
+            entity_id: ID of the document, template, template group or document group to retrieve
+            entity_type: Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional)
 
         Returns:
             DocumentGroup with complete information including field values for all documents

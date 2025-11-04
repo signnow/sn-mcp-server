@@ -6,7 +6,7 @@ Pydantic models for SignNow API responses and requests related to document group
 
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
 
 class DocumentGroupTemplate(BaseModel):
@@ -335,3 +335,26 @@ class GetDocumentGroupV2Response(BaseModel):
     """Response model for getting a single document group using v2 endpoint."""
 
     data: DocumentGroupV2Data = Field(..., description="Document group data as returned by v2 endpoint")
+
+
+class TemplateShortThumbnail(BaseModel):
+    """Thumbnail information for template in document group template response."""
+
+    large: HttpUrl = Field(..., description="Large thumbnail URL")
+
+
+class TemplateShort(BaseModel):
+    """Short template information in document group template response."""
+
+    id: str = Field(..., description="Template ID (40-character HEX)")
+    template_name: str = Field(..., description="Template name")
+    thumbnail: TemplateShortThumbnail = Field(..., description="Template thumbnail with large URL")
+    roles: list[str] = Field(..., description="Roles defined for this template")
+
+
+class GetDocumentGroupTemplateResponse(BaseModel):
+    """Response model for getting a single document group template by ID."""
+
+    id: str = Field(..., description="Document group template ID")
+    group_name: str = Field(..., description="Name of the template group")
+    templates: list[TemplateShort] = Field(..., description="List of templates in this group")

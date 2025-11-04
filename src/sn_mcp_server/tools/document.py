@@ -7,7 +7,10 @@ Tools for working with documents in SignNow.
 from typing import Literal
 
 from signnow_client import SignNowAPIClient
-from signnow_client.models.document_groups import GetDocumentGroupV2Response
+from signnow_client.models.document_groups import (
+    GetDocumentGroupTemplateResponse,
+    GetDocumentGroupV2Response,
+)
 from signnow_client.models.templates_and_documents import (
     DocumentResponse,
 )
@@ -123,7 +126,43 @@ def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: G
     )
 
 
-def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_type: Literal["document", "document_group"] | None = None) -> DocumentGroup:
+def _get_full_template_group(client: SignNowAPIClient, token: str, template_group_data: GetDocumentGroupTemplateResponse) -> DocumentGroup:
+    """
+    Get full template group information including all templates with their field values.
+
+    This function retrieves a template group and for each template in the group,
+    gets the complete template information including field values.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token for authentication
+        template_group_data: Pre-fetched template group data to avoid duplicate API calls
+
+    Returns:
+        DocumentGroup with complete information including all templates with field values
+    """
+
+    # Get full document information for each template in the group
+    full_documents = []
+    for template in template_group_data.templates:
+        # Get template data as document (templates are documents in SignNow)
+        document_data = client.get_document(token, template.id)
+        full_doc = _get_full_document(client=client, token=token, document_id=template.id, document_data=document_data)
+        full_documents.append(full_doc)
+
+    # Create DocumentGroup with full template information
+    return DocumentGroup(
+        last_updated=0,  # Not available in template group response
+        entity_id=template_group_data.id,
+        group_name=template_group_data.group_name,
+        entity_type="template_group",
+        invite_id=None,  # Not applicable for template groups
+        invite_status=None,  # Not applicable for template groups
+        documents=full_documents,
+    )
+
+
+def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_type: Literal["document", "document_group", "template", "template_group"] | None = None) -> DocumentGroup:
     """
     Get document or document group information with full field values.
 
@@ -134,7 +173,7 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
         client: SignNow API client instance
         token: Access token for authentication
         entity_id: ID of the document or document group
-        entity_type: Type of entity: 'document' or 'document_group' (optional)
+        entity_type: Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional)
 
     Returns:
         DocumentGroup with complete information including field values
@@ -145,6 +184,7 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
 
     # Determine entity type if not provided and get entity data
     document_data = None
+    template_group_data = None
     group_data = None
 
     if not entity_type:
@@ -160,17 +200,29 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
                 group_data = client.get_document_group_v2(token, entity_id)
                 entity_type = "document_group"
             except:
-                raise ValueError(f"Entity with ID {entity_id} not found as either document or document group")
+                # If document group not found, try template group
+                try:
+                    # Try to get template group - if successful, it's a template group
+                    template_group_data = client.get_document_group_template(token, entity_id)
+                    entity_type = "template_group"
+                except:
+                    raise ValueError(f"Entity with ID {entity_id} not found as either document, template, template group or document group")
     else:
         # Entity type is provided, get the entity data
         if entity_type == "document_group":
             group_data = client.get_document_group_v2(token, entity_id)
+        if entity_type == "template":
+            document_data = client.get_document(token, entity_id)
+        if entity_type == "template_group":
+            template_group_data = client.get_document_group_template(token, entity_id)
         else:  # entity_type == "document"
             document_data = client.get_document(token, entity_id)
 
     # Get the appropriate data based on determined or provided entity type
     if entity_type == "document_group":
         return _get_full_document_group(client, token, group_data)
+    if entity_type == "template_group":
+        return _get_full_template_group(client, token, template_group_data)
     else:  # entity_type == "document"
         return _get_single_document_as_group(client, token, entity_id, document_data)
 

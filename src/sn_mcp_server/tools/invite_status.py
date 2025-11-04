@@ -48,7 +48,7 @@ def _get_document_group_status(client: SignNowAPIClient, token: str, document_gr
         for action in step.actions:
             # Only include actions with email (skip email_group actions)
             if action.email:
-                actions.append(DocumentGroupStatusAction(action=action.action, email=action.email, document_id=action.document_id, status=action.status, role_name=action.role_name))
+                actions.append(DocumentGroupStatusAction(action=action.action, email=action.email, document_id=action.document_id, status=action.status, role=action.role_name))
 
         steps.append(DocumentGroupStatusStep(status=step.status, order=step.order, actions=actions))
 
@@ -91,7 +91,7 @@ def _get_document_status(client: SignNowAPIClient, token: str, document_data: An
                     email=field_invite.email,
                     document_id=document_response.id,
                     status=field_invite.status,
-                    role_name=field_invite.role,
+                    role=field_invite.role,
                 )
             )
 
