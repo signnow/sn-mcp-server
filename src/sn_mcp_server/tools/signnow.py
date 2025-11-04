@@ -500,7 +500,11 @@ def bind(mcp: Any, cfg: Any) -> None:
         client = SignNowAPIClient(token_provider.signnow_config)
         return _get_document_download_link(entity_id, entity_type, token, client)
 
-    @mcp.tool(name="get_document", description="Get full document, template, template group or document group information with field values", tags=["document", "document_group", "template", "template_group", "get", "fields"])
+    @mcp.tool(
+        name="get_document",
+        description="Get full document, template, template group or document group information with field values",
+        tags=["document", "document_group", "template", "template_group", "get", "fields"],
+    )
     def get_document(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],

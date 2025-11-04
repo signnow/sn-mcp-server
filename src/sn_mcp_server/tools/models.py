@@ -93,7 +93,7 @@ class InviteRecipient(BaseModel):
     role: str = Field(..., description="Recipient's role name in the document")
     message: str | None = Field(None, description="Custom email message for the recipient")
     subject: str | None = Field(None, description="Custom email subject for the recipient")
-    action: str = Field(default='sign', description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    action: str = Field(default="sign", description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
     redirect_uri: str | None = Field(None, description="Link that opens after completion")
     redirect_target: str | None = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     decline_redirect_uri: str | None = Field(None, description="URL that opens after decline")
@@ -127,7 +127,7 @@ class EmbeddedInviteRecipient(BaseModel):
 
     email: str = Field(..., description="Recipient's email address")
     role: str = Field(..., description="Recipient's role name in the document")
-    action: str = Field(default='sign', description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    action: str = Field(default="sign", description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
     auth_method: str = Field("none", description="Authentication method in integrated app: 'password', 'email', 'mfa', 'biometric', 'social', 'other', 'none'")
     first_name: str | None = Field(None, description="Recipient's first name")
     last_name: str | None = Field(None, description="Recipient's last name")
