@@ -70,18 +70,20 @@ def _verify_jwt(token: str) -> dict[str, Any] | None:
 
 # ============= OAuth endpoints =============
 async def openid_config(_: Request) -> JSONResponse:
-    return JSONResponse({
-        "issuer": str(settings.oauth_issuer),
-        "authorization_endpoint": f"{str(settings.oauth_issuer)}authorize",
-        "token_endpoint": f"{str(settings.oauth_issuer)}oauth2/token",
-        "jwks_uri": f"{str(settings.oauth_issuer)}.well-known/jwks.json",
-        "registration_endpoint": f"{str(settings.oauth_issuer)}oauth2/register",
-        "scopes_supported": ["openid", "profile", "offline_access", "*"],
-        "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "refresh_token"],
-        "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
-    })
+    return JSONResponse(
+        {
+            "issuer": str(settings.oauth_issuer),
+            "authorization_endpoint": f"{str(settings.oauth_issuer)}authorize",
+            "token_endpoint": f"{str(settings.oauth_issuer)}oauth2/token",
+            "jwks_uri": f"{str(settings.oauth_issuer)}.well-known/jwks.json",
+            "registration_endpoint": f"{str(settings.oauth_issuer)}oauth2/register",
+            "scopes_supported": ["offline_access", "*"],
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "code_challenge_methods_supported": ["S256"],
+            "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
+        }
+    )
 
 
 async def oauth_as_meta(_: Request) -> JSONResponse:
@@ -132,13 +134,15 @@ async def token(req: Request) -> JSONResponse:
             return JSONResponse({"error": "external_token_error"}, status_code=500)
 
         # Return tokens from SignNow API
-        return JSONResponse({
-            "token_type": signnow_response.get("token_type", "Bearer"),
-            "access_token": signnow_response.get("access_token"),
-            "expires_in": signnow_response.get("expires_in", settings.access_ttl),
-            "refresh_token": signnow_response.get("refresh_token"),
-            "scope": "*",
-        })
+        return JSONResponse(
+            {
+                "token_type": signnow_response.get("token_type", "Bearer"),
+                "access_token": signnow_response.get("access_token"),
+                "expires_in": signnow_response.get("expires_in", settings.access_ttl),
+                "refresh_token": signnow_response.get("refresh_token"),
+                "scope": "offline_access *",
+            }
+        )
 
     elif grant_type == "refresh_token":
         refresh = form.get("refresh_token")
@@ -155,13 +159,15 @@ async def token(req: Request) -> JSONResponse:
             return JSONResponse({"error": "invalid_request", "error_description": "refresh_token must be a string"}, status_code=400)
 
         if signnow_response:
-            return JSONResponse({
-                "token_type": signnow_response.get("token_type", "Bearer"),
-                "access_token": signnow_response.get("access_token"),
-                "expires_in": signnow_response.get("expires_in", settings.access_ttl),
-                "refresh_token": signnow_response.get("refresh_token"),
-                "scope": signnow_response.get("scope", "*"),
-            })
+            return JSONResponse(
+                {
+                    "token_type": signnow_response.get("token_type", "Bearer"),
+                    "access_token": signnow_response.get("access_token"),
+                    "expires_in": signnow_response.get("expires_in", settings.access_ttl),
+                    "refresh_token": signnow_response.get("refresh_token"),
+                    "scope": signnow_response.get("scope", "*"),
+                }
+            )
         else:
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
 
@@ -179,15 +185,17 @@ async def introspect(req: Request) -> JSONResponse:
     active = claims is not None
     resp: dict[str, Any] = {"active": bool(active)}
     if active and claims:
-        resp.update({
-            "iss": claims["iss"],
-            "sub": claims["sub"],
-            "aud": claims["aud"],
-            "client_id": claims.get("client_id"),
-            "scope": claims.get("scope", ""),
-            "exp": claims["exp"],
-            "iat": claims["iat"],
-        })
+        resp.update(
+            {
+                "iss": claims["iss"],
+                "sub": claims["sub"],
+                "aud": claims["aud"],
+                "client_id": claims.get("client_id"),
+                "scope": claims.get("scope", ""),
+                "exp": claims["exp"],
+                "iat": claims["iat"],
+            }
+        )
     return JSONResponse(resp)
 
 
@@ -212,12 +220,14 @@ async def revoke(req: Request) -> PlainTextResponse | JSONResponse:
 
 # ============= PRM (Protected Resource Metadata) =============
 def prm_for_resource(resource_url: str) -> JSONResponse:
-    return JSONResponse({
-        "resource": resource_url,
-        "authorization_servers": [str(settings.oauth_issuer)],
-        "bearer_methods_supported": ["header"],
-        "scopes_supported": ["openid", "profile", "offline_access", "*"],
-    })
+    return JSONResponse(
+        {
+            "resource": resource_url,
+            "authorization_servers": [str(settings.oauth_issuer)],
+            "bearer_methods_supported": ["header"],
+            "scopes_supported": ["offline_access", "*"],
+        }
+    )
 
 
 async def prm_root(_: Request) -> JSONResponse:
@@ -307,14 +317,16 @@ class BearerJWTASGIMiddleware:
             if not self.token_provider.has_config_credentials():
                 token = self.token_provider.get_access_token(dict(request.headers))
                 if not token:
-                    await send({
-                        "type": "http.response.start",
-                        "status": 401,
-                        "headers": [
-                            (b"www-authenticate", f'Bearer resource_metadata="{str(settings.oauth_issuer)}/.well-known/oauth-protected-resource"'.encode()),
-                            (b"content-type", b"text/plain; charset=utf-8"),
-                        ],
-                    })
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 401,
+                            "headers": [
+                                (b"www-authenticate", f'Bearer resource_metadata="{str(settings.oauth_issuer)}/.well-known/oauth-protected-resource"'.encode()),
+                                (b"content-type", b"text/plain; charset=utf-8"),
+                            ],
+                        }
+                    )
                     await send({"type": "http.response.body", "body": b"Unauthorized"})
                     return
 

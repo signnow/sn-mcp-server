@@ -151,7 +151,11 @@ def bind(mcp: Any, cfg: Any) -> None:
         # Use the imported function from list_documents module
         return _list_document_groups(token, token_provider.signnow_config, limit, offset)
 
-    @mcp.tool(name="send_invite", description="Send invite to sign a document or document group", tags=["send_invite", "document", "document_group", "sign", "workflow"])
+    @mcp.tool(
+        name="send_invite",
+        description="Send invite to sign a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: send_invite_from_template",
+        tags=["send_invite", "document", "document_group", "sign", "workflow"],
+    )
     def send_invite(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -171,6 +175,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         ] = None,
     ) -> SendInviteResponse:
         """Send invite to sign a document or document group.
+
+        This tool is ONLY for documents and document groups.
+        If you have template or template_group, use the alternative tool: send_invite_from_template
 
         Args:
             entity_id: ID of the document or document group
@@ -195,7 +202,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
     @mcp.tool(
         name="create_embedded_invite",
-        description="Create embedded invite for signing a document or document group",
+        description="Create embedded invite for signing a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_invite_from_template",
         tags=["send_invite", "document", "document_group", "sign", "embedded", "workflow"],
     )
     def create_embedded_invite(
@@ -217,8 +224,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         ] = None,
     ) -> CreateEmbeddedInviteResponse:
         """Create embedded invite for signing a document or document group.
+
         This tool is ONLY for documents and document groups.
-        If you have template or template group, you have to convert it to document or document group first, using create_from_template tool
+        If you have template or template_group, use the alternative tool: create_embedded_invite_from_template
 
         Args:
             entity_id: ID of the document or document group
@@ -243,7 +251,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
     @mcp.tool(
         name="create_embedded_sending",
-        description="Create embedded sending for managing, editing, or sending invites for a document or document group",
+        description="Create embedded sending for managing, editing, or sending invites for a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_sending_from_template",
         tags=["edit", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     def create_embedded_sending(
@@ -259,8 +267,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage",
     ) -> CreateEmbeddedSendingResponse:
         """Create embedded sending for managing, editing, or sending invites for a document or document group.
+
         This tool is ONLY for documents and document groups.
-        If you have template or template group, you have to convert it to document or document group first, using create_from_template tool
+        If you have template or template_group, use the alternative tool: create_embedded_sending_from_template
 
         Args:
             entity_id: ID of the document or document group
@@ -283,7 +292,11 @@ def bind(mcp: Any, cfg: Any) -> None:
         client = SignNowAPIClient(token_provider.signnow_config)
         return _create_embedded_sending(entity_id, entity_type, redirect_uri, redirect_target, link_expiration, type, token, client)
 
-    @mcp.tool(name="create_embedded_editor", description="Create embedded editor for editing a document or document group", tags=["edit", "document", "document_group", "embedded"])
+    @mcp.tool(
+        name="create_embedded_editor",
+        description="Create embedded editor for editing a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_editor_from_template",
+        tags=["edit", "document", "document_group", "embedded"],
+    )
     def create_embedded_editor(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -296,8 +309,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         link_expiration: Annotated[int | None, Field(ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")] = None,
     ) -> CreateEmbeddedEditorResponse:
         """Create embedded editor for editing a document or document group.
+
         This tool is ONLY for documents and document groups.
-        If you have template or template group, you have to convert it to document or document group first, using create_from_template tool
+        If you have template or template_group, use the alternative tool: create_embedded_editor_from_template
 
         Args:
             entity_id: ID of the document or document group
@@ -355,7 +369,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
     @mcp.tool(
         name="send_invite_from_template",
-        description="Create document/group from template and send invite immediately",
+        description="Create document/group from template and send invite immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: send_invite",
         tags=["template", "template_group", "document", "document_group", "send_invite", "workflow"],
     )
     async def send_invite_from_template(
@@ -378,6 +392,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
     ) -> SendInviteFromTemplateResponse:
         """Create document or document group from template and send invite immediately.
+
+        This tool is ONLY for templates and template groups.
+        If you have document or document_group, use the alternative tool: send_invite
 
         This tool combines two operations:
         1. Creates a document/group from template using create_from_template
@@ -407,7 +424,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
     @mcp.tool(
         name="create_embedded_sending_from_template",
-        description="Create document/group from template and create embedded sending immediately",
+        description="Create document/group from template and create embedded sending immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_sending",
         tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     async def create_embedded_sending_from_template(
@@ -424,6 +441,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None,
     ) -> CreateEmbeddedSendingFromTemplateResponse:
         """Create document or document group from template and create embedded sending immediately.
+
+        This tool is ONLY for templates and template groups.
+        If you have document or document_group, use the alternative tool: create_embedded_sending
 
         This tool combines two operations:
         1. Creates a document/group from template using create_from_template
@@ -453,7 +473,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
     @mcp.tool(
         name="create_embedded_editor_from_template",
-        description="Create document/group from template and create embedded editor immediately",
+        description="Create document/group from template and create embedded editor immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_editor",
         tags=["template", "template_group", "document", "document_group", "embedded_editor", "embedded", "workflow"],
     )
     async def create_embedded_editor_from_template(
@@ -469,6 +489,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         link_expiration: Annotated[int | None, Field(ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")] = None,
     ) -> CreateEmbeddedEditorFromTemplateResponse:
         """Create document or document group from template and create embedded editor immediately.
+
+        This tool is ONLY for templates and template groups.
+        If you have document or document_group, use the alternative tool: create_embedded_editor
 
         This tool combines two operations:
         1. Creates a document/group from template using create_from_template
@@ -497,7 +520,7 @@ def bind(mcp: Any, cfg: Any) -> None:
 
     @mcp.tool(
         name="create_embedded_invite_from_template",
-        description="Create document/group from template and create embedded invite immediately",
+        description="Create document/group from template and create embedded invite immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_invite",
         tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     async def create_embedded_invite_from_template(
@@ -520,6 +543,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
     ) -> CreateEmbeddedInviteFromTemplateResponse:
         """Create document or document group from template and create embedded invite immediately.
+
+        This tool is ONLY for templates and template groups.
+        If you have document or document_group, use the alternative tool: create_embedded_invite
 
         This tool combines two operations:
         1. Creates a document/group from template using create_from_template

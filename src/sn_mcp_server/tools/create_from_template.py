@@ -105,8 +105,22 @@ def _create_from_template(entity_id: str, entity_type: Literal["template", "temp
             entity_type = "template"
 
     if entity_type == "template_group":
+        # If name is not provided, try to get it from found_template_group
         if name is None:
-            raise ValueError("name is required when creating document group from template group")
+            if found_template_group:
+                # Use name from found template group
+                name = found_template_group.template_group_name
+            else:
+                # found_template_group was not found, get it by ID to extract name
+                found_template_group = _find_template_group(entity_id, token, client)
+                if found_template_group:
+                    # Use name from found template group
+                    name = found_template_group.template_group_name
+                else:
+                    # Get template group by ID to extract name (more reliable method)
+                    template_group_data = client.get_document_group_template(token, entity_id)
+                    name = template_group_data.group_name
+
         return _create_document_group_from_template(client, token, entity_id, name)
     else:
         # Create document from template
