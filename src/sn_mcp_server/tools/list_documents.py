@@ -6,7 +6,6 @@ from the SignNow API and converting them to simplified formats for MCP tools.
 """
 
 from signnow_client import SignNowAPIClient
-from signnow_client.config import SignNowConfig
 
 from .models import (
     SimplifiedDocumentGroup,
@@ -15,7 +14,7 @@ from .models import (
 )
 
 
-def _list_document_groups(token: str, signnow_config: SignNowConfig, limit: int = 50, offset: int = 0) -> SimplifiedDocumentGroupsResponse:
+def _list_document_groups(token: str, client: SignNowAPIClient, limit: int = 50, offset: int = 0) -> SimplifiedDocumentGroupsResponse:
     """Provide simplified list of document groups with basic fields.
 
     Args:
@@ -28,7 +27,6 @@ def _list_document_groups(token: str, signnow_config: SignNowConfig, limit: int 
         SimplifiedDocumentGroupsResponse with document groups
     """
     # Use the client to get document groups - API already applies limit and offset
-    client = SignNowAPIClient(signnow_config)
     full_response = client.get_document_groups(token, limit=limit, offset=offset)
 
     # Convert to simplified models for MCP tools

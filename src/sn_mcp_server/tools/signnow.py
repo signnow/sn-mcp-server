@@ -48,6 +48,32 @@ from .models import (
 )
 from .send_invite import _send_invite, _send_invite_from_template
 
+RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
+
+TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer the resource version of this endpoint; " "this tool exists as a compatibility fallback for tool-only clients."
+
+
+def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAPIClient]:
+    """Get access token and initialize SignNow API client.
+
+    Args:
+        token_provider: TokenProvider instance to get access token
+
+    Returns:
+        Tuple of (access_token, SignNowAPIClient instance)
+
+    Raises:
+        ValueError: If no access token is available
+    """
+    headers = get_http_headers()
+    token = token_provider.get_access_token(headers)
+
+    if not token:
+        raise ValueError("No access token available")
+
+    client = SignNowAPIClient(token_provider.signnow_config)
+    return token, client
+
 
 def _normalize_orders(orders: Any, order_type: type) -> list[Any]:
     """Normalize orders parameter - handle both list and JSON string inputs.
@@ -110,7 +136,15 @@ def bind(mcp: Any, cfg: Any) -> None:
     # Initialize token provider
     token_provider = TokenProvider()
 
-    @mcp.tool(name="list_all_templates", description="Get simplified list of all templates and template groups with basic information", tags=["template", "template_group", "list"])
+    async def _list_all_templates_impl(ctx: Context) -> TemplateSummaryList:
+        token, client = _get_token_and_client(token_provider)
+        return await _list_all_templates(ctx, token, client)
+
+    @mcp.tool(
+        name="list_all_templates",
+        description="Get simplified list of all templates and template groups with basic information" + TOOL_FALLBACK_SUFFIX,
+        tags=["template", "template_group", "list"],
+    )
     async def list_all_templates(ctx: Context) -> TemplateSummaryList:
         """Get all templates and template groups from all folders.
 
@@ -120,17 +154,22 @@ def bind(mcp: Any, cfg: Any) -> None:
         Note: Individual templates are deprecated. For new implementations, prefer using template groups
         which are more feature-rich and actively maintained.
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        return await _list_all_templates_impl(ctx)
 
-        if not token:
-            raise ValueError("No access token available")
+    @mcp.resource(
+        "signnow://templates",
+        name="list_all_templates_resource",
+        description="Get simplified list of all templates and template groups with basic information" + RESOURCE_PREFERRED_SUFFIX,
+        tags=["template", "template_group", "list"],
+    )
+    async def list_all_templates_resource(ctx: Context) -> TemplateSummaryList:
+        return await _list_all_templates_impl(ctx)
 
-        # Initialize client and use the imported function from list_templates module
-        client = SignNowAPIClient(token_provider.signnow_config)
-        return await _list_all_templates(ctx, token, client)
+    def _list_document_groups_impl(ctx: Context, limit: int = 50, offset: int = 0) -> SimplifiedDocumentGroupsResponse:
+        token, client = _get_token_and_client(token_provider)
+        return _list_document_groups(token, client, limit, offset)
 
-    @mcp.tool(name="list_document_groups", description="Get simplified list of document groups with basic information", tags=["document_group", "list"])
+    @mcp.tool(name="list_document_groups", description="Get simplified list of document groups with basic information." + TOOL_FALLBACK_SUFFIX, tags=["document_group", "list"])
     def list_document_groups(
         ctx: Context,
         limit: Annotated[int, Field(ge=1, le=50, description="Maximum number of document groups to return (default: 50, max: 50)")] = 50,
@@ -142,18 +181,29 @@ def bind(mcp: Any, cfg: Any) -> None:
             limit: Maximum number of document groups to return (default: 50, max: 50)
             offset: Number of document groups to skip for pagination (default: 0)
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        return _list_document_groups_impl(ctx, limit, offset)
 
-        if not token:
-            raise ValueError("No access token available")
-
-        # Use the imported function from list_documents module
-        return _list_document_groups(token, token_provider.signnow_config, limit, offset)
+    @mcp.resource(
+        "signnow://document-groups/{?limit,offset}",
+        name="list_document_groups_resource",
+        description="Get simplified list of document groups with basic information." + RESOURCE_PREFERRED_SUFFIX,
+        tags=["document_group", "list"],
+        mime_type="application/json",
+    )
+    def list_document_groups_resource(
+        ctx: Context,
+        limit: Annotated[int, Field(ge=1, le=50, description="Maximum number of document groups to return (default: 50, max: 50)")] = 50,
+        offset: Annotated[int, Field(ge=0, description="Number of document groups to skip for pagination(default: 0)")] = 0,
+    ) -> SimplifiedDocumentGroupsResponse:
+        return _list_document_groups_impl(ctx, limit, offset)
 
     @mcp.tool(
         name="send_invite",
-        description="Send invite to sign a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: send_invite_from_template",
+        description=(
+            "Send invite to sign a document or document group. "
+            "This tool is ONLY for documents and document groups. "
+            "If you have template or template_group, use the alternative tool: send_invite_from_template"
+        ),
         tags=["send_invite", "document", "document_group", "sign", "workflow"],
     )
     def send_invite(
@@ -187,22 +237,21 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             SendInviteResponse with invite ID and entity type
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
-
-        if not token:
-            raise ValueError("No access token available")
+        token, client = _get_token_and_client(token_provider)
 
         # Normalize orders parameter (handle JSON string input)
         normalized_orders = _normalize_orders(orders, InviteOrder)
 
         # Initialize client and use the imported function from send_invite module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return _send_invite(entity_id, entity_type, normalized_orders, token, client)
 
     @mcp.tool(
         name="create_embedded_invite",
-        description="Create embedded invite for signing a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_invite_from_template",
+        description=(
+            "Create embedded invite for signing a document or document group. "
+            "This tool is ONLY for documents and document groups. "
+            "If you have template or template_group, use the alternative tool: create_embedded_invite_from_template"
+        ),
         tags=["send_invite", "document", "document_group", "sign", "embedded", "workflow"],
     )
     def create_embedded_invite(
@@ -236,22 +285,21 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateEmbeddedInviteResponse with invite ID and entity type
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
-
-        if not token:
-            raise ValueError("No access token available")
+        token, client = _get_token_and_client(token_provider)
 
         # Normalize orders parameter (handle JSON string input)
         normalized_orders = _normalize_orders(orders, EmbeddedInviteOrder)
 
         # Initialize client and use the imported function from embedded_invite module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return _create_embedded_invite(entity_id, entity_type, normalized_orders, token, client)
 
     @mcp.tool(
         name="create_embedded_sending",
-        description="Create embedded sending for managing, editing, or sending invites for a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_sending_from_template",
+        description=(
+            "Create embedded sending for managing, editing, or sending invites for a document or document group. "
+            "This tool is ONLY for documents and document groups. "
+            "If you have template or template_group, use the alternative tool: create_embedded_sending_from_template"
+        ),
         tags=["edit", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     def create_embedded_sending(
@@ -282,19 +330,17 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateEmbeddedSendingResponse with entity type, and URL
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        token, client = _get_token_and_client(token_provider)
 
-        if not token:
-            raise ValueError("No access token available")
-
-        # Initialize client and use the imported function from embedded_sending module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return _create_embedded_sending(entity_id, entity_type, redirect_uri, redirect_target, link_expiration, type, token, client)
 
     @mcp.tool(
         name="create_embedded_editor",
-        description="Create embedded editor for editing a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_editor_from_template",
+        description=(
+            "Create embedded editor for editing a document or document group. "
+            "This tool is ONLY for documents and document groups. "
+            "If you have template or template_group, use the alternative tool: create_embedded_editor_from_template"
+        ),
         tags=["edit", "document", "document_group", "embedded"],
     )
     def create_embedded_editor(
@@ -323,14 +369,8 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateEmbeddedEditorResponse with editor ID and entity type
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        token, client = _get_token_and_client(token_provider)
 
-        if not token:
-            raise ValueError("No access token available")
-
-        # Initialize client and use the imported function from embedded_editor module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration, token, client)
 
     @mcp.tool(
@@ -357,19 +397,17 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateFromTemplateResponse with created entity ID, type and name
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        token, client = _get_token_and_client(token_provider)
 
-        if not token:
-            raise ValueError("No access token available")
-
-        # Initialize client and use the imported function from create_from_template module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return _create_from_template(entity_id, entity_type, name, token, client)
 
     @mcp.tool(
         name="send_invite_from_template",
-        description="Create document/group from template and send invite immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: send_invite",
+        description=(
+            "Create document/group from template and send invite immediately. "
+            "This tool is ONLY for templates and template groups. "
+            "If you have document or document_group, use the alternative tool: send_invite"
+        ),
         tags=["template", "template_group", "document", "document_group", "send_invite", "workflow"],
     )
     async def send_invite_from_template(
@@ -409,22 +447,21 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             SendInviteFromTemplateResponse with created entity info and invite details
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
-
-        if not token:
-            raise ValueError("No access token available")
+        token, client = _get_token_and_client(token_provider)
 
         # Normalize orders parameter (handle JSON string input)
         normalized_orders = _normalize_orders(orders, InviteOrder)
 
         # Initialize client and use the imported function from send_invite module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return await _send_invite_from_template(entity_id, entity_type, name, normalized_orders, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_sending_from_template",
-        description="Create document/group from template and create embedded sending immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_sending",
+        description=(
+            "Create document/group from template and create embedded sending immediately. "
+            "This tool is ONLY for templates and template groups. "
+            "If you have document or document_group, use the alternative tool: create_embedded_sending"
+        ),
         tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     async def create_embedded_sending_from_template(
@@ -461,19 +498,17 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateEmbeddedSendingFromTemplateResponse with created entity info and embedded sending details
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        token, client = _get_token_and_client(token_provider)
 
-        if not token:
-            raise ValueError("No access token available")
-
-        # Initialize client and use the imported function from embedded_sending module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return await _create_embedded_sending_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration, type, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_editor_from_template",
-        description="Create document/group from template and create embedded editor immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_editor",
+        description=(
+            "Create document/group from template and create embedded editor immediately. "
+            "This tool is ONLY for templates and template groups. "
+            "If you have document or document_group, use the alternative tool: create_embedded_editor"
+        ),
         tags=["template", "template_group", "document", "document_group", "embedded_editor", "embedded", "workflow"],
     )
     async def create_embedded_editor_from_template(
@@ -508,19 +543,18 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateEmbeddedEditorFromTemplateResponse with created entity info and embedded editor details
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
-
-        if not token:
-            raise ValueError("No access token available")
+        token, client = _get_token_and_client(token_provider)
 
         # Initialize client and use the imported function from embedded_editor module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return await _create_embedded_editor_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_invite_from_template",
-        description="Create document/group from template and create embedded invite immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_invite",
+        description=(
+            "Create document/group from template and create embedded invite immediately. "
+            "This tool is ONLY for templates and template groups. "
+            "If you have document or document_group, use the alternative tool: create_embedded_invite"
+        ),
         tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     async def create_embedded_invite_from_template(
@@ -560,20 +594,19 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             CreateEmbeddedInviteFromTemplateResponse with created entity info and embedded invite details
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
-
-        if not token:
-            raise ValueError("No access token available")
+        token, client = _get_token_and_client(token_provider)
 
         # Normalize orders parameter (handle JSON string input)
         normalized_orders = _normalize_orders(orders, EmbeddedInviteOrder)
 
         # Initialize client and use the imported function from embedded_invite module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return await _create_embedded_invite_from_template(entity_id, entity_type, name, normalized_orders, token, client, ctx)
 
-    @mcp.tool(name="get_invite_status", description="Get invite status for a document or document group", tags=["invite", "status", "document", "document_group", "workflow"])
+    def _get_invite_status_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> InviteStatus:
+        token, client = _get_token_and_client(token_provider)
+        return _get_invite_status(entity_id, entity_type, token, client)
+
+    @mcp.tool(name="get_invite_status", description="Get invite status for a document or document group" + TOOL_FALLBACK_SUFFIX, tags=["invite", "status", "document", "document_group", "workflow"])
     def get_invite_status(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -582,26 +615,31 @@ def bind(mcp: Any, cfg: Any) -> None:
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
     ) -> InviteStatus:
-        """Get invite status for a document or document group.
+        return _get_invite_status_impl(ctx, entity_id, entity_type)
 
-        Args:
-            entity_id: ID of the document or document group
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+    @mcp.resource(
+        "signnow://invite-status/{entity_id}{?entity_type}",
+        name="get_invite_status_resource",
+        description="Get invite status for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
+        tags=["invite", "status", "document", "document_group", "workflow"],
+    )
+    def get_invite_status_resource(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+        ] = None,
+    ) -> InviteStatus:
+        return _get_invite_status_impl(ctx, entity_id, entity_type)
 
-        Returns:
-            InviteStatus with invite ID, status, and steps information
-        """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+    def _get_document_download_link_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> DocumentDownloadLinkResponse:
+        token, client = _get_token_and_client(token_provider)
 
-        if not token:
-            raise ValueError("No access token available")
+        # Initialize client and use the imported function from document_download_link module
+        return _get_document_download_link(entity_id, entity_type, token, client)
 
-        # Initialize client and use the imported function from invite_status module
-        client = SignNowAPIClient(token_provider.signnow_config)
-        return _get_invite_status(entity_id, entity_type, token, client)
-
-    @mcp.tool(name="get_document_download_link", description="Get download link for a document or document group", tags=["document", "document_group", "download", "link"])
+    @mcp.tool(name="get_document_download_link", description="Get download link for a document or document group" + TOOL_FALLBACK_SUFFIX, tags=["document", "document_group", "download", "link"])
     def get_document_download_link(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -622,15 +660,29 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             DocumentDownloadLinkResponse with download link
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        return _get_document_download_link_impl(ctx, entity_id, entity_type)
 
-        if not token:
-            raise ValueError("No access token available")
+    @mcp.resource(
+        "signnow://document-download-link/{entity_id}{?entity_type}",
+        name="get_document_download_link_resource",
+        description="Get download link for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
+        tags=["document", "document_group", "download", "link"],
+    )
+    def get_document_download_link_resource(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+        ] = None,
+    ) -> DocumentDownloadLinkResponse:
+        return _get_document_download_link_impl(ctx, entity_id, entity_type)
 
-        # Initialize client and use the imported function from document_download_link module
-        client = SignNowAPIClient(token_provider.signnow_config)
-        return _get_document_download_link(entity_id, entity_type, token, client)
+    def _get_document_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group", "template", "template_group"] | None) -> DocumentGroup:
+        token, client = _get_token_and_client(token_provider)
+
+        # Initialize client and use the imported function from document module
+        return _get_document(client, token, entity_id, entity_type)
 
     @mcp.tool(
         name="get_document",
@@ -665,15 +717,23 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             DocumentGroup with complete information including field values for all documents
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
+        return _get_document_impl(ctx, entity_id, entity_type)
 
-        if not token:
-            raise ValueError("No access token available")
-
-        # Initialize client and use the imported function from document module
-        client = SignNowAPIClient(token_provider.signnow_config)
-        return _get_document(client, token, entity_id, entity_type)
+    @mcp.resource(
+        "signnow://document/{entity_id}{?entity_type}",
+        name="get_document_resource",
+        description="Get full document, template, template group or document group information with field values" + RESOURCE_PREFERRED_SUFFIX,
+        tags=["document", "document_group", "template", "template_group", "get", "fields"],
+    )
+    def get_document_resource(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
+        entity_type: Annotated[
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional). If not provided, will be determined automatically"),
+        ] = None,
+    ) -> DocumentGroup:
+        return _get_document_impl(ctx, entity_id, entity_type)
 
     @mcp.tool(
         name="update_document_fields",
@@ -719,14 +779,9 @@ def bind(mcp: Any, cfg: Any) -> None:
         Returns:
             UpdateDocumentFieldsResponse with results for each document update
         """
-        headers = get_http_headers()
-        token = token_provider.get_access_token(headers)
-
-        if not token:
-            raise ValueError("No access token available")
+        token, client = _get_token_and_client(token_provider)
 
         # Initialize client and use the imported function from document module
-        client = SignNowAPIClient(token_provider.signnow_config)
         return _update_document_fields(client, token, update_requests)
 
     # @mcp.tool(
