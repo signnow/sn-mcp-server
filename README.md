@@ -21,6 +21,7 @@ The SignNow REST API empowers users to deliver a seamless eSignature experience 
 
 > A Model Context Protocol (MCP) server that gives AI agents secure, structured access to **SignNow** eSignature workflows — templates, embedded signing, invites, status tracking, and document downloads — over **STDIO** or **Streamable HTTP**.
 
+> mcp-name: io.github.signnow/sn-mcp-server
 ---
 
 ## Table of contents
