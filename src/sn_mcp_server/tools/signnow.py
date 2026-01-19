@@ -75,7 +75,7 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
     return token, client
 
 
-def _normalize_orders(orders: Any, order_type: type) -> list[Any]:
+def _normalize_orders(orders: Any, order_type: type) -> list[Any]:  # noqa: ANN401
     """Normalize orders parameter - handle both list and JSON string inputs.
 
     Args:
@@ -132,7 +132,7 @@ def _normalize_orders(orders: Any, order_type: type) -> list[Any]:
     raise ValueError(f"Invalid orders type: {type(orders)}")
 
 
-def bind(mcp: Any, cfg: Any) -> None:
+def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     # Initialize token provider
     token_provider = TokenProvider()
 
@@ -169,13 +169,21 @@ def bind(mcp: Any, cfg: Any) -> None:
         token, client = _get_token_and_client(token_provider)
         return _list_document_groups(token, client, limit, offset)
 
-    @mcp.tool(name="list_document_groups", description="Get simplified list of document groups with basic information." + TOOL_FALLBACK_SUFFIX, tags=["document_group", "list"])
+    @mcp.tool(
+        name="list_document_groups",
+        description=("Get simplified list of documents and document groups with basic information. " "Returns both documents and document groups in a unified format. " + TOOL_FALLBACK_SUFFIX),
+        tags=["document_group", "list"],
+    )
     def list_document_groups(
         ctx: Context,
         limit: Annotated[int, Field(ge=1, le=50, description="Maximum number of document groups to return (default: 50, max: 50)")] = 50,
         offset: Annotated[int, Field(ge=0, description="Number of document groups to skip for pagination (default: 0)")] = 0,
     ) -> SimplifiedDocumentGroupsResponse:
-        """Provide simplified list of document groups with basic fields.
+        """Provide simplified list of documents and document groups with basic fields.
+
+        This tool retrieves both individual documents and document groups from SignNow,
+        presenting them all in a unified format. If you need a list of documents or
+        a list of document groups, this is the right tool to use.
 
         Args:
             limit: Maximum number of document groups to return (default: 50, max: 50)
@@ -186,7 +194,7 @@ def bind(mcp: Any, cfg: Any) -> None:
     @mcp.resource(
         "signnow://document-groups/{?limit,offset}",
         name="list_document_groups_resource",
-        description="Get simplified list of document groups with basic information." + RESOURCE_PREFERRED_SUFFIX,
+        description=("Get simplified list of documents and document groups with basic information. " "Returns both documents and document groups in a unified format. " + RESOURCE_PREFERRED_SUFFIX),
         tags=["document_group", "list"],
         mime_type="application/json",
     )
