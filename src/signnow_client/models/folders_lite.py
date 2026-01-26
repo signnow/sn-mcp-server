@@ -39,15 +39,54 @@ def _normalize_folder_type_value(value: Any) -> Any:
     return value
 
 
-def _folder_doc_type_from_payload(value: Any) -> str | None:
+def _normalize_roles(value: Any) -> list[str] | None:
+    """Normalize roles to list[str] format.
+
+    Handles:
+    - list[str]: returns as-is
+    - list[RoleLite]: extracts name from each RoleLite
+    - list[dict]: extracts name from each dict
+    - None: returns None
+    - Other: returns None
+    """
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return None
+
+    result: list[str] = []
+    for item in value:
+        if isinstance(item, str):
+            if item:
+                result.append(item)
+        elif isinstance(item, dict):
+            name = item.get("name")
+            if name:
+                result.append(name)
+        elif hasattr(item, "name"):
+            # RoleLite or similar object
+            name = getattr(item, "name", None)
+            if name:
+                result.append(name)
+
+    return result if result else None
+
+
+def _folder_doc_type_from_payload(value: Any) -> str:
     # discriminator for Union by raw payload
     if isinstance(value, dict):
         raw_type = value.get("entity_type") or value.get("type")
     else:
         raw_type = value
     if raw_type is None:
-        return None
-    return _normalize_folder_type_value(raw_type)
+        # Return "unknown" as fallback for items without type/entity_type
+        # This will be handled by UnknownFolderDocLite
+        return "unknown"
+    normalized = _normalize_folder_type_value(raw_type)
+    # Validate that normalized type is one of the known types
+    if normalized not in ("document", "template", "document-group", "dgt"):
+        return "unknown"
+    return normalized
 
 
 # ----------------------------
@@ -116,6 +155,7 @@ DocTypeDocument = Annotated[Literal["document"], BeforeValidator(_normalize_fold
 DocTypeTemplate = Annotated[Literal["template"], BeforeValidator(_normalize_folder_type_value)]
 DocTypeDocGroup = Annotated[Literal["document-group"], BeforeValidator(_normalize_folder_type_value)]
 DocTypeDgt = Annotated[Literal["dgt"], BeforeValidator(_normalize_folder_type_value)]
+DocTypeUnknown = Annotated[Literal["unknown"], BeforeValidator(_normalize_folder_type_value)]
 
 
 class DocumentItemLite(SNBaseModel):
@@ -137,7 +177,7 @@ class DocumentItemLite(SNBaseModel):
 
     thumbnail: DocumentThumbnail | None = None
 
-    roles: list[RoleLite] | list[str] | None = None
+    roles: Annotated[list[str] | None, BeforeValidator(_normalize_roles)] = None
 
     field_invites: list[FieldInviteLite] | None = None
 
@@ -213,12 +253,39 @@ class DocumentGroupTemplateItemLite(SNBaseModel):
     documents: list[DocumentGroupDocumentLite] | None = None
 
 
+class UnknownFolderDocLite(SNBaseModel):
+    """Fallback model for folder items with unknown or missing type/entity_type."""
+
+    type: DocTypeUnknown = Field(..., validation_alias=AliasChoices("type", "entity_type"))
+
+    id: str
+    user_id: str | None = None
+    document_name: str | None = None
+    document_group_name: str | None = None
+    owner: str | None = None
+    parent_id: str | None = None
+
+    page_count: IntFromAny = None
+    created: IntFromAny = None
+    updated: IntFromAny = None
+
+    pinned: bool | None = None
+    is_favorite: bool | None = None
+    template: bool | None = None
+
+    thumbnail: DocumentThumbnail | None = None
+
+    # Allow any additional fields that might be present
+    # This is a fallback, so we want to be permissive
+
+
 FolderDocLite = Annotated[
     Union[
         Annotated[DocumentItemLite, Tag("document")],
         Annotated[TemplateItemLite, Tag("template")],
         Annotated[DocumentGroupItemLite, Tag("document-group")],
         Annotated[DocumentGroupTemplateItemLite, Tag("dgt")],
+        Annotated[UnknownFolderDocLite, Tag("unknown")],
     ],
     Field(discriminator=Discriminator(_folder_doc_type_from_payload)),
 ]

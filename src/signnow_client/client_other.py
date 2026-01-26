@@ -105,7 +105,7 @@ class OtherClientMixin:
                         Possible values: 'document-all', 'all', 'document', 'document-group', 'dgt', 'template'
 
         Returns:
-            Validated GetFoldersResponse model with complete folder structure
+            Validated GetFoldersResponseLite model with complete folder structure
         """
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
@@ -160,7 +160,7 @@ class OtherClientMixin:
             only_favorites: Show only favorite documents and document groups
 
         Returns:
-            Validated GetFolderByIdResponse model with folder details and documents
+            Validated GetFolderByIdResponseLite model with folder details and documents
         """
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
