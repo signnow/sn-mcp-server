@@ -156,6 +156,11 @@ __all__ = [
     # Other Models
     "OrganizationSetting",
     "DocumentDownloadLinkResponse",
+    "DocumentRoleName",
+    "DocumentGroupDocument",
+    "DocumentItem",
+    "DocumentGroupItem",
+    "FolderDoc",
     "FolderSubFolder",
     "Folder",
     "GetFoldersResponse",

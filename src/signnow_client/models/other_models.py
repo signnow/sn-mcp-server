@@ -4,9 +4,46 @@ SignNow API Data Models - Other Models
 Pydantic models for SignNow API responses and requests not related to templates, documents, or document groups.
 """
 
-from typing import Any
+from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Discriminator, Field, Tag, field_validator
+
+from .templates_and_documents import DocumentThumbnail
+
+
+def _parse_int_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+class DocumentRoleName(BaseModel):
+    """Document role name."""
+
+    name: str | None = Field(None, description="Role name")
+
+
+class DocumentFieldInvite(BaseModel):
+    """Field invite inside a document item."""
+
+    id: str = Field(..., description="Field invite ID")
+    signer_user_id: str | None = Field(None, description="Signer user ID")
+    status: str | None = Field(None, description="Invite status")
+    created: int | None = Field(None, description="Unix timestamp when invite was created")
+    email: str | None = Field(None, description="Signer email")
+    role: str | None = Field(None, description="Signer role")
+    updated: int | None = Field(None, description="Unix timestamp when invite was updated")
+    expiration_time: int | None = Field(None, description="Unix timestamp when invite expires")
+    role_id: str | None = Field(None, description="Role ID")
+
+    @field_validator("created", "updated", "expiration_time", mode="before")
+    @classmethod
+    def _normalize_int_fields(cls, value: Any) -> int | None:
+        return _parse_int_value(value)
+
 
 
 class OrganizationSetting(BaseModel):
@@ -20,68 +57,6 @@ class DocumentDownloadLinkResponse(BaseModel):
     """Response model for document download link."""
 
     link: str = Field(..., description="Download link for the document")
-
-
-class FolderSubFolder(BaseModel):
-    """Folder subfolder information."""
-
-    id: str = Field(..., description="Subfolder ID")
-    user_id: str = Field(..., description="User ID")
-    name: str = Field(..., description="Subfolder name")
-    created: str = Field(..., description="Creation timestamp")
-    shared: bool = Field(..., description="Shared status")
-    document_count: str = Field(..., description="Document count")
-    template_count: int | str | None = Field(None, description="Template count")
-    folder_count: str = Field(..., description="Folder count")
-    sub_folders: list[dict[str, Any]] | None = Field(None, description="Sub folders")
-
-
-class Folder(BaseModel):
-    """Folder information."""
-
-    id: str = Field(..., description="Folder ID")
-    user_id: str = Field(..., description="User ID")
-    name: str = Field(..., description="Folder name")
-    created: str = Field(..., description="Creation timestamp")
-    shared: bool = Field(..., description="Shared status")
-    document_count: str = Field(..., description="Document count")
-    template_count: int | str | None = Field(None, description="Template count")
-    folder_count: str = Field(..., description="Folder count")
-    sub_folders: list[dict[str, Any]] | None = Field(None, description="Sub folders")
-    team_name: str | None = Field(None, description="Team name")
-    team_id: str | None = Field(None, description="Team ID")
-    team_type: str | None = Field(None, description="Team type")
-
-
-class GetFoldersResponse(BaseModel):
-    """Response model for getting all folders."""
-
-    id: str = Field(..., description="Root folder ID")
-    created: str = Field(..., description="Creation timestamp")
-    name: str = Field(..., description="Root folder name")
-    user_id: str = Field(..., description="User ID")
-    parent_id: str | None = Field(None, description="Parent folder ID")
-    system_folder: bool = Field(..., description="System folder status")
-    shared: bool = Field(..., description="Shared status")
-    folders: list[Folder] = Field(..., description="List of folders")
-    total_documents: int = Field(..., description="Total documents count")
-    documents: list[dict[str, Any]] = Field(..., description="Documents or document groups")
-
-
-class GetFolderByIdResponse(BaseModel):
-    """Response model for getting folder by ID."""
-
-    id: str = Field(..., description="Folder ID")
-    created: str = Field(..., description="Creation timestamp")
-    name: str = Field(..., description="Folder name")
-    user_id: str = Field(..., description="User ID")
-    parent_id: str | None = Field(None, description="Parent folder ID")
-    system_folder: bool = Field(..., description="System folder status")
-    shared: bool = Field(..., description="Shared status")
-    folders: list[dict[str, Any]] | None = Field(None, description="Subfolders")
-    total_documents: int = Field(..., description="Total documents count")
-    documents: list[dict[str, Any]] = Field(..., description="Documents or document groups")
-
 
 # User API Models
 

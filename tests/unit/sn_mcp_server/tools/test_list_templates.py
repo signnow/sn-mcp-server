@@ -100,6 +100,7 @@ class TestListAllTemplates:
             total_documents=2,
             documents=[
                 {
+                    "type": "document",
                     "id": "template2",
                     "document_name": "Template 2",
                     "template": True,
@@ -107,6 +108,7 @@ class TestListAllTemplates:
                     "roles": [{"name": "Reviewer"}],
                 },
                 {
+                    "type": "document",
                     "id": "document2",
                     "document_name": "Document 2",
                     "template": False,

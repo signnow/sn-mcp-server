@@ -4,9 +4,42 @@ MCP Tools Data Models
 Pydantic models for MCP tools results and responses.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from signnow_client.models.document_groups import DocumentGroupV2FieldInvite
+from signnow_client.models.folders_lite import DocumentGroupInviteLite, FieldInviteLite
+from signnow_client.models.templates_and_documents import DocumentFieldInviteStatus
+
+
+# ----------------------------
+# Status constants
+# ----------------------------
+
+# Unified invite status values
+class InviteStatusValues:
+    """Constants for unified invite status values."""
+
+    PENDING = "pending"
+    CREATED = "created"
+    COMPLETED = "completed"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+    UNKNOWN = "unknown"
+
+
+# Raw status sets for status computation
+class InviteStatusSets:
+    """Sets of raw status values grouped by meaning."""
+
+    CREATED = {"created", "new"}
+    PENDING = {"pending", "sent", "waiting"}
+    DONE = {"fulfilled", "signed", "completed", "done"}
+    DECLINED = {"declined", "rejected", "canceled", "cancelled"}
+    EXPIRED = {"expired"}
 
 
 class TemplateSummary(BaseModel):
@@ -54,8 +87,7 @@ class DocumentGroup(BaseModel):
     entity_id: str = Field(..., description="Document group ID")
     group_name: str = Field(..., description="Name of the document group")
     entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
-    invite_id: str | None = Field(None, description="Invite ID for this group")
-    invite_status: str | None = Field(None, description="Status of the invite (e.g., 'pending')")
+    invite: SimplifiedInvite | None = Field(None, description="Unified invite info")
     documents: list[DocumentGroupDocument] = Field(..., description="List of documents in this group")
 
 
@@ -66,15 +98,351 @@ class SimplifiedDocumentGroupDocument(BaseModel):
     name: str = Field(..., description="Document name")
     roles: list[str] = Field(..., description="Roles defined for this document")
 
+class SimplifiedInviteParticipant(BaseModel):
+    email: str | None = Field(None, description="Participant email")
+    role: str | None = Field(None, description="Role (for document field_invites)")
+    action: str | None = Field(None, description="Action (for document-group invites)")
+    order: int | None = Field(None, description="Signing order if present")
+
+    status: str | None = Field(None, description="Raw participant status from API")
+    created: int | None = Field(None, description="Unix created timestamp")
+    updated: int | None = Field(None, description="Unix updated timestamp")
+
+    expires_at: int | None = Field(None, description="Unix expiration timestamp")
+    expired: bool = Field(False, description="Is this participant expired")
+
+    @staticmethod
+    def _normalize_status(status: str | None) -> str:
+        """Normalize status string for comparison."""
+        return (status or "").strip().lower()
+
+    @staticmethod
+    def check_expired(status: str | None, expires_at: int | None, now: int) -> bool:
+        """Check if participant is expired based on status and expiration time."""
+        st = SimplifiedInviteParticipant._normalize_status(status)
+        if st in InviteStatusSets.EXPIRED:
+            return True
+        if expires_at is None:
+            return False
+        return (now > expires_at) and (st in InviteStatusSets.PENDING or st == "")
+
+    @classmethod
+    def from_field_invite(cls, field_invite: FieldInviteLite, now: int) -> SimplifiedInviteParticipant:
+        """Create participant from FieldInviteLite."""
+        expires_at = field_invite.expiration_time
+        status = field_invite.status
+        expired = cls.check_expired(field_invite.status, expires_at, now)
+
+        if expired:
+            status = InviteStatusValues.EXPIRED
+
+        return cls(
+            email=field_invite.email,
+            role=field_invite.role,
+            action="sign",
+            order=None,
+            status=status,
+            created=field_invite.created,
+            updated=field_invite.updated,
+            expires_at=expires_at,
+            expired=expired,
+        )
+
+    @classmethod
+    def from_group_invite(cls, group_invite: DocumentGroupInviteLite, now: int) -> SimplifiedInviteParticipant:
+        """Create participant from DocumentGroupInviteLite."""
+        expires_at = group_invite.expiration_time
+
+        # is_full_declined upgrades to declined
+        status = group_invite.status
+        if group_invite.is_full_declined:
+            status = InviteStatusValues.DECLINED
+
+        expired = cls.check_expired(status, expires_at, now)
+
+        return cls(
+            email=group_invite.email,
+            role=None,
+            action=group_invite.action,
+            order=group_invite.order,
+            status=status,
+            created=group_invite.created,
+            updated=group_invite.updated,
+            expires_at=expires_at,
+            expired=expired,
+        )
+
+    @staticmethod
+    def _parse_timestamp(value: str | int | None) -> int | None:
+        """Parse timestamp from string or int to int."""
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return None
+        return None
+
+    @classmethod
+    def from_document_field_invite(cls, field_invite: DocumentFieldInviteStatus, now: int) -> SimplifiedInviteParticipant:
+        """Create participant from DocumentFieldInviteStatus."""
+        created = cls._parse_timestamp(field_invite.created)
+        updated = cls._parse_timestamp(field_invite.updated)
+        # DocumentFieldInviteStatus doesn't have expiration_time, so it's None
+        expires_at = None
+        status = field_invite.status
+        expired = cls.check_expired(status, expires_at, now)
+
+        if expired:
+            status = InviteStatusValues.EXPIRED
+
+        return cls(
+            email=field_invite.email,
+            role=field_invite.role,
+            action="sign",
+            order=None,
+            status=status,
+            created=created,
+            updated=updated,
+            expires_at=expires_at,
+            expired=expired,
+        )
+
+    @classmethod
+    def from_document_group_v2_field_invite(cls, field_invite: DocumentGroupV2FieldInvite, now: int) -> SimplifiedInviteParticipant:
+        """Create participant from DocumentGroupV2FieldInvite."""
+        expires_at = field_invite.expiration_time
+        status = field_invite.status
+        expired = cls.check_expired(status, expires_at, now)
+
+        if expired:
+            status = InviteStatusValues.EXPIRED
+
+        return cls(
+            email=field_invite.signer_email,  # DocumentGroupV2FieldInvite uses signer_email instead of email
+            role=None,  # DocumentGroupV2FieldInvite doesn't have role
+            action="sign",
+            order=None,
+            status=status,
+            created=field_invite.created,
+            updated=field_invite.updated,
+            expires_at=expires_at,
+            expired=expired,
+        )
+
+class SimplifiedInvite(BaseModel):
+    invite_id: str | None = Field(None, description="Invite ID if present")
+    status: str = Field(
+        InviteStatusValues.UNKNOWN,
+        description=(
+            "Unified invite status. Values: "
+            "pending (awaiting actions), created (created but not sent), "
+            "completed (all actions done), "
+            "declined (someone declined), expired (invite deadline passed), "
+            "unknown (status could not be determined)."
+        ),
+    )
+    status_raw: str | None = Field(
+        None,
+        description=(
+            "Raw group-level invite status as returned by SignNow. "
+            "Possible values depend on SignNow API (examples seen here: "
+            "created, new, sent, pending, waiting, fulfilled, signed, completed, "
+            "done, declined, rejected, canceled, cancelled, expired). "
+            "created means the document was created but not sent."
+        ),
+    )
+
+    expires_at: int | None = Field(None, description="Unified invite expiration timestamp")
+    expired: bool = Field(False, description="Is invite expired")
+
+    participants: list[SimplifiedInviteParticipant] = Field(default_factory=list)
+
+    @staticmethod
+    def _normalize_status(status: str | None) -> str:
+        """Normalize status string for comparison."""
+        return (status or "").strip().lower()
+
+    @staticmethod
+    def pick_expires_at(participants: list["SimplifiedInviteParticipant"]) -> int | None:
+        """Pick expiration time from participants (prefer pending, then any minimum)."""
+        # 1) nearest deadline among pending (most useful for UI)
+        pending_times = [
+            p.expires_at
+            for p in participants
+            if p.expires_at and SimplifiedInvite._normalize_status(p.status) in InviteStatusSets.PENDING
+        ]
+        if pending_times:
+            return min(pending_times)
+        # 2) otherwise — any minimum
+        all_times = [p.expires_at for p in participants if p.expires_at]
+        return min(all_times) if all_times else None
+
+    @staticmethod
+    def compute_status(
+        participants: list["SimplifiedInviteParticipant"],
+        invite_expired: bool,
+        raw_status: str | None = None,
+    ) -> str:
+        """Compute unified invite status from participants and raw status."""
+        rs = SimplifiedInvite._normalize_status(raw_status)
+
+        # 1) explicit statuses with priority
+        if rs in InviteStatusSets.DECLINED:
+            return InviteStatusValues.DECLINED
+        if rs in InviteStatusSets.EXPIRED:
+            return InviteStatusValues.EXPIRED
+        if rs in InviteStatusSets.DONE:
+            return InviteStatusValues.COMPLETED
+        if rs in InviteStatusSets.PENDING:
+            return InviteStatusValues.PENDING
+        if rs in InviteStatusSets.CREATED:
+            return InviteStatusValues.CREATED
+
+        # 2) derive from participants
+        st_list = [
+            SimplifiedInvite._normalize_status(p.status) for p in participants if p.status is not None
+        ]
+
+        if any(st in InviteStatusSets.DECLINED for st in st_list):
+            return InviteStatusValues.DECLINED
+        if invite_expired or any(st in InviteStatusSets.EXPIRED for st in st_list):
+            return InviteStatusValues.EXPIRED
+        if st_list and all(st in InviteStatusSets.DONE for st in st_list):
+            return InviteStatusValues.COMPLETED
+        has_pending = any(st in InviteStatusSets.PENDING for st in st_list)
+        if has_pending:
+            return InviteStatusValues.PENDING
+        if any(st in InviteStatusSets.CREATED for st in st_list):
+            return InviteStatusValues.CREATED
+
+        return InviteStatusValues.UNKNOWN
+
+    @classmethod
+    def from_field_invites(
+        cls, field_invites: list[FieldInviteLite] | None, now: int
+    ) -> SimplifiedInvite | None:
+        """Create invite from list of FieldInviteLite."""
+        if not field_invites:
+            return None
+
+        participants: list[SimplifiedInviteParticipant] = []
+        for fi in field_invites:
+            participants.append(SimplifiedInviteParticipant.from_field_invite(fi, now))
+
+        expires_at = cls.pick_expires_at(participants)
+        invite_expired = any(p.expired for p in participants)
+        status = cls.compute_status(participants, invite_expired, raw_status=None)
+
+        return cls(
+            invite_id=None,
+            status=status,
+            status_raw=None,
+            expires_at=expires_at,
+            expired=invite_expired,
+            participants=participants,
+        )
+
+    @classmethod
+    def from_group_invites(
+        cls,
+        invite_id: str | None,
+        raw_status: str | None,
+        invites: list[DocumentGroupInviteLite] | None,
+        now: int,
+    ) -> SimplifiedInvite | None:
+        """Create invite from list of DocumentGroupInviteLite."""
+        if not invites and not invite_id and not raw_status:
+            return None
+
+        participants: list[SimplifiedInviteParticipant] = []
+        if invites:
+            for inv in invites:
+                participants.append(SimplifiedInviteParticipant.from_group_invite(inv, now))
+
+        expires_at = cls.pick_expires_at(participants)
+        invite_expired = any(p.expired for p in participants) or (
+            cls._normalize_status(raw_status) in InviteStatusSets.EXPIRED
+        )
+        status = cls.compute_status(participants, invite_expired, raw_status=raw_status)
+
+        return cls(
+            invite_id=invite_id,
+            status=status,
+            status_raw=raw_status,
+            expires_at=expires_at,
+            expired=invite_expired,
+            participants=participants,
+        )
+
+    @classmethod
+    def from_document_field_invites(
+        cls, field_invites: list[DocumentFieldInviteStatus] | None, now: int
+    ) -> SimplifiedInvite | None:
+        """Create invite from list of DocumentFieldInviteStatus from /document/{id} endpoint."""
+        if not field_invites:
+            return None
+
+        participants: list[SimplifiedInviteParticipant] = []
+        for fi in field_invites:
+            participants.append(SimplifiedInviteParticipant.from_document_field_invite(fi, now))
+
+        expires_at = cls.pick_expires_at(participants)
+        invite_expired = any(p.expired for p in participants)
+        status = cls.compute_status(participants, invite_expired, raw_status=None)
+
+        return cls(
+            invite_id=None,
+            status=status,
+            status_raw=None,
+            expires_at=expires_at,
+            expired=invite_expired,
+            participants=participants,
+        )
+
+    @classmethod
+    def from_document_group_v2(
+        cls,
+        invite_id: str | None,
+        raw_status: str | None,
+        field_invites: list[DocumentGroupV2FieldInvite] | None,
+        now: int,
+    ) -> SimplifiedInvite | None:
+        """Create invite from document group v2 API data."""
+        if not field_invites and not invite_id and not raw_status:
+            return None
+
+        participants: list[SimplifiedInviteParticipant] = []
+        if field_invites:
+            for fi in field_invites:
+                participants.append(SimplifiedInviteParticipant.from_document_group_v2_field_invite(fi, now))
+
+        expires_at = cls.pick_expires_at(participants)
+        invite_expired = any(p.expired for p in participants) or (
+            cls._normalize_status(raw_status) in InviteStatusSets.EXPIRED
+        )
+        status = cls.compute_status(participants, invite_expired, raw_status=raw_status)
+
+        return cls(
+            invite_id=invite_id,
+            status=status,
+            status_raw=raw_status,
+            expires_at=expires_at,
+            expired=invite_expired,
+            participants=participants,
+        )
 
 class SimplifiedDocumentGroup(BaseModel):
     """Simplified document group for MCP tools."""
 
     last_updated: int = Field(..., description="Unix timestamp of the last update")
-    group_id: str = Field(..., description="Document group ID")
-    group_name: str = Field(..., description="Name of the document group")
-    invite_id: str | None = Field(None, description="Invite ID for this group")
-    invite_status: str | None = Field(None, description="Status of the invite (e.g., 'pending')")
+    id: str = Field(..., description="Document group or document ID")
+    name: str = Field(..., description="Name of the document group or document")
+    entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
+    invite: SimplifiedInvite | None = Field(None, description="Unified invite info")
     documents: list[SimplifiedDocumentGroupDocument] = Field(..., description="List of documents in this group")
 
 
@@ -344,6 +712,12 @@ class DocumentDownloadLinkResponse(BaseModel):
     """Response model for document download link."""
 
     link: str = Field(..., description="Download link for the document")
+
+
+class SigningLinkResponse(BaseModel):
+    """Response model for signing link."""
+
+    link: str = Field(..., description="Signing link for the document or document group")
 
 
 # Create from template models
