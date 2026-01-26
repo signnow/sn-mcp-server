@@ -45,7 +45,6 @@ class DocumentFieldInvite(BaseModel):
         return _parse_int_value(value)
 
 
-
 class OrganizationSetting(BaseModel):
     """Organization setting from the response."""
 
@@ -57,6 +56,7 @@ class DocumentDownloadLinkResponse(BaseModel):
     """Response model for document download link."""
 
     link: str = Field(..., description="Download link for the document")
+
 
 # User API Models
 

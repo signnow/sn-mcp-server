@@ -19,6 +19,7 @@ from signnow_client.models.templates_and_documents import DocumentFieldInviteSta
 # Status constants
 # ----------------------------
 
+
 # Unified invite status values
 class InviteStatusValues:
     """Constants for unified invite status values."""
@@ -97,6 +98,7 @@ class SimplifiedDocumentGroupDocument(BaseModel):
     id: str = Field(..., description="Document ID")
     name: str = Field(..., description="Document name")
     roles: list[str] = Field(..., description="Roles defined for this document")
+
 
 class SimplifiedInviteParticipant(BaseModel):
     email: str | None = Field(None, description="Participant email")
@@ -233,6 +235,7 @@ class SimplifiedInviteParticipant(BaseModel):
             expired=expired,
         )
 
+
 class SimplifiedInvite(BaseModel):
     invite_id: str | None = Field(None, description="Invite ID if present")
     status: str = Field(
@@ -270,11 +273,7 @@ class SimplifiedInvite(BaseModel):
     def pick_expires_at(participants: list["SimplifiedInviteParticipant"]) -> int | None:
         """Pick expiration time from participants (prefer pending, then any minimum)."""
         # 1) nearest deadline among pending (most useful for UI)
-        pending_times = [
-            p.expires_at
-            for p in participants
-            if p.expires_at and SimplifiedInvite._normalize_status(p.status) in InviteStatusSets.PENDING
-        ]
+        pending_times = [p.expires_at for p in participants if p.expires_at and SimplifiedInvite._normalize_status(p.status) in InviteStatusSets.PENDING]
         if pending_times:
             return min(pending_times)
         # 2) otherwise — any minimum
@@ -303,9 +302,7 @@ class SimplifiedInvite(BaseModel):
             return InviteStatusValues.CREATED
 
         # 2) derive from participants
-        st_list = [
-            SimplifiedInvite._normalize_status(p.status) for p in participants if p.status is not None
-        ]
+        st_list = [SimplifiedInvite._normalize_status(p.status) for p in participants if p.status is not None]
 
         if any(st in InviteStatusSets.DECLINED for st in st_list):
             return InviteStatusValues.DECLINED
@@ -322,9 +319,7 @@ class SimplifiedInvite(BaseModel):
         return InviteStatusValues.UNKNOWN
 
     @classmethod
-    def from_field_invites(
-        cls, field_invites: list[FieldInviteLite] | None, now: int
-    ) -> SimplifiedInvite | None:
+    def from_field_invites(cls, field_invites: list[FieldInviteLite] | None, now: int) -> SimplifiedInvite | None:
         """Create invite from list of FieldInviteLite."""
         if not field_invites:
             return None
@@ -364,9 +359,7 @@ class SimplifiedInvite(BaseModel):
                 participants.append(SimplifiedInviteParticipant.from_group_invite(inv, now))
 
         expires_at = cls.pick_expires_at(participants)
-        invite_expired = any(p.expired for p in participants) or (
-            cls._normalize_status(raw_status) in InviteStatusSets.EXPIRED
-        )
+        invite_expired = any(p.expired for p in participants) or (cls._normalize_status(raw_status) in InviteStatusSets.EXPIRED)
         status = cls.compute_status(participants, invite_expired, raw_status=raw_status)
 
         return cls(
@@ -379,9 +372,7 @@ class SimplifiedInvite(BaseModel):
         )
 
     @classmethod
-    def from_document_field_invites(
-        cls, field_invites: list[DocumentFieldInviteStatus] | None, now: int
-    ) -> SimplifiedInvite | None:
+    def from_document_field_invites(cls, field_invites: list[DocumentFieldInviteStatus] | None, now: int) -> SimplifiedInvite | None:
         """Create invite from list of DocumentFieldInviteStatus from /document/{id} endpoint."""
         if not field_invites:
             return None
@@ -421,9 +412,7 @@ class SimplifiedInvite(BaseModel):
                 participants.append(SimplifiedInviteParticipant.from_document_group_v2_field_invite(fi, now))
 
         expires_at = cls.pick_expires_at(participants)
-        invite_expired = any(p.expired for p in participants) or (
-            cls._normalize_status(raw_status) in InviteStatusSets.EXPIRED
-        )
+        invite_expired = any(p.expired for p in participants) or (cls._normalize_status(raw_status) in InviteStatusSets.EXPIRED)
         status = cls.compute_status(participants, invite_expired, raw_status=raw_status)
 
         return cls(
@@ -434,6 +423,7 @@ class SimplifiedInvite(BaseModel):
             expired=invite_expired,
             participants=participants,
         )
+
 
 class SimplifiedDocumentGroup(BaseModel):
     """Simplified document group for MCP tools."""

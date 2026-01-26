@@ -19,6 +19,7 @@ from .templates_and_documents import DocumentThumbnail
 # helpers
 # ----------------------------
 
+
 def _parse_int_value(value: Any) -> int | None:
     if value is None:
         return None
@@ -53,6 +54,7 @@ def _folder_doc_type_from_payload(value: Any) -> str | None:
 # base model
 # ----------------------------
 
+
 class SNBaseModel(BaseModel):
     # explicitly fix behavior: ignore extra fields
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -61,6 +63,7 @@ class SNBaseModel(BaseModel):
 # ----------------------------
 # roles / invites / group docs (minimal)
 # ----------------------------
+
 
 class RoleLite(SNBaseModel):
     id: str | None = Field(None, validation_alias=AliasChoices("unique_id", "id"))
@@ -224,6 +227,7 @@ FolderDocLite = Annotated[
 # ----------------------------
 # folders endpoints
 # ----------------------------
+
 
 class FolderLite(SNBaseModel):
     id: str

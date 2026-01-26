@@ -196,8 +196,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Returns both documents and document groups in a unified format. "
             "Use this tool to fetch lists of documents by status, e.g. "
             "documents waiting for your signature (waiting-for-me) or expired documents "
-            "(expired_filter=expired). "
-            + TOOL_FALLBACK_SUFFIX
+            "(expired_filter=expired). " + TOOL_FALLBACK_SUFFIX
         ),
         tags=["document", "document_group", "list"],
     )
@@ -205,40 +204,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         filter: Annotated[
             Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(
-                description=(
-                    "Filter by document group status (optional). "
-                    "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent."
-                )
-            ),
+            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
         ] = None,
         sortby: Annotated[
             Literal["updated", "created", "document-name"] | None,
-            Field(
-                description=(
-                    "Sort by created date, updated date, or document name (optional). "
-                    "Available values: updated, created, document-name."
-                )
-            ),
+            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
         ] = None,
         order: Annotated[
             Literal["asc", "desc"] | None,
-            Field(
-                description=(
-                    "Order of sorting (optional, can be used only with sortby). "
-                    "Available values: asc, desc."
-                )
-            ),
+            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
         ] = None,
         folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
         expired_filter: Annotated[
             Literal["all", "expired", "not-expired"],
-            Field(
-                description=(
-                    "Filter by invite expiredness (optional, default: all). "
-                    "Available values: all, expired, not-expired."
-                )
-            ),
+            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
         ] = "all",
     ) -> SimplifiedDocumentGroupsResponse:
         """Provide simplified list of documents and document groups with basic fields.
@@ -273,8 +252,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Returns both documents and document groups in a unified format. "
             "Use this resource to fetch lists of documents by status, e.g. "
             "documents waiting for your signature (waiting-for-me) or expired documents "
-            "(expired_filter=expired). "
-            + RESOURCE_PREFERRED_SUFFIX
+            "(expired_filter=expired). " + RESOURCE_PREFERRED_SUFFIX
         ),
         tags=["document", "document_group", "list"],
         mime_type="application/json",
@@ -283,40 +261,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         filter: Annotated[
             Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(
-                description=(
-                    "Filter by document group status (optional). "
-                    "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent."
-                )
-            ),
+            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
         ] = None,
         sortby: Annotated[
             Literal["updated", "created", "document-name"] | None,
-            Field(
-                description=(
-                    "Sort by created date, updated date, or document name (optional). "
-                    "Available values: updated, created, document-name."
-                )
-            ),
+            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
         ] = None,
         order: Annotated[
             Literal["asc", "desc"] | None,
-            Field(
-                description=(
-                    "Order of sorting (optional, can be used only with sortby). "
-                    "Available values: asc, desc."
-                )
-            ),
+            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
         ] = None,
         folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
         expired_filter: Annotated[
             Literal["all", "expired", "not-expired"],
-            Field(
-                description=(
-                    "Filter by invite expiredness (optional, default: all). "
-                    "Available values: all, expired, not-expired."
-                )
-            ),
+            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
         ] = "all",
     ) -> SimplifiedDocumentGroupsResponse:
         return await _list_documents_impl(

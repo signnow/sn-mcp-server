@@ -33,6 +33,7 @@ from .utils import extract_role_names
 # main
 # ----------------------------
 
+
 async def _list_document_groups(
     ctx: Context,
     token: str,
