@@ -15,10 +15,13 @@ from signnow_client.models.templates_and_documents import (
     DocumentResponse,
 )
 
+import time
+
 from .models import (
     DocumentField,
     DocumentGroup,
     DocumentGroupDocument,
+    SimplifiedInvite,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
     UpdateDocumentFieldsResult,
@@ -108,11 +111,24 @@ def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: G
 
     # Get full document information for each document in the group
     full_documents = []
+    all_field_invites = []
     for doc in group_data.documents:
+        # Collect field_invites from each document
+        if doc.field_invites:
+            all_field_invites.extend(doc.field_invites)
         # Get document data first
         document_data = client.get_document(token, doc.id)
         full_doc = _get_full_document(client=client, token=token, document_id=doc.id, document_data=document_data)
         full_documents.append(full_doc)
+
+    # Create invite from group data and field_invites
+    now = int(time.time())
+    invite = SimplifiedInvite.from_document_group_v2(
+        invite_id=group_data.invite_id,
+        raw_status=group_data.state,
+        field_invites=all_field_invites if all_field_invites else None,
+        now=now,
+    )
 
     # Create DocumentGroup with full document information
     return DocumentGroup(
@@ -120,8 +136,7 @@ def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: G
         entity_id=group_data.id,
         group_name=group_data.name,
         entity_type="document_group",
-        invite_id=group_data.invite_id,
-        invite_status=group_data.state,  # Use state as invite_status
+        invite=invite,
         documents=full_documents,
     )
 
@@ -156,8 +171,7 @@ def _get_full_template_group(client: SignNowAPIClient, token: str, template_grou
         entity_id=template_group_data.id,
         group_name=template_group_data.group_name,
         entity_type="template_group",
-        invite_id=None,  # Not applicable for template groups
-        invite_status=None,  # Not applicable for template groups
+        invite=None,  # Not applicable for template groups
         documents=full_documents,
     )
 
@@ -193,27 +207,27 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
             # Try to get document - if successful, it's a document
             document_data = client.get_document(token, entity_id)
             entity_type = "document"
-        except:
+        except Exception:
             # If document not found, try document group
             try:
                 # Try to get document group - if successful, it's a document group
                 group_data = client.get_document_group_v2(token, entity_id)
                 entity_type = "document_group"
-            except:
+            except Exception:
                 # If document group not found, try template group
                 try:
                     # Try to get template group - if successful, it's a template group
                     template_group_data = client.get_document_group_template(token, entity_id)
                     entity_type = "template_group"
-                except:
+                except Exception:
                     raise ValueError(f"Entity with ID {entity_id} not found as either document, template, template group or document group")
     else:
         # Entity type is provided, get the entity data
         if entity_type == "document_group":
             group_data = client.get_document_group_v2(token, entity_id)
-        if entity_type == "template":
+        elif entity_type == "template":
             document_data = client.get_document(token, entity_id)
-        if entity_type == "template_group":
+        elif entity_type == "template_group":
             template_group_data = client.get_document_group_template(token, entity_id)
         else:  # entity_type == "document"
             document_data = client.get_document(token, entity_id)
@@ -221,9 +235,9 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
     # Get the appropriate data based on determined or provided entity type
     if entity_type == "document_group":
         return _get_full_document_group(client, token, group_data)
-    if entity_type == "template_group":
+    elif entity_type == "template_group":
         return _get_full_template_group(client, token, template_group_data)
-    else:  # entity_type == "document"
+    else:  # entity_type == "document" or "template"
         return _get_single_document_as_group(client, token, entity_id, document_data)
 
 
@@ -244,14 +258,17 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
     # Get full document information
     full_document = _get_full_document(client, token, document_id, document_data)
 
+    # Create invite from field_invites
+    now = int(time.time())
+    invite = SimplifiedInvite.from_document_field_invites(document_data.field_invites, now)
+
     # Create DocumentGroup with single document
     return DocumentGroup(
         last_updated=0,  # Not available for single documents
         entity_id=document_id,
         group_name=full_document.name,
         entity_type="document",
-        invite_id=None,  # Not available for single documents
-        invite_status=None,  # Not available for single documents
+        invite=invite,
         documents=[full_document],
     )
 
@@ -297,7 +314,6 @@ def _update_document_fields(client: SignNowAPIClient, token: str, update_request
         except Exception as e:
             # Log error and mark as failed
             error_message = str(e)
-            print(f"Failed to update fields for document {update_request.document_id}: {error_message}")
             results.append(UpdateDocumentFieldsResult(document_id=update_request.document_id, updated=False, reason=error_message))
 
     return UpdateDocumentFieldsResponse(results=results)

@@ -8,8 +8,10 @@ from the SignNow API and converting them to simplified formats for MCP tools.
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
+from signnow_client.models.folders_lite import DocumentItemLite, TemplateItemLite
 
 from .models import TemplateSummary, TemplateSummaryList
+from .utils import extract_role_names
 
 
 async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient) -> TemplateSummaryList:
@@ -40,35 +42,49 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
 
     all_templates = []
 
-    # Process root folder
+    # Process root folder using get_folder_by_id (same approach as subfolders)
     await ctx.report_progress(progress=progress, total=total, message="Processing root folder")
     progress += 1
 
-    root_folder = folders_response
-    if hasattr(root_folder, "documents") and root_folder.documents:
-        for doc in root_folder.documents:
-            # Check if document is a template
-            if doc.get("template", False):
-                # Extract role names from roles array
-                role_names = []
-                if doc.get("roles"):
-                    role_names = [role.get("name", "") for role in doc["roles"] if role.get("name")]
+    try:
+        root_folder_content = client.get_folder_by_id(token, folders_response.id, entity_type="template")
 
-                all_templates.append(
-                    TemplateSummary(
-                        id=doc["id"],
-                        name=doc.get("document_name", doc.get("name", "")),
-                        entity_type="template",
-                        folder_id=root_folder.id,
-                        last_updated=int(doc.get("updated", 0)) if doc.get("updated") else 0,
-                        is_prepared=True,  # Default to True for individual templates
-                        roles=role_names,
+        if root_folder_content.documents:
+            for doc in root_folder_content.documents:
+                # Process TemplateItemLite (entity_type="template" returns these)
+                if isinstance(doc, TemplateItemLite):
+                    all_templates.append(
+                        TemplateSummary(
+                            id=doc.id,
+                            name=doc.document_name or "",
+                            entity_type="template",
+                            folder_id=folders_response.id,
+                            last_updated=int(doc.updated) if doc.updated else 0,
+                            is_prepared=True,  # Default to True for individual templates
+                            roles=[],  # TemplateItemLite doesn't have roles field
+                        )
                     )
-                )
+                # Process DocumentItemLite with template=True (if any)
+                elif isinstance(doc, DocumentItemLite) and doc.template:
+                    role_names = extract_role_names(doc.roles if isinstance(doc.roles, list) else None)
+                    all_templates.append(
+                        TemplateSummary(
+                            id=doc.id,
+                            name=doc.document_name or "",
+                            entity_type="template",
+                            folder_id=folders_response.id,
+                            last_updated=int(doc.updated) if doc.updated else 0,
+                            is_prepared=True,  # Default to True for individual templates
+                            roles=role_names,
+                        )
+                    )
+    except (ValueError, KeyError, AttributeError):
+        # Skip root folder if it can't be accessed
+        pass
 
     # Process all subfolders
     for folder in folders_response.folders:
-        await ctx.report_progress(progress=progress, total=total, message="Processing subfolder {folder.name}")
+        await ctx.report_progress(progress=progress, total=total, message=f"Processing subfolder {folder.name}")
         progress += 1
 
         try:
@@ -77,26 +93,36 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
 
             if folder_content.documents:
                 for doc in folder_content.documents:
-                    # Check if document is a template
-                    if doc.get("template", False):
-                        # Extract role names from roles array
-                        role_names = []
-                        if doc.get("roles"):
-                            role_names = [role.get("name", "") for role in doc["roles"] if role.get("name")]
-
+                    # Process TemplateItemLite (entity_type="template" returns these)
+                    if isinstance(doc, TemplateItemLite):
                         all_templates.append(
                             TemplateSummary(
-                                id=doc["id"],
-                                name=doc.get("document_name", doc.get("name", "")),
+                                id=doc.id,
+                                name=doc.document_name or "",
                                 entity_type="template",
                                 folder_id=folder.id,
-                                last_updated=int(doc.get("updated", 0)) if doc.get("updated") else 0,
+                                last_updated=int(doc.updated) if doc.updated else 0,
+                                is_prepared=True,  # Default to True for individual templates
+                                roles=[],  # TemplateItemLite doesn't have roles field
+                            )
+                        )
+                    # Process DocumentItemLite with template=True (if any)
+                    elif isinstance(doc, DocumentItemLite) and doc.template:
+                        role_names = extract_role_names(doc.roles if isinstance(doc.roles, list) else None)
+                        all_templates.append(
+                            TemplateSummary(
+                                id=doc.id,
+                                name=doc.document_name or "",
+                                entity_type="template",
+                                folder_id=folder.id,
+                                last_updated=int(doc.updated) if doc.updated else 0,
                                 is_prepared=True,  # Default to True for individual templates
                                 roles=role_names,
                             )
                         )
-        except Exception:
+        except (ValueError, KeyError, AttributeError):
             # Skip folders that can't be accessed
+            # Log specific error types but continue processing other folders
             continue
 
     # Get template groups

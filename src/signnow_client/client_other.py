@@ -6,7 +6,9 @@ Methods for authentication, folders, and other utilities.
 
 from typing import Any
 
-from .models import GetFolderByIdResponse, GetFoldersResponse, User
+from signnow_client.models.folders_lite import GetFolderByIdResponseLite, GetFoldersResponseLite
+
+from .models import User
 
 
 class OtherClientMixin:
@@ -90,7 +92,7 @@ class OtherClientMixin:
             data={"username": username, "password": password, "grant_type": "password", "scope": scope},
         )
 
-    def get_folders(self, token: str) -> GetFoldersResponse:
+    def get_folders(self, token: str, entity_type: str | None = None) -> GetFoldersResponseLite:
         """
         Get all folders of a user.
 
@@ -99,14 +101,20 @@ class OtherClientMixin:
 
         Args:
             token: Access token for authentication
+            entity_type: Defines what entities should be in the response
+                        Possible values: 'document-all', 'all', 'document', 'document-group', 'dgt', 'template'
 
         Returns:
-            Validated GetFoldersResponse model with complete folder structure
+            Validated GetFoldersResponseLite model with complete folder structure
         """
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params = {"with_team_documents": "true"}
 
-        return self._get("/user/folder", headers=headers, validate_model=GetFoldersResponse)
+        if entity_type:
+            params["entity_type"] = entity_type
+
+        return self._get("/user/folder", headers=headers, params=params, validate_model=GetFoldersResponseLite)
 
     def get_folder_by_id(
         self,
@@ -123,7 +131,7 @@ class OtherClientMixin:
         include_documents_subfolders: bool | None = None,
         with_team_documents: bool | None = None,
         only_favorites: bool = False,
-    ) -> GetFolderByIdResponse:
+    ) -> GetFolderByIdResponseLite:
         """
         Get folder by ID with detailed information.
 
@@ -152,7 +160,7 @@ class OtherClientMixin:
             only_favorites: Show only favorite documents and document groups
 
         Returns:
-            Validated GetFolderByIdResponse model with folder details and documents
+            Validated GetFolderByIdResponseLite model with folder details and documents
         """
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
@@ -182,7 +190,7 @@ class OtherClientMixin:
         if only_favorites:
             params["only_favorites"] = only_favorites
 
-        return self._get(f"/folder/{folder_id}", headers=headers, params=params, validate_model=GetFolderByIdResponse)
+        return self._get(f"/folder/{folder_id}", headers=headers, params=params, validate_model=GetFolderByIdResponseLite)
 
     def get_user_info(self, token: str) -> User:
         """

@@ -11,6 +11,7 @@ from ..token_provider import TokenProvider
 from .create_from_template import _create_from_template
 from .document import _get_document, _update_document_fields
 from .document_download_link import _get_document_download_link
+from .signing_link import _get_signing_link
 from .embedded_editor import (
     _create_embedded_editor,
     _create_embedded_editor_from_template,
@@ -39,6 +40,7 @@ from .models import (
     EmbeddedInviteOrder,
     InviteOrder,
     InviteStatus,
+    SigningLinkResponse,
     SendInviteFromTemplateResponse,
     SendInviteResponse,
     SimplifiedDocumentGroupsResponse,
@@ -165,45 +167,124 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     async def list_all_templates_resource(ctx: Context) -> TemplateSummaryList:
         return await _list_all_templates_impl(ctx)
 
-    def _list_document_groups_impl(ctx: Context, limit: int = 50, offset: int = 0) -> SimplifiedDocumentGroupsResponse:
+    async def _list_documents_impl(
+        ctx: Context,
+        filter: Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None = None,
+        sortby: Literal["updated", "created", "document-name"] | None = None,
+        order: Literal["asc", "desc"] | None = None,
+        folder_id: str | None = None,
+        expired_filter: Literal["all", "expired", "not-expired"] = "all",
+    ) -> SimplifiedDocumentGroupsResponse:
+        if order is not None and sortby is None:
+            raise ValueError("order can be used only with sortby")
         token, client = _get_token_and_client(token_provider)
-        return _list_document_groups(token, client, limit, offset)
+        return await _list_document_groups(
+            ctx,
+            token,
+            client,
+            filter=filter,
+            sortby=sortby,
+            order=order,
+            folder_id=folder_id,
+            expired_filter=expired_filter,
+        )
 
     @mcp.tool(
-        name="list_document_groups",
-        description=("Get simplified list of documents and document groups with basic information. " "Returns both documents and document groups in a unified format. " + TOOL_FALLBACK_SUFFIX),
-        tags=["document_group", "list"],
+        name="list_documents",
+        description=(
+            "Get simplified list of documents and document groups with basic information. "
+            "Returns both documents and document groups in a unified format. "
+            "Use this tool to fetch lists of documents by status, e.g. "
+            "documents waiting for your signature (waiting-for-me) or expired documents "
+            "(expired_filter=expired). " + TOOL_FALLBACK_SUFFIX
+        ),
+        tags=["document", "document_group", "list"],
     )
-    def list_document_groups(
+    async def list_documents(
         ctx: Context,
-        limit: Annotated[int, Field(ge=1, le=50, description="Maximum number of document groups to return (default: 50, max: 50)")] = 50,
-        offset: Annotated[int, Field(ge=0, description="Number of document groups to skip for pagination (default: 0)")] = 0,
+        filter: Annotated[
+            Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
+            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
+        ] = None,
+        sortby: Annotated[
+            Literal["updated", "created", "document-name"] | None,
+            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
+        ] = None,
+        order: Annotated[
+            Literal["asc", "desc"] | None,
+            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
+        ] = None,
+        folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
+        expired_filter: Annotated[
+            Literal["all", "expired", "not-expired"],
+            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
+        ] = "all",
     ) -> SimplifiedDocumentGroupsResponse:
         """Provide simplified list of documents and document groups with basic fields.
 
         This tool retrieves both individual documents and document groups from SignNow,
         presenting them all in a unified format. If you need a list of documents or
         a list of document groups, this is the right tool to use.
+        You can also use it to fetch specific lists like documents waiting for your
+        signature (waiting-for-me) or expired documents (expired_filter=expired).
 
         Args:
-            limit: Maximum number of document groups to return (default: 50, max: 50)
-            offset: Number of document groups to skip for pagination (default: 0)
+            filter: Filter by document group status (optional)
+            sortby: Sort by created date, updated date, or document name (optional)
+            order: Order of sorting (optional, requires sortby)
+            folder_id: Filter by folder ID (optional)
+            expired_filter: Filter by invite expiredness (optional, default: all)
         """
-        return _list_document_groups_impl(ctx, limit, offset)
+        return await _list_documents_impl(
+            ctx,
+            filter=filter,
+            sortby=sortby,
+            order=order,
+            folder_id=folder_id,
+            expired_filter=expired_filter,
+        )
 
     @mcp.resource(
-        "signnow://document-groups/{?limit,offset}",
-        name="list_document_groups_resource",
-        description=("Get simplified list of documents and document groups with basic information. " "Returns both documents and document groups in a unified format. " + RESOURCE_PREFERRED_SUFFIX),
-        tags=["document_group", "list"],
+        "signnow://documents/{?filter,sortby,order,folder_id,expired_filter}",
+        name="list_documents_resource",
+        description=(
+            "Get simplified list of documents and document groups with basic information. "
+            "Returns both documents and document groups in a unified format. "
+            "Use this resource to fetch lists of documents by status, e.g. "
+            "documents waiting for your signature (waiting-for-me) or expired documents "
+            "(expired_filter=expired). " + RESOURCE_PREFERRED_SUFFIX
+        ),
+        tags=["document", "document_group", "list"],
         mime_type="application/json",
     )
-    def list_document_groups_resource(
+    async def list_documents_resource(
         ctx: Context,
-        limit: Annotated[int, Field(ge=1, le=50, description="Maximum number of document groups to return (default: 50, max: 50)")] = 50,
-        offset: Annotated[int, Field(ge=0, description="Number of document groups to skip for pagination(default: 0)")] = 0,
+        filter: Annotated[
+            Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
+            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
+        ] = None,
+        sortby: Annotated[
+            Literal["updated", "created", "document-name"] | None,
+            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
+        ] = None,
+        order: Annotated[
+            Literal["asc", "desc"] | None,
+            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
+        ] = None,
+        folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
+        expired_filter: Annotated[
+            Literal["all", "expired", "not-expired"],
+            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
+        ] = "all",
     ) -> SimplifiedDocumentGroupsResponse:
-        return _list_document_groups_impl(ctx, limit, offset)
+        return await _list_documents_impl(
+            ctx,
+            filter=filter,
+            sortby=sortby,
+            order=order,
+            folder_id=folder_id,
+            expired_filter=expired_filter,
+        )
 
     @mcp.tool(
         name="send_invite",
@@ -685,6 +766,48 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = None,
     ) -> DocumentDownloadLinkResponse:
         return _get_document_download_link_impl(ctx, entity_id, entity_type)
+
+    def _get_signing_link_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> SigningLinkResponse:
+        token, client = _get_token_and_client(token_provider)
+
+        # Initialize client and use the imported function from signing_link module
+        return _get_signing_link(entity_id, entity_type, token, client)
+
+    @mcp.tool(name="get_signing_link", description="Get signing link for a document or document group" + TOOL_FALLBACK_SUFFIX, tags=["document", "document_group", "sign", "link"])
+    def get_signing_link(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+        ] = None,
+    ) -> SigningLinkResponse:
+        """Get signing link for a document or document group.
+
+        Args:
+            entity_id: ID of the document or document group
+            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+
+        Returns:
+            SigningLinkResponse with signing link
+        """
+        return _get_signing_link_impl(ctx, entity_id, entity_type)
+
+    @mcp.resource(
+        "signnow://signing-link/{entity_id}{?entity_type}",
+        name="get_signing_link_resource",
+        description="Get signing link for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
+        tags=["document", "document_group", "sign", "link"],
+    )
+    def get_signing_link_resource(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+        ] = None,
+    ) -> SigningLinkResponse:
+        return _get_signing_link_impl(ctx, entity_id, entity_type)
 
     def _get_document_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group", "template", "template_group"] | None) -> DocumentGroup:
         token, client = _get_token_and_client(token_provider)

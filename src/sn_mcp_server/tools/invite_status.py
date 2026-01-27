@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from signnow_client import SignNowAPIClient
 
-from .models import DocumentGroupStatusAction, DocumentGroupStatusStep, InviteStatus
+from .models import DocumentGroupStatusAction, DocumentGroupStatusStep, InviteStatus, InviteStatusValues
 
 
 def _get_document_group_status(client: SignNowAPIClient, token: str, document_group_data: Any, document_group_id: str) -> InviteStatus:
@@ -103,7 +103,7 @@ def _get_document_status(client: SignNowAPIClient, token: str, document_data: An
     # Use first field invite ID as invite_id, or generate a placeholder
     invite_id = field_invites[0].id if field_invites else f"doc_{document_response.id}"
 
-    return InviteStatus(invite_id=invite_id, status=field_invites[0].status if field_invites else "unknown", steps=steps)
+    return InviteStatus(invite_id=invite_id, status=field_invites[0].status if field_invites else InviteStatusValues.UNKNOWN, steps=steps)
 
 
 def _get_invite_status(entity_id: str, entity_type: Literal["document", "document_group"] | None, token: str, client: SignNowAPIClient) -> InviteStatus:
