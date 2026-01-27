@@ -4,20 +4,12 @@ SignNow API Data Models - Other Models
 Pydantic models for SignNow API responses and requests not related to templates, documents, or document groups.
 """
 
-from typing import Annotated, Any, Literal, Union
+from typing import Any
 
-from pydantic import AliasChoices, BaseModel, Discriminator, Field, Tag, field_validator
+from pydantic import BaseModel, Field, field_validator
 
+from .folders_lite import _parse_int_value
 from .templates_and_documents import DocumentThumbnail
-
-
-def _parse_int_value(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 class DocumentRoleName(BaseModel):

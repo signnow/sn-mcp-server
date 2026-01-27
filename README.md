@@ -393,7 +393,7 @@ You can list tools, call them with JSON args, and inspect responses.
 Each tool is described concisely; use an MCP client (e.g., Inspector) to view exact JSON schemas.
 
 * **`list_all_templates`** — List templates & template groups with simplified metadata.
-* **`list_documents`** — Browse your document, document groups and statuses.
+* **`list_documents`** — Browse your documents, document groups and statuses.
 * **`create_from_template`** — Make a document or a group from a template/group.
 * **`send_invite`** — Email invites (documents or groups), ordered recipients supported.
 * **`create_embedded_invite`** — Embedded signing session without email delivery.

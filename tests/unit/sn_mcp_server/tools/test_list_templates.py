@@ -8,7 +8,7 @@ from fastmcp import Context
 
 from sn_mcp_server.tools.list_templates import _list_all_templates
 from sn_mcp_server.tools.models import TemplateSummary, TemplateSummaryList
-from signnow_client.models.other_models import GetFoldersResponse, Folder, GetFolderByIdResponse
+from signnow_client.models.folders_lite import GetFoldersResponseLite, FolderLite, GetFolderByIdResponseLite
 from signnow_client.models.document_groups import DocumentGroupTemplatesResponse, DocumentGroupTemplate
 
 
@@ -31,67 +31,49 @@ class TestListAllTemplates:
     @pytest.fixture
     def sample_folders_response(self):
         """Create sample folders response."""
-        return GetFoldersResponse(
+        return GetFoldersResponseLite(
             id="root_folder_id",
-            created="2024-01-01T00:00:00Z",
+            created=1640995200,  # 2022-01-01
             name="Root Folder",
             user_id="user123",
             parent_id=None,
             system_folder=True,
             shared=False,
             folders=[
-                Folder(
+                FolderLite(
                     id="folder1",
-                    created="2024-01-01T00:00:00Z",
+                    created=1640995200,
                     name="Folder 1",
                     user_id="user123",
                     shared=False,
-                    document_count="1",
-                    folder_count="0",
-                    sub_folders=None,
+                    document_count=1,
+                    folder_count=0,
                     team_name=None,
                     team_id=None,
                     team_type=None,
                 ),
-                Folder(
+                FolderLite(
                     id="folder2",
-                    created="2024-01-01T00:00:00Z",
+                    created=1640995200,
                     name="Folder 2",
                     user_id="user123",
                     shared=False,
-                    document_count="0",
-                    folder_count="0",
-                    sub_folders=None,
+                    document_count=0,
+                    folder_count=0,
                     team_name=None,
                     team_id=None,
                     team_type=None,
                 ),
             ],
             total_documents=2,
-            documents=[
-                {
-                    "id": "template1",
-                    "document_name": "Template 1",
-                    "template": True,
-                    "updated": "1640995200",  # 2022-01-01
-                    "roles": [{"name": "Signer"}, {"name": "Approver"}],
-                },
-                {
-                    "id": "document1",
-                    "document_name": "Document 1",
-                    "template": False,
-                    "updated": "1640995200",
-                    "roles": [],
-                },
-            ],
         )
 
     @pytest.fixture
     def sample_folder_content_response(self):
         """Create sample folder content response."""
-        return GetFolderByIdResponse(
+        return GetFolderByIdResponseLite(
             id="folder1",
-            created="2024-01-01T00:00:00Z",
+            created=1640995200,
             name="Folder 1",
             user_id="user123",
             parent_id="root_folder_id",
@@ -100,11 +82,11 @@ class TestListAllTemplates:
             total_documents=2,
             documents=[
                 {
-                    "type": "document",
+                    "type": "template",
                     "id": "template2",
                     "document_name": "Template 2",
                     "template": True,
-                    "updated": "1640995200",
+                    "updated": 1640995200,
                     "roles": [{"name": "Reviewer"}],
                 },
                 {
@@ -112,7 +94,7 @@ class TestListAllTemplates:
                     "id": "document2",
                     "document_name": "Document 2",
                     "template": False,
-                    "updated": "1640995200",
+                    "updated": 1640995200,
                     "roles": [],
                 },
             ],
@@ -213,9 +195,9 @@ class TestListAllTemplates:
     async def test_list_all_templates_empty_folders(self, mock_context, mock_client):
         """Test listing templates when there are no folders or templates."""
         # Setup empty response
-        empty_folders_response = GetFoldersResponse(
+        empty_folders_response = GetFoldersResponseLite(
             id="root_folder_id",
-            created="2024-01-01T00:00:00Z",
+            created=1640995200,
             name="Root Folder",
             user_id="user123",
             parent_id=None,
@@ -223,7 +205,6 @@ class TestListAllTemplates:
             shared=False,
             folders=[],
             total_documents=0,
-            documents=[],
         )
 
         empty_template_groups_response = DocumentGroupTemplatesResponse(
@@ -276,9 +257,9 @@ class TestListAllTemplates:
     ):
         """Test handling of documents with missing optional fields."""
         # Setup response with minimal data
-        folders_response = GetFoldersResponse(
+        folders_response = GetFoldersResponseLite(
             id="root_folder_id",
-            created="2024-01-01T00:00:00Z",
+            created=1640995200,
             name="Root Folder",
             user_id="user123",
             parent_id=None,
@@ -286,8 +267,20 @@ class TestListAllTemplates:
             shared=False,
             folders=[],
             total_documents=1,
+        )
+
+        root_folder_content = GetFolderByIdResponseLite(
+            id="root_folder_id",
+            created=1640995200,
+            name="Root Folder",
+            user_id="user123",
+            parent_id=None,
+            system_folder=True,
+            shared=False,
+            total_documents=1,
             documents=[
                 {
+                    "type": "template",
                     "id": "template_minimal",
                     "template": True,
                     # Missing document_name, updated, roles
@@ -301,6 +294,7 @@ class TestListAllTemplates:
         )
 
         mock_client.get_folders.return_value = folders_response
+        mock_client.get_folder_by_id.return_value = root_folder_content
         mock_client.get_document_template_groups.return_value = empty_template_groups_response
 
         # Call the function

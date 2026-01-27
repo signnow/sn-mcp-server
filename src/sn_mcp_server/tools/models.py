@@ -31,6 +31,35 @@ class InviteStatusValues:
     EXPIRED = "expired"
     UNKNOWN = "unknown"
 
+    @staticmethod
+    def from_raw_status(raw_status: str | None) -> str:
+        """Normalize raw status from API to unified status value.
+
+        Args:
+            raw_status: Raw status string from API (e.g., "sent", "fulfilled", "declined")
+
+        Returns:
+            Unified status value (pending, created, completed, declined, expired, unknown)
+        """
+        if not raw_status:
+            return InviteStatusValues.UNKNOWN
+
+        normalized = (raw_status or "").strip().lower()
+
+        # Check status sets in priority order
+        if normalized in InviteStatusSets.DECLINED:
+            return InviteStatusValues.DECLINED
+        if normalized in InviteStatusSets.EXPIRED:
+            return InviteStatusValues.EXPIRED
+        if normalized in InviteStatusSets.DONE:
+            return InviteStatusValues.COMPLETED
+        if normalized in InviteStatusSets.PENDING:
+            return InviteStatusValues.PENDING
+        if normalized in InviteStatusSets.CREATED:
+            return InviteStatusValues.CREATED
+
+        return InviteStatusValues.UNKNOWN
+
 
 # Raw status sets for status computation
 class InviteStatusSets:
@@ -287,19 +316,10 @@ class SimplifiedInvite(BaseModel):
         raw_status: str | None = None,
     ) -> str:
         """Compute unified invite status from participants and raw status."""
-        rs = SimplifiedInvite._normalize_status(raw_status)
-
         # 1) explicit statuses with priority
-        if rs in InviteStatusSets.DECLINED:
-            return InviteStatusValues.DECLINED
-        if rs in InviteStatusSets.EXPIRED:
-            return InviteStatusValues.EXPIRED
-        if rs in InviteStatusSets.DONE:
-            return InviteStatusValues.COMPLETED
-        if rs in InviteStatusSets.PENDING:
-            return InviteStatusValues.PENDING
-        if rs in InviteStatusSets.CREATED:
-            return InviteStatusValues.CREATED
+        status_from_raw = InviteStatusValues.from_raw_status(raw_status)
+        if status_from_raw != InviteStatusValues.UNKNOWN:
+            return status_from_raw
 
         # 2) derive from participants
         st_list = [SimplifiedInvite._normalize_status(p.status) for p in participants if p.status is not None]

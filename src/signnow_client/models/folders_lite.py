@@ -33,7 +33,12 @@ IntFromAny = Annotated[int | None, BeforeValidator(_parse_int_value)]
 
 
 def _normalize_folder_type_value(value: Any) -> Any:
-    # in case sometimes document_group comes instead of document-group
+    """Normalize folder type value from API.
+
+    The SignNow API sometimes returns inconsistent type values:
+    - Sometimes returns "document_group" instead of "document-group"
+    - This function normalizes these inconsistencies to ensure consistent type values.
+    """
     if value == "document_group":
         return "document-group"
     return value
@@ -73,7 +78,17 @@ def _normalize_roles(value: Any) -> list[str] | None:
 
 
 def _folder_doc_type_from_payload(value: Any) -> str:
-    # discriminator for Union by raw payload
+    """Discriminator function for Union by raw payload.
+
+    Extracts and normalizes the type/entity_type from payload to determine which model to use.
+    Known types: "document", "template", "document-group", "dgt" (document group template).
+
+    Args:
+        value: Raw payload (dict) or type value (str)
+
+    Returns:
+        Normalized type string, or "unknown" if type cannot be determined
+    """
     if isinstance(value, dict):
         raw_type = value.get("entity_type") or value.get("type")
     else:
@@ -84,6 +99,7 @@ def _folder_doc_type_from_payload(value: Any) -> str:
         return "unknown"
     normalized = _normalize_folder_type_value(raw_type)
     # Validate that normalized type is one of the known types
+    # "dgt" stands for "document group template" (DocumentGroupTemplateItemLite)
     if normalized not in ("document", "template", "document-group", "dgt"):
         return "unknown"
     return normalized

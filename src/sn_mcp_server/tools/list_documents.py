@@ -84,7 +84,7 @@ async def _list_document_groups(
     filter_values = filter if filter else None
     now = int(time.time())
 
-    for entry_id, entry_name, _entry_document_count in folder_entries:
+    for entry_id, entry_name, _ in folder_entries:
         await ctx.report_progress(progress=progress, total=total, message=f"Processing folder {entry_name}")
         progress += 1
 

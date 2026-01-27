@@ -6,7 +6,7 @@ This module contains shared utility functions used across multiple tool modules.
 
 from typing import Protocol, Union
 
-from signnow_client.models.folders_lite import RoleLite
+from signnow_client.models.folders_lite import RoleLite, _normalize_roles
 
 
 class HasName(Protocol):
@@ -20,6 +20,9 @@ RoleType = Union[RoleLite, str, dict[str, str], HasName]
 
 def extract_role_names(roles: list[RoleType] | None) -> list[str]:
     """Extract role names from various role representations.
+
+    This function uses _normalize_roles from folders_lite and converts None to empty list
+    for compatibility with code that expects list[str] instead of list[str] | None.
 
     This function handles multiple role formats that can come from the SignNow API:
     - list[str]: Direct list of role names
@@ -41,25 +44,5 @@ def extract_role_names(roles: list[RoleType] | None) -> list[str]:
         >>> extract_role_names(None)
         []
     """
-    if not roles:
-        return []
-
-    out: list[str] = []
-    for role in roles:
-        if isinstance(role, str):
-            if role:
-                out.append(role)
-            continue
-
-        if isinstance(role, dict):
-            name = role.get("name")
-            if name:
-                out.append(name)
-            continue
-
-        # For Pydantic models or objects with name attribute
-        name = getattr(role, "name", None)
-        if name:
-            out.append(name)
-
-    return out
+    normalized = _normalize_roles(roles)
+    return normalized if normalized is not None else []
