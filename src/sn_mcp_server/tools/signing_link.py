@@ -32,7 +32,7 @@ def _get_signing_link(entity_id: str, entity_type: Literal["document", "document
     if document_group.entity_type not in ("document", "document_group"):
         raise ValueError(f"Entity with ID {entity_id} is not a document or document group")
 
-    if not document_group.invite or not document_group.invite.invite_id:
+    if not document_group.invite:
         raise ValueError(f"To sign, an invite must exist for {document_group.entity_type} with ID {document_group.entity_id}")
 
     app_base = str(client.cfg.app_base).rstrip("/")
