@@ -83,7 +83,7 @@ class DocumentPage(BaseModel):
     """Document page information."""
 
     src: str = Field(..., description="Page source URL")
-    size: dict[str, int] = Field(..., description="Page size")
+    size: dict[str, float] = Field(..., description="Page size")
 
 
 # Document field invite models (detailed from /document endpoint)
