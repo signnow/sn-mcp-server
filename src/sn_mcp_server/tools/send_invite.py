@@ -102,9 +102,6 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
     # Create document field invite request
     request_data = CreateDocumentFieldInviteRequest(document_id=entity_id, to=recipients, from_=from_email)
 
-    print(from_email)
-    print(user_info.model_dump())
-    print(request_data.model_dump())
     response = client.create_document_field_invite(token, entity_id, request_data)
 
     return SendInviteResponse(invite_id=response.status, invite_entity="document")  # Document field invite returns status, not id
