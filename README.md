@@ -466,10 +466,9 @@ Find technical details on SignNow API requests, parameters, code examples, and p
 
 Read the [API documentation](https://docs.signnow.com/docs/signnow/welcome).
 
-### GitHub Copilot extension
-Develop eSignature integrations directly in GitHub using AI-powered code suggestions. Copilot recommends API calls and code snippets that align with SignNow API guidelines.
-
-Get [SignNow for GitHub Copilot](https://github.com/apps/signnow).
+### SignNow API Helper MCP
+Connect your AI to access API docs, generate code for complex signing workflows, and troubleshoot integration errors automatically.
+[Access the API Helper MCP](https://github.com/signnow/sn-api-helper-mcp)
 
 ---
 
