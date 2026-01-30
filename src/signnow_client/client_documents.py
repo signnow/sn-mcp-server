@@ -396,7 +396,12 @@ class DocumentClientMixin:
 
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
-        return self._post(f"/document/{document_id}/invite", headers=headers, json_data=request_data.model_dump(exclude_none=True), validate_model=CreateDocumentFieldInviteResponse)
+        return self._post(
+            f"/document/{document_id}/invite",
+            headers=headers,
+            json_data=request_data.model_dump(exclude_none=True, by_alias=True),
+            validate_model=CreateDocumentFieldInviteResponse,
+        )
 
     def cancel_document_field_invite(self, token: str, document_id: str, request_data: CancelDocumentFieldInviteRequest) -> CancelDocumentFieldInviteResponse:
         """
@@ -436,4 +441,9 @@ class DocumentClientMixin:
 
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
-        return self._post(f"/document/{document_id}/invite", headers=headers, json_data=request_data.model_dump(exclude_none=True), validate_model=CreateDocumentFreeformInviteResponse)
+        return self._post(
+            f"/document/{document_id}/invite",
+            headers=headers,
+            json_data=request_data.model_dump(exclude_none=True, by_alias=True),
+            validate_model=CreateDocumentFreeformInviteResponse,
+        )
