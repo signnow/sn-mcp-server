@@ -54,7 +54,7 @@ The SignNow REST API empowers users to deliver a seamless eSignature experience 
 
   * [Sample apps](#sample-apps)
   * [API documentation](#api-documentation)
-  * [GitHub Copilot extension](#github-copilot-extension)
+  * [SignNow API Helper MCP](#signnow-api-helper-mcp)
 * [License](#license)
 
 ---
@@ -85,8 +85,13 @@ The SignNow REST API empowers users to deliver a seamless eSignature experience 
 
 ### Prerequisites
 
-- Python 3.11+ installed on your system
+- SignNow account. Create a [free developer account](https://www.signnow.com/developers).
+- SignNow Credentials: You will need your account email, password, and the application Basic Authorization Token. [Getting started](https://docs.signnow.com/docs/signnow/get-started).
+- An active SignNow API application.
+- Python 3.11+ installed on your system (check with python3 --version)
+- UVX installed  (check with uvx --version). Recommended for the quickest setup.
 - Environment variables configured
+- If your client supports Streamable HTTP, you can use the pre-deployed server URL `https://mcp-server.signnow.com/mcp` instead of running it locally.
 
 ### Quick run (uvx)
 
