@@ -6,7 +6,7 @@ Pydantic models for SignNow API responses and requests related to templates and 
 
 from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 class Thumbnail(BaseModel):
@@ -551,6 +551,8 @@ class DocumentFieldInviteRecipient(BaseModel):
 class CreateDocumentFieldInviteRequest(BaseModel):
     """Request model for creating document field invite."""
 
+    model_config = ConfigDict(populate_by_name=True, validate_by_name=True)
+
     document_id: str = Field(..., description="Path parameter: ID of the document")
     to: list[DocumentFieldInviteRecipient] = Field(..., description="Array[object]: email addresses and settings for all recipients")
     from_: str | None = Field(None, alias="from", description="Sender's email address: you can use only the email address associated with your SignNow account (login email) as 'from' address")
@@ -918,6 +920,8 @@ class DocumentFreeformInviteRecipient(BaseModel):
 
 class CreateDocumentFreeformInviteRequest(BaseModel):
     """Request model for creating document freeform invite."""
+
+    model_config = ConfigDict(populate_by_name=True, validate_by_name=True)
 
     to: str = Field(..., description="Signer's email address")
     from_: str = Field(..., alias="from", description="Sender's email address. You can use only the email address associated with your SignNow account (login email) as 'from' address")
