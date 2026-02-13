@@ -1,45 +1,23 @@
-from fastmcp.server.http import create_sse_app
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
-from starlette.routing import Mount, Route
 
-from .auth import (
-    BearerJWTASGIMiddleware,
-    TrailingSlashCompatMiddleware,
-    get_auth_routes,
-)
-from .config import load_settings
+from .server import create_server
 
 
 def create_http_app() -> Starlette:
-    """Create and configure Starlette HTTP application with MCP endpoints"""
-    # ============= CONFIG =============
-    settings = load_settings()
+    """Create HTTP application with MCP endpoint.
 
-    # ============= Build Starlette + MCP mounts =============
-    from .server import create_server
+    ``FastMCP.http_app()`` auto-wires:
+    * The Streamable-HTTP MCP endpoint at ``/mcp``
+    * OAuth discovery, authorize, token, register routes (when auth is set)
+    * Bearer-token middleware protecting the MCP endpoint
 
-    _mcp = create_server()
+    We only add CORS on top for browser-based clients (MCP Inspector, etc.).
+    """
+    mcp = create_server(stateless_http=True)
+    app = mcp.http_app(path="/mcp")
 
-    # Use modern approach instead of deprecated sse_app
-    sse_app = create_sse_app(_mcp, message_path="/", sse_path="/")
-    mcp_app = _mcp.http_app(path="/")
-
-    # Get OAuth routes from auth module
-    auth_routes = get_auth_routes()
-
-    # Convert auth route tuples to Route objects
-    routes = [
-        # OAuth routes
-        *[Route(path, handler, methods=methods) for path, handler, methods in auth_routes],
-        # MCP endpoints
-        Mount("/sse", app=sse_app),
-        Mount("/mcp", app=mcp_app),
-    ]
-
-    app = Starlette(routes=routes, lifespan=mcp_app.lifespan)
-
-    # CORS for browser clients (inspector) - BEFORE BearerJWTMiddleware
+    # CORS for browser clients (MCP Inspector, embedded UIs)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -48,10 +26,5 @@ def create_http_app() -> Starlette:
         expose_headers=["*"],
         allow_credentials=True,
     )
-
-    app.add_middleware(TrailingSlashCompatMiddleware, accept_exact=("/mcp", "/sse"))
-
-    # Bearer middleware after CORS
-    app.add_middleware(BearerJWTASGIMiddleware)
 
     return app

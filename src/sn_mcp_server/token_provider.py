@@ -1,35 +1,43 @@
+from __future__ import annotations
+
+from fastmcp.server.auth import AccessToken, TokenVerifier
+
 from signnow_client import SignNowAPIClient
 from signnow_client.config import load_signnow_config
 
 from .config import load_settings
 
 
+class SignNowTokenVerifier(TokenVerifier):
+    """Minimal token verifier for opaque SignNow access tokens.
+
+    OAuthProxy already handles token storage, expiry checks, and obtains
+    tokens from valid exchanges.  The verifier simply wraps the upstream
+    token so that FastMCP can pass it through to tool handlers.
+    """
+
+    async def verify_token(self, token: str) -> AccessToken | None:  # noqa: ANN401
+        if not token:
+            return None
+        return AccessToken(token=token, client_id="signnow", scopes=["*"])
+
+
 class TokenProvider:
-    """Automatically provides access tokens from config credentials or authorization headers"""
+    """Provides access tokens from config credentials (STDIO / dev mode)."""
 
     def __init__(self) -> None:
         self.settings = load_settings()
         self.signnow_config = load_signnow_config()
         self.signnow_client = SignNowAPIClient(self.signnow_config)
 
-    def get_access_token(self, headers: dict[str, str] | None = None) -> str | None:
-        """
-        Get access token either from config credentials or from request headers
-
-        Args:
-            headers: Optional request headers dictionary
+    def get_access_token(self) -> str | None:
+        """Get access token from config credentials (password grant).
 
         Returns:
             Access token string or None if unable to get token
         """
-        # First try to get token from config credentials
         if self.has_config_credentials():
             return self._get_token_from_config()
-
-        # If no config credentials, try to extract from headers
-        if headers:
-            return self._extract_token_from_headers(headers)
-
         return None
 
     def has_config_credentials(self) -> bool:
@@ -43,27 +51,6 @@ class TokenProvider:
         if response and isinstance(response, dict) and "access_token" in response:
             token = response["access_token"]
             if isinstance(token, str):
-                return token
-
-        return None
-
-    def _extract_token_from_headers(self, headers: dict[str, str]) -> str | None:
-        """Extract token from request headers, checking multiple possible locations"""
-        if not headers:
-            return None
-
-        # Try authorization header first
-        auth_header = headers.get("authorization", "")
-        if auth_header:
-            # Remove 'Bearer ' prefix if present
-            if auth_header.startswith("Bearer "):
-                return auth_header[7:]  # Remove 'Bearer ' prefix
-            return auth_header
-
-        # Try other common header names
-        for header_name in ["x-access-token", "x-auth-token", "token"]:
-            token = headers.get(header_name, "")
-            if token:
                 return token
 
         return None

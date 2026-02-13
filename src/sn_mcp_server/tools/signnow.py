@@ -2,7 +2,7 @@ import json
 from typing import Annotated, Any, Literal
 
 from fastmcp import Context
-from fastmcp.server.dependencies import get_http_headers
+from fastmcp.server.dependencies import get_access_token as get_mcp_access_token
 from pydantic import Field
 
 from signnow_client import SignNowAPIClient
@@ -58,6 +58,11 @@ TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer 
 def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAPIClient]:
     """Get access token and initialize SignNow API client.
 
+    Resolution order:
+    1. FastMCP auth context (HTTP mode with OAuthProxy) — ``get_access_token()``
+       returns an ``AccessToken`` whose ``.token`` is the upstream SignNow token.
+    2. Config credentials (STDIO mode or HTTP dev mode with user/password).
+
     Args:
         token_provider: TokenProvider instance to get access token
 
@@ -67,14 +72,17 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
     Raises:
         ValueError: If no access token is available
     """
-    headers = get_http_headers()
-    token = token_provider.get_access_token(headers)
+    # 1. Try FastMCP auth (HTTP mode with OAuthProxy)
+    mcp_token = get_mcp_access_token()
+    if mcp_token and mcp_token.token:
+        return mcp_token.token, SignNowAPIClient(token_provider.signnow_config)
 
+    # 2. Fall back to config credentials (STDIO or HTTP with user/password)
+    token = token_provider.get_access_token()
     if not token:
         raise ValueError("No access token available")
 
-    client = SignNowAPIClient(token_provider.signnow_config)
-    return token, client
+    return token, SignNowAPIClient(token_provider.signnow_config)
 
 
 def _normalize_orders(orders: Any, order_type: type) -> list[Any]:  # noqa: ANN401
