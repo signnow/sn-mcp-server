@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any
+
+from fastmcp.server.auth import OAuthProxy
 from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -51,6 +54,34 @@ class Settings(BaseSettings):
 # ---------------------------------------------------------------------------
 
 
+class SignNowOAuthProxy(OAuthProxy):
+    """OAuthProxy that does not forward resource/code_challenge to SignNow (unsupported)."""
+
+    def _build_upstream_authorize_url(
+        self, txn_id: str, transaction: dict[str, Any]
+    ) -> str:
+        """Build authorize URL without resource param (SignNow rejects it)."""
+        from urllib.parse import urlencode
+
+        query_params: dict[str, Any] = {
+            "response_type": "code",
+            "client_id": self._upstream_client_id,
+            "redirect_uri": f"{str(self.base_url).rstrip('/')}{self._redirect_path}",
+            "state": txn_id,
+        }
+
+        scopes_to_use = transaction.get("scopes") or self.required_scopes or []
+        if scopes_to_use:
+            query_params["scope"] = " ".join(scopes_to_use)
+
+        # SignNow does not support PKCE or resource - omit both
+        if self._extra_authorize_params:
+            query_params.update(self._extra_authorize_params)
+
+        separator = "&" if "?" in self._upstream_authorization_endpoint else "?"
+        return f"{self._upstream_authorization_endpoint}{separator}{urlencode(query_params)}"
+
+
 def create_auth_provider(settings: Settings) -> "OAuthProxy | None":
     """Create an OAuthProxy auth provider if OAuth credentials are available.
 
@@ -58,8 +89,6 @@ def create_auth_provider(settings: Settings) -> "OAuthProxy | None":
     (STDIO / dev mode) – in that case no HTTP-level OAuth is needed because
     ``TokenProvider`` resolves tokens from config.
     """
-    from fastmcp.server.auth import OAuthProxy
-
     from signnow_client.config import load_signnow_config
 
     from .token_provider import SignNowTokenVerifier
@@ -77,7 +106,7 @@ def create_auth_provider(settings: Settings) -> "OAuthProxy | None":
 
     base_url = str(settings.oauth_issuer).rstrip("/")
 
-    return OAuthProxy(
+    return SignNowOAuthProxy(
         upstream_authorization_endpoint=f"{str(sn.app_base).rstrip('/')}/authorize",
         upstream_token_endpoint=f"{str(sn.api_base).rstrip('/')}/oauth2/token",
         upstream_revocation_endpoint=f"{str(sn.api_base).rstrip('/')}/oauth2/terminate",
@@ -87,7 +116,7 @@ def create_auth_provider(settings: Settings) -> "OAuthProxy | None":
         base_url=base_url,
         issuer_url=base_url,
         token_endpoint_auth_method="client_secret_post",
-        forward_pkce=True,
+        forward_pkce=False,  # SignNow OAuth does not support code_challenge
         allowed_client_redirect_uris=settings.allowed_redirects_list or None,
         require_authorization_consent=False,
     )
