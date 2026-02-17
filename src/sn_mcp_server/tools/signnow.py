@@ -3,6 +3,7 @@ from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from fastmcp.server.dependencies import get_http_headers
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from signnow_client import SignNowAPIClient
@@ -11,7 +12,6 @@ from ..token_provider import TokenProvider
 from .create_from_template import _create_from_template
 from .document import _get_document, _update_document_fields
 from .document_download_link import _get_document_download_link
-from .signing_link import _get_signing_link
 from .embedded_editor import (
     _create_embedded_editor,
     _create_embedded_editor_from_template,
@@ -40,15 +40,16 @@ from .models import (
     EmbeddedInviteOrder,
     InviteOrder,
     InviteStatus,
-    SigningLinkResponse,
     SendInviteFromTemplateResponse,
     SendInviteResponse,
+    SigningLinkResponse,
     SimplifiedDocumentGroupsResponse,
     TemplateSummaryList,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
 )
 from .send_invite import _send_invite, _send_invite_from_template
+from .signing_link import _get_signing_link
 
 RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
 
@@ -145,6 +146,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="list_all_templates",
         description="Get simplified list of all templates and template groups with basic information" + TOOL_FALLBACK_SUFFIX,
+        annotations=ToolAnnotations(
+            title="List templates and template groups",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
         tags=["template", "template_group", "list"],
     )
     async def list_all_templates(ctx: Context) -> TemplateSummaryList:
@@ -197,6 +205,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Use this tool to fetch lists of documents by status, e.g. "
             "documents waiting for your signature (waiting-for-me) or expired documents "
             "(expired_filter=expired). " + TOOL_FALLBACK_SUFFIX
+        ),
+        annotations=ToolAnnotations(
+            title="List documents and document groups",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
         ),
         tags=["document", "document_group", "list"],
     )
@@ -293,6 +308,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "This tool is ONLY for documents and document groups. "
             "If you have template or template_group, use the alternative tool: send_invite_from_template"
         ),
+        annotations=ToolAnnotations(
+            title="Send signing invite",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
         tags=["send_invite", "document", "document_group", "sign", "workflow"],
     )
     def send_invite(
@@ -340,6 +362,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Create embedded invite for signing a document or document group. "
             "This tool is ONLY for documents and document groups. "
             "If you have template or template_group, use the alternative tool: create_embedded_invite_from_template"
+        ),
+        annotations=ToolAnnotations(
+            title="Create embedded signing invite",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
         ),
         tags=["send_invite", "document", "document_group", "sign", "embedded", "workflow"],
     )
@@ -389,6 +418,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "This tool is ONLY for documents and document groups. "
             "If you have template or template_group, use the alternative tool: create_embedded_sending_from_template"
         ),
+        annotations=ToolAnnotations(
+            title="Create embedded sending link",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
         tags=["edit", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     def create_embedded_sending(
@@ -430,6 +466,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "This tool is ONLY for documents and document groups. "
             "If you have template or template_group, use the alternative tool: create_embedded_editor_from_template"
         ),
+        annotations=ToolAnnotations(
+            title="Create embedded editor link",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
         tags=["edit", "document", "document_group", "embedded"],
     )
     def create_embedded_editor(
@@ -465,6 +508,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="create_from_template",
         description="Create a new document or document group from an existing template or template group",
+        annotations=ToolAnnotations(
+            title="Create from template",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
         tags=["template", "template_group", "document", "document_group", "create", "workflow"],
     )
     def create_from_template(
@@ -496,6 +546,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Create document/group from template and send invite immediately. "
             "This tool is ONLY for templates and template groups. "
             "If you have document or document_group, use the alternative tool: send_invite"
+        ),
+        annotations=ToolAnnotations(
+            title="Create from template and send invite",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
         ),
         tags=["template", "template_group", "document", "document_group", "send_invite", "workflow"],
     )
@@ -551,6 +608,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "This tool is ONLY for templates and template groups. "
             "If you have document or document_group, use the alternative tool: create_embedded_sending"
         ),
+        annotations=ToolAnnotations(
+            title="Create from template and embed sending",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
         tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
     async def create_embedded_sending_from_template(
@@ -598,6 +662,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "This tool is ONLY for templates and template groups. "
             "If you have document or document_group, use the alternative tool: create_embedded_editor"
         ),
+        annotations=ToolAnnotations(
+            title="Create from template and embed editor",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
         tags=["template", "template_group", "document", "document_group", "embedded_editor", "embedded", "workflow"],
     )
     async def create_embedded_editor_from_template(
@@ -643,6 +714,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Create document/group from template and create embedded invite immediately. "
             "This tool is ONLY for templates and template groups. "
             "If you have document or document_group, use the alternative tool: create_embedded_invite"
+        ),
+        annotations=ToolAnnotations(
+            title="Create from template and embed invite",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
         ),
         tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
@@ -695,7 +773,18 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         token, client = _get_token_and_client(token_provider)
         return _get_invite_status(entity_id, entity_type, token, client)
 
-    @mcp.tool(name="get_invite_status", description="Get invite status for a document or document group" + TOOL_FALLBACK_SUFFIX, tags=["invite", "status", "document", "document_group", "workflow"])
+    @mcp.tool(
+        name="get_invite_status",
+        description="Get invite status for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        annotations=ToolAnnotations(
+            title="Get invite status",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["invite", "status", "document", "document_group", "workflow"],
+    )
     def get_invite_status(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -728,7 +817,18 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         # Initialize client and use the imported function from document_download_link module
         return _get_document_download_link(entity_id, entity_type, token, client)
 
-    @mcp.tool(name="get_document_download_link", description="Get download link for a document or document group" + TOOL_FALLBACK_SUFFIX, tags=["document", "document_group", "download", "link"])
+    @mcp.tool(
+        name="get_document_download_link",
+        description="Get download link for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        annotations=ToolAnnotations(
+            title="Get document download link",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "download", "link"],
+    )
     def get_document_download_link(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -773,7 +873,18 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         # Initialize client and use the imported function from signing_link module
         return _get_signing_link(entity_id, entity_type, token, client)
 
-    @mcp.tool(name="get_signing_link", description="Get signing link for a document or document group" + TOOL_FALLBACK_SUFFIX, tags=["document", "document_group", "sign", "link"])
+    @mcp.tool(
+        name="get_signing_link",
+        description="Get signing link for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        annotations=ToolAnnotations(
+            title="Get signing link",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "sign", "link"],
+    )
     def get_signing_link(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
@@ -818,6 +929,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="get_document",
         description="Get full document, template, template group or document group information with field values",
+        annotations=ToolAnnotations(
+            title="Get document or group details",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
         tags=["document", "document_group", "template", "template_group", "get", "fields"],
     )
     def get_document(
@@ -869,6 +987,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="update_document_fields",
         description="Update text fields in multiple documents (only individual documents, not document groups)",
+        annotations=ToolAnnotations(
+            title="Update document text fields",
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
         tags=["document", "fields", "update", "prefill"],
     )
     def update_document_fields(
