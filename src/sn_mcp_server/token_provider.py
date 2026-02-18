@@ -44,6 +44,26 @@ class TokenProvider:
         """Check if username and password are configured"""
         return bool(self.signnow_config.user_email and self.signnow_config.password and self.signnow_config.basic_token)
 
+    def get_token_from_headers(self, headers: dict[str, str] | object) -> str | None:
+        """Extract Bearer token from Authorization header.
+
+        Args:
+            headers: Request headers (e.g. request.headers or dict)
+
+        Returns:
+            Token string or None if missing/invalid
+        """
+        get = getattr(headers, "get", None)
+        if get is None:
+            return None
+        auth = get("authorization") or get("Authorization")
+        if not auth or not isinstance(auth, str):
+            return None
+        auth = auth.strip()
+        if not auth.lower().startswith("bearer ") or len(auth) <= 7:
+            return None
+        return auth[7:].strip()
+
     def _get_token_from_config(self) -> str | None:
         """Get token using configured username and password"""
         response = self.signnow_client.get_tokens_by_password(username=self.signnow_config.user_email, password=self.signnow_config.password)

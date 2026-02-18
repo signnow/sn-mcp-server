@@ -1,6 +1,7 @@
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 
+from .bearer_auth_middleware import BearerJWTASGIMiddleware
 from .server import create_server
 
 
@@ -12,10 +13,12 @@ def create_http_app() -> Starlette:
     * OAuth discovery, authorize, token, register routes (when auth is set)
     * Bearer-token middleware protecting the MCP endpoint
 
-    We only add CORS on top for browser-based clients (MCP Inspector, etc.).
+    BearerJWTASGIMiddleware returns 401 with www-authenticate when token is missing.
     """
     mcp = create_server(stateless_http=True)
     app = mcp.http_app(path="/mcp")
+
+    app.add_middleware(BearerJWTASGIMiddleware)
 
     # CORS for browser clients (MCP Inspector, embedded UIs)
     app.add_middleware(
