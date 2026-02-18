@@ -56,6 +56,7 @@ class BearerJWTASGIMiddleware:
                     "status": 401,
                     "headers": [
                         (b"www-authenticate", f'Bearer resource_metadata="{resource_metadata_url}"'.encode()),
+                        (b"content-type", b"text/plain"),
                         (b"content-length", b"12"),
                     ],
                 }
