@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastmcp.server.auth import OAuthProxy
+from key_value.aio.protocols.key_value import AsyncKeyValue
 from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,6 +20,9 @@ class Settings(BaseSettings):
 
     # Allowed redirect URIs (passed to OAuthProxy)
     allowed_redirects: str = Field(default="http://localhost,http://127.0.0.1", description="Comma-separated list of allowed redirect URIs", alias="ALLOWED_REDIRECTS")
+
+    # Redis URL for shared OAuth state (multi-instance deployments)
+    redis_url: str | None = Field(default=None, description="Redis URL for shared OAuth state storage (e.g. redis://localhost:6379/0)", alias="REDIS_URL")
 
     @field_validator("oauth_issuer", mode="before")
     @classmethod
@@ -106,6 +110,8 @@ def create_auth_provider(settings: Settings) -> "OAuthProxy | None":
 
     base_url = str(settings.oauth_issuer).rstrip("/")
 
+    client_storage = _build_client_storage(settings.redis_url, sn.client_secret)
+
     return SignNowOAuthProxy(
         upstream_authorization_endpoint=f"{str(sn.app_base).rstrip('/')}/authorize",
         upstream_token_endpoint=f"{str(sn.api_base).rstrip('/')}/oauth2/token",
@@ -119,6 +125,32 @@ def create_auth_provider(settings: Settings) -> "OAuthProxy | None":
         forward_pkce=False,  # SignNow OAuth does not support code_challenge
         allowed_client_redirect_uris=settings.allowed_redirects_list or None,
         require_authorization_consent=False,
+        client_storage=client_storage,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Storage
+# ---------------------------------------------------------------------------
+
+
+def _build_client_storage(redis_url: str | None, client_secret: str) -> AsyncKeyValue | None:
+    """Build a shared Redis-backed storage when *redis_url* is set.
+
+    Returns ``None`` to let OAuthProxy fall back to its default encrypted
+    DiskStore (suitable for single-instance / STDIO deployments).
+    """
+    if not redis_url:
+        return None
+
+    from key_value.aio.stores.redis import RedisStore
+    from key_value.aio.wrappers.encryption.fernet import FernetEncryptionWrapper
+
+    redis_store = RedisStore(url=redis_url)
+    return FernetEncryptionWrapper(
+        key_value=redis_store,
+        source_material=client_secret,
+        salt="sn-mcp-oauth-storage",
     )
 
 

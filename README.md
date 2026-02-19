@@ -222,6 +222,9 @@ ACCESS_TTL=3600
 REFRESH_TTL=2592000
 ALLOWED_REDIRECTS=<comma,separated,uris>
 
+# Shared state for multi-instance deployments (optional)
+REDIS_URL=redis://localhost:6379/0
+
 # RSA keys for OAuth (critical in production)
 OAUTH_RSA_PRIVATE_PEM=<PEM content>
 OAUTH_JWK_KID=<key id>
@@ -230,6 +233,26 @@ OAUTH_JWK_KID=<key id>
 ### Production key management
 
 If `OAUTH_RSA_PRIVATE_PEM` is missing in production, a new RSA key will be generated on each restart, **invalidating all existing tokens**. Always provide a persistent private key via secrets management in prod.
+
+### Multi-instance deployment (Redis)
+
+By default the server stores OAuth state (transactions, tokens, client registrations) on local disk. This works for single-instance setups but **breaks when two or more instances run behind a load balancer** because each instance has its own isolated state.
+
+Set the `REDIS_URL` environment variable to share state across instances:
+
+```
+REDIS_URL=redis://my-redis-host:6379/0
+```
+
+Install the optional Redis dependency:
+
+```bash
+pip install "signnow-mcp-server[redis]"
+```
+
+All OAuth collections (transactions, authorization codes, upstream tokens, client registrations) will be stored in Redis and encrypted with a Fernet key derived from `SIGNNOW_CLIENT_SECRET`. As long as every instance shares the same `SIGNNOW_CLIENT_SECRET`, they can read and write the same state.
+
+When `REDIS_URL` is not set, the server falls back to the default encrypted local disk store — no changes are required for existing single-instance deployments.
 
 ---
 

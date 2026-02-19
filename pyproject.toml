@@ -41,6 +41,9 @@ langchain = [
   "langchain-mcp-adapters>=0.1.0",
   "langchain-core>=0.1.0",
 ]
+redis = [
+  "redis>=5.0",
+]
 test = [
   "pytest>=7.0",
   "pytest-asyncio>=0.21",
