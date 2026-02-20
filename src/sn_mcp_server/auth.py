@@ -1,6 +1,7 @@
 import base64
 import secrets
 import time
+from urllib.parse import urlencode, urlparse
 from typing import Any
 
 import jwt
@@ -14,6 +15,7 @@ from signnow_client import SignNowAPIClient
 from signnow_client.config import load_signnow_config
 
 from .config import load_settings
+from .token_provider import TokenProvider
 
 # ============= CONFIG =============
 settings = load_settings()
@@ -33,6 +35,13 @@ n_b = numbers.n.to_bytes((numbers.n.bit_length() + 7) // 8, "big")
 
 def b64url(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def _url(base: str | Any, *parts: str) -> str:
+    """Join base URL with path parts, normalizing slashes."""
+    base = str(base).rstrip("/")
+    path = "/".join(p.strip("/") for p in parts if p)
+    return f"{base}/{path}" if path else base
 
 
 JWKS = {
@@ -64,53 +73,99 @@ def _verify_jwt(token: str) -> dict[str, Any] | None:
             issuer=str(settings.oauth_issuer),
             options={"require": ["exp", "iat", "iss", "aud"]},
         )
-    except Exception:
+    except jwt.PyJWTError:
         return None
 
 
-# ============= OAuth endpoints =============
-async def openid_config(_: Request) -> JSONResponse:
+def _token_response(signnow_response: dict[str, Any]) -> JSONResponse:
+    """Build OAuth token response from SignNow API response."""
     return JSONResponse(
         {
-            "issuer": str(settings.oauth_issuer),
-            "authorization_endpoint": f"{str(settings.oauth_issuer)}authorize",
-            "token_endpoint": f"{str(settings.oauth_issuer)}oauth2/token",
-            "jwks_uri": f"{str(settings.oauth_issuer)}.well-known/jwks.json",
-            "registration_endpoint": f"{str(settings.oauth_issuer)}oauth2/register",
-            "scopes_supported": ["offline_access", "*"],
-            "response_types_supported": ["code"],
-            "grant_types_supported": ["authorization_code", "refresh_token"],
-            "code_challenge_methods_supported": ["S256"],
-            "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
+            "token_type": signnow_response.get("token_type", "Bearer"),
+            "access_token": signnow_response.get("access_token"),
+            "expires_in": signnow_response.get("expires_in", settings.access_ttl),
+            "refresh_token": signnow_response.get("refresh_token"),
+            "scope": signnow_response.get("scope", "offline_access *"),
         }
     )
 
 
+def _require_string(value: Any, param: str) -> tuple[str | None, JSONResponse | None]:
+    """Validate form param is non-empty string. Returns (value, error_response)."""
+    if not value:
+        return None, JSONResponse({"error": "invalid_request", "error_description": f"{param} required"}, status_code=400)
+    if not isinstance(value, str):
+        return None, JSONResponse({"error": "invalid_request", "error_description": f"{param} must be a string"}, status_code=400)
+    return value, None
+
+
+# ============= OAuth endpoints =============
+def _openid_configuration() -> dict[str, Any]:
+    """Build OAuth/OIDC discovery document with correct URLs."""
+    base = str(settings.oauth_issuer).rstrip("/")
+    return {
+        "issuer": str(settings.oauth_issuer),
+        "authorization_endpoint": _url(base, "authorize"),
+        "token_endpoint": _url(base, "oauth2/token"),
+        "jwks_uri": _url(base, ".well-known/jwks.json"),
+        "registration_endpoint": _url(base, "oauth2/register"),
+        "scopes_supported": ["offline_access", "*"],
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
+    }
+
+
+async def openid_config(_: Request) -> JSONResponse:
+    return JSONResponse(_openid_configuration())
+
+
 async def oauth_as_meta(_: Request) -> JSONResponse:
-    # can return the same object as openid-configuration
-    return await openid_config(_)
+    return JSONResponse(_openid_configuration())
 
 
 async def jwks(_: Request) -> JSONResponse:
     return JSONResponse(JWKS)
 
 
-async def authorize(req: Request) -> RedirectResponse:
+async def authorize(req: Request) -> RedirectResponse | JSONResponse:
     q = req.query_params
     redirect_uri = q.get("redirect_uri")
     state = q.get("state", "")
 
-    # Build redirect URL with proper query parameters
-    base_url = str(signnow_config.app_base) + "authorize"
-    params = {"response_type": "code", "client_id": signnow_config.client_id, "redirect_uri": redirect_uri}
+    if not redirect_uri:
+        return JSONResponse({"error": "invalid_request", "error_description": "redirect_uri required"}, status_code=400)
 
-    # Add state only if it exists
+    # Validate redirect_uri against allowed list (exact match or same scheme+host; any port when allowed has no port)
+    allowed = settings.allowed_redirects_list
+    if allowed:
+        parsed = urlparse(redirect_uri)
+        redirect_scheme = parsed.scheme
+        redirect_host = (parsed.hostname or "").lower()
+        redirect_port = parsed.port
+
+        def _matches(allowed_uri: str) -> bool:
+            if redirect_uri == allowed_uri:
+                return True
+            a = urlparse(allowed_uri)
+            if redirect_scheme != a.scheme:
+                return False
+            if (a.hostname or "").lower() != redirect_host:
+                return False
+            # Same scheme and host: allow if exact port match, or if allowed has no port (any port ok)
+            if a.port is None:
+                return True
+            return redirect_port == a.port
+
+        if not any(_matches(a) for a in allowed):
+            return JSONResponse({"error": "invalid_request", "error_description": "redirect_uri not allowed"}, status_code=400)
+
+    base_url = _url(signnow_config.app_base, "authorize")
+    params: dict[str, str] = {"response_type": "code", "client_id": signnow_config.client_id, "redirect_uri": redirect_uri}
     if state:
         params["state"] = state
-
-    # Build query string
-    query_string = "&".join(f"{key}={value}" for key, value in params.items())
-    redirect_url = f"{base_url}?{query_string}"
+    redirect_url = f"{base_url}?{urlencode(params)}"
 
     return RedirectResponse(redirect_url, status_code=302)
 
@@ -120,56 +175,24 @@ async def token(req: Request) -> JSONResponse:
     grant_type = form.get("grant_type")
 
     if grant_type == "authorization_code":
-        code = form.get("code")
-
-        # Get tokens from SignNow API
-        if not code:
-            return JSONResponse({"error": "invalid_request", "error_description": "code parameter required"}, status_code=400)
-        if isinstance(code, str):
-            signnow_response = signnow_client.get_tokens(code=code)
-        else:
-            return JSONResponse({"error": "invalid_request", "error_description": "code must be a string"}, status_code=400)
-
+        code, err = _require_string(form.get("code"), "code")
+        if err:
+            return err
+        assert code is not None
+        signnow_response = signnow_client.get_tokens(code=code)
         if not signnow_response:
             return JSONResponse({"error": "external_token_error"}, status_code=500)
-
-        # Return tokens from SignNow API
-        return JSONResponse(
-            {
-                "token_type": signnow_response.get("token_type", "Bearer"),
-                "access_token": signnow_response.get("access_token"),
-                "expires_in": signnow_response.get("expires_in", settings.access_ttl),
-                "refresh_token": signnow_response.get("refresh_token"),
-                "scope": "offline_access *",
-            }
-        )
+        return _token_response(signnow_response)
 
     elif grant_type == "refresh_token":
-        refresh = form.get("refresh_token")
-
-        if not refresh:
+        refresh, err = _require_string(form.get("refresh_token"), "refresh_token")
+        if err:
+            return err
+        assert refresh is not None
+        signnow_response = signnow_client.refresh_tokens(refresh_token=refresh)
+        if not signnow_response:
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
-
-        # Get new tokens from SignNow API using refresh token
-        if not refresh:
-            return JSONResponse({"error": "invalid_request", "error_description": "refresh_token parameter required"}, status_code=400)
-        if isinstance(refresh, str):
-            signnow_response = signnow_client.refresh_tokens(refresh_token=refresh)
-        else:
-            return JSONResponse({"error": "invalid_request", "error_description": "refresh_token must be a string"}, status_code=400)
-
-        if signnow_response:
-            return JSONResponse(
-                {
-                    "token_type": signnow_response.get("token_type", "Bearer"),
-                    "access_token": signnow_response.get("access_token"),
-                    "expires_in": signnow_response.get("expires_in", settings.access_ttl),
-                    "refresh_token": signnow_response.get("refresh_token"),
-                    "scope": signnow_response.get("scope", "*"),
-                }
-            )
-        else:
-            return JSONResponse({"error": "invalid_grant"}, status_code=400)
+        return _token_response(signnow_response)
 
     else:
         return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
@@ -201,21 +224,16 @@ async def introspect(req: Request) -> JSONResponse:
 
 async def revoke(req: Request) -> PlainTextResponse | JSONResponse:
     form = await req.form()
-    token = form.get("token")
-
-    if not token:
-        return JSONResponse({"error": "invalid_request", "error_description": "token parameter required"}, status_code=400)
-
-    # Send revoke request to SignNow API
-    if not token:
-        return JSONResponse({"error": "invalid_request", "error_description": "token parameter required"}, status_code=400)
-    if isinstance(token, str):
+    token, err = _require_string(form.get("token"), "token")
+    if err:
+        return err
+    assert token is not None
+    try:
         if signnow_client.revoke_token(token):
             return PlainTextResponse("", status_code=200)
-        else:
-            return JSONResponse({"error": "external_revoke_error"}, status_code=500)
-    else:
-        return JSONResponse({"error": "invalid_request", "error_description": "token must be a string"}, status_code=400)
+        return JSONResponse({"error": "external_revoke_error"}, status_code=500)
+    except Exception:
+        return JSONResponse({"error": "external_revoke_error"}, status_code=500)
 
 
 # ============= PRM (Protected Resource Metadata) =============
@@ -262,7 +280,7 @@ async def register(req: Request) -> JSONResponse:
         "token_endpoint_auth_method": token_method,
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
-        "registration_client_uri": f"{str(settings.oauth_issuer)}/oauth2/register/{client_id}",
+        "registration_client_uri": _url(settings.oauth_issuer, "oauth2/register", client_id),
         "client_secret_expires_at": 0,
     }
     if client_secret:
@@ -298,20 +316,19 @@ class BearerJWTASGIMiddleware:
     def __init__(self, app: Any, protect_prefixes: tuple[str, ...] = ("/mcp", "/sse", "/messages")) -> None:
         self.app = app
         self._paths = tuple(protect_prefixes)
-        from .token_provider import TokenProvider
-
         self.token_provider = TokenProvider()
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
+            return
 
         request = Request(scope, receive=receive)
         path = request.url.path
 
-        # Let CORS outside handle preflight
         if request.method == "OPTIONS":
             await self.app(scope, receive, send)
+            return
 
         if any(path.startswith(x) for x in self._paths):
             if not self.token_provider.has_config_credentials():
@@ -322,7 +339,7 @@ class BearerJWTASGIMiddleware:
                             "type": "http.response.start",
                             "status": 401,
                             "headers": [
-                                (b"www-authenticate", f'Bearer resource_metadata="{str(settings.oauth_issuer)}/.well-known/oauth-protected-resource"'.encode()),
+                                (b"www-authenticate", f'Bearer resource_metadata="{_url(settings.oauth_issuer, ".well-known/oauth-protected-resource")}"'.encode()),
                                 (b"content-type", b"text/plain; charset=utf-8"),
                             ],
                         }

@@ -65,10 +65,14 @@ class OtherClientMixin:
             token: Access token to revoke
 
         Returns:
-            True if successful, False otherwise
+            True if successful (2xx including 204 No Content), False otherwise. Raises on network/timeout errors.
         """
-        self._post("/oauth2/terminate", headers={"Accept": "application/json", "Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json_data={})
-        return True
+        response = self.http.post(
+            "/oauth2/terminate",
+            headers={"Accept": "application/json", "Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={},
+        )
+        return response.is_success
 
     def get_tokens_by_password(self, username: str, password: str, scope: str = None) -> dict[str, Any] | None:
         """
