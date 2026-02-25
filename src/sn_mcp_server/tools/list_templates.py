@@ -78,7 +78,7 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
                             roles=role_names,
                         )
                     )
-    except (ValueError, KeyError, AttributeError):
+    except Exception:  # noqa: S110
         # Skip root folder if it can't be accessed
         pass
 
@@ -120,9 +120,8 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
                                 roles=role_names,
                             )
                         )
-        except (ValueError, KeyError, AttributeError):
-            # Skip folders that can't be accessed
-            # Log specific error types but continue processing other folders
+        except Exception:  # noqa: S112
+            # Skip folders that can't be accessed; continue processing remaining folders
             continue
 
     # Get template groups

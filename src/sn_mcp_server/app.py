@@ -1,7 +1,11 @@
+from collections.abc import Sequence
+from typing import Any
+
 from fastmcp.server.http import create_sse_app
 from starlette.applications import Starlette
 from starlette.middleware.cors import CORSMiddleware
 from starlette.routing import Mount, Route
+from starlette.types import ASGIApp
 
 from .auth import (
     BearerJWTASGIMiddleware,
@@ -9,6 +13,20 @@ from .auth import (
     get_auth_routes,
 )
 from .config import load_settings
+
+
+class _CORSMiddlewareWithExposeInPreflight(CORSMiddleware):
+    """
+    Starlette's CORSMiddleware adds Access-Control-Expose-Headers only to
+    actual (non-preflight) responses. This subclass also injects it into
+    the preflight response headers so that clients such as Claude's MCP
+    web client can read Mcp-Session-Id after the OPTIONS handshake.
+    """
+
+    def __init__(self, app: ASGIApp, expose_headers: Sequence[str] = (), **kwargs: Any) -> None:  # noqa: ANN401
+        super().__init__(app, expose_headers=expose_headers, **kwargs)
+        if expose_headers:
+            self.preflight_headers["Access-Control-Expose-Headers"] = ", ".join(expose_headers)
 
 
 def create_http_app() -> Starlette:
@@ -41,11 +59,11 @@ def create_http_app() -> Starlette:
 
     # CORS for browser clients (inspector) - BEFORE BearerJWTMiddleware
     app.add_middleware(
-        CORSMiddleware,
+        _CORSMiddlewareWithExposeInPreflight,
         allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["*"],
+        expose_headers=["Mcp-Session-Id"],
         allow_credentials=True,
     )
 
