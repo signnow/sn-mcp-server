@@ -14,16 +14,18 @@ async def main() -> None:
         os.environ.update(dotenv_values(env_path))
 
     # MCP server as subprocess (example: your sn-mcp serve)
-    client = MultiServerMCPClient({
-        "sn": {
-            "transport": "stdio",
-            "command": "sn-mcp",
-            "args": ["serve"],
-            # "cwd": "/path/to/dir",
-            # "env": {"VAR": "value"},
-            # "allowed_tools": ["list_templates", "get_template"],
+    client = MultiServerMCPClient(
+        {
+            "sn": {
+                "transport": "stdio",
+                "command": "sn-mcp",
+                "args": ["serve"],
+                # "cwd": "/path/to/dir",
+                # "env": {"VAR": "value"},
+                # "allowed_tools": ["list_templates", "get_template"],
+            }
         }
-    })
+    )
 
     tools = await client.get_tools()  # MCP → LangChain tools
 
@@ -34,11 +36,13 @@ async def main() -> None:
         temperature=0,
     )
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Be helpful."),
-        ("human", "{input}"),
-        MessagesPlaceholder("agent_scratchpad"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "Be helpful."),
+            ("human", "{input}"),
+            MessagesPlaceholder("agent_scratchpad"),
+        ]
+    )
     agent = create_openai_tools_agent(llm, tools, prompt)
     execu = AgentExecutor(agent=agent, tools=tools, verbose=True)
 

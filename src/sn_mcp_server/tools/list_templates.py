@@ -14,11 +14,12 @@ from .models import TemplateSummary, TemplateSummaryList
 from .utils import extract_role_names
 
 
-async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient) -> TemplateSummaryList:
-    """Get all templates and template groups from all folders.
+async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient, limit: int = 50, offset: int = 0) -> TemplateSummaryList:
+    """Get all templates and template groups from all folders, with pagination.
 
     This function combines both individual templates and template groups into a single response.
     Individual templates are marked with entity_type='template' and template groups with entity_type='template_group'.
+    Fetches the complete list from SignNow API, then applies offset/limit slicing.
 
     Note: Individual templates are deprecated. For new implementations, prefer using template groups
     which are more feature-rich and actively maintained.
@@ -27,9 +28,11 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
         ctx: FastMCP context object
         token: Access token for SignNow API
         client: SignNow API client instance
+        limit: Maximum number of items to return (1-100, default 50)
+        offset: Number of items to skip (default 0)
 
     Returns:
-        TemplateSummaryList with all templates and template groups combined
+        TemplateSummaryList with paginated results and metadata
     """
     await ctx.report_progress(progress=0, message="Selecting all folders")
 
@@ -149,4 +152,8 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
         )
         all_templates.append(template_summary)
 
-    return TemplateSummaryList(templates=all_templates, total_count=len(all_templates))
+    total_count = len(all_templates)
+    page = all_templates[offset : offset + limit]
+    has_more = (offset + limit) < total_count
+
+    return TemplateSummaryList(templates=page, total_count=total_count, offset=offset, limit=limit, has_more=has_more)
