@@ -8,11 +8,19 @@ description: >
 
 ## Critical rules
 
+* **NEVER commit directly to `main` or `master`.** Always work on a dedicated branch.
 * Do not commit unless **all required checks** pass (see below).
 * Keep each commit **one logical change** (single change type).
 * Commit message follows **Conventional Commits**.
 
 ## Workflow
+
+0. **Create (or switch to) a feature branch — MANDATORY**
+
+* NEVER commit to `main` or `master` directly.
+* If not already on a feature branch, create one:
+  * `git checkout -b <type>/<short-description>` (e.g., `feat/add-embedded-editor`, `fix/token-refresh`)
+* Branch naming: `<type>/<short-description>` using the same type vocabulary as commit types.
 
 1. **Check what changed**
 
