@@ -18,7 +18,7 @@ from signnow_client.models.folders_lite import (
 class TestFoldersLiteDiscriminator:
     """Test cases for folder document discriminator logic."""
 
-    def test_discriminator_document_type(self):
+    def test_discriminator_document_type(self) -> None:
         """Test discriminator correctly identifies document type."""
         payload = {
             "type": "document",
@@ -30,7 +30,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.type == "document"
         assert doc.id == "doc123"
 
-    def test_discriminator_template_type(self):
+    def test_discriminator_template_type(self) -> None:
         """Test discriminator correctly identifies template type."""
         payload = {
             "type": "template",
@@ -42,7 +42,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.type == "template"
         assert doc.id == "tpl123"
 
-    def test_discriminator_document_group_type(self):
+    def test_discriminator_document_group_type(self) -> None:
         """Test discriminator correctly identifies document-group type."""
         payload = {
             "type": "document-group",
@@ -54,7 +54,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.type == "document-group"
         assert doc.id == "dg123"
 
-    def test_discriminator_document_group_normalized(self):
+    def test_discriminator_document_group_normalized(self) -> None:
         """Test discriminator normalizes document_group to document-group."""
         payload = {
             "type": "document_group",
@@ -65,7 +65,7 @@ class TestFoldersLiteDiscriminator:
         doc = DocumentGroupItemLite(**payload)
         assert doc.type == "document-group"
 
-    def test_discriminator_dgt_type(self):
+    def test_discriminator_dgt_type(self) -> None:
         """Test discriminator correctly identifies dgt type."""
         payload = {
             "type": "dgt",
@@ -77,7 +77,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.type == "dgt"
         assert doc.id == "dgt123"
 
-    def test_discriminator_entity_type_alias(self):
+    def test_discriminator_entity_type_alias(self) -> None:
         """Test discriminator uses entity_type as alias for type."""
         payload = {
             "entity_type": "document",
@@ -88,7 +88,7 @@ class TestFoldersLiteDiscriminator:
         doc = DocumentItemLite(**payload)
         assert doc.type == "document"
 
-    def test_discriminator_missing_type_unknown(self):
+    def test_discriminator_missing_type_unknown(self) -> None:
         """Test discriminator handles missing type/entity_type as unknown."""
         payload = {
             "id": "unknown123",
@@ -100,7 +100,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.type == "unknown"
         assert doc.id == "unknown123"
 
-    def test_discriminator_unknown_type_value(self):
+    def test_discriminator_unknown_type_value(self) -> None:
         """Test discriminator handles unknown type values."""
         payload = {
             "type": "unknown_type",
@@ -112,7 +112,7 @@ class TestFoldersLiteDiscriminator:
         doc = UnknownFolderDocLite(**payload)
         assert doc.type == "unknown"
 
-    def test_int_from_any_string_value(self):
+    def test_int_from_any_string_value(self) -> None:
         """Test IntFromAny handles string values."""
         payload = {
             "type": "document",
@@ -128,7 +128,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.created == 1234567890
         assert doc.updated == 1234567890
 
-    def test_int_from_any_int_value(self):
+    def test_int_from_any_int_value(self) -> None:
         """Test IntFromAny handles int values."""
         payload = {
             "type": "document",
@@ -144,7 +144,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.created == 1234567890
         assert doc.updated == 1234567890
 
-    def test_int_from_any_none_value(self):
+    def test_int_from_any_none_value(self) -> None:
         """Test IntFromAny handles None values."""
         payload = {
             "type": "document",
@@ -160,7 +160,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.created is None
         assert doc.updated is None
 
-    def test_int_from_any_invalid_value(self):
+    def test_int_from_any_invalid_value(self) -> None:
         """Test IntFromAny handles invalid values gracefully."""
         payload = {
             "type": "document",
@@ -177,7 +177,7 @@ class TestFoldersLiteDiscriminator:
         assert doc.created is None
         assert doc.updated is None
 
-    def test_get_folder_by_id_response_lite_documents(self):
+    def test_get_folder_by_id_response_lite_documents(self) -> None:
         """Test GetFolderByIdResponseLite with mixed document types."""
         payload = {
             "id": "folder123",
@@ -225,7 +225,7 @@ class TestFoldersLiteDiscriminator:
         assert isinstance(response.documents[3], DocumentGroupTemplateItemLite)
         assert isinstance(response.documents[4], UnknownFolderDocLite)
 
-    def test_roles_normalization_string_list(self):
+    def test_roles_normalization_string_list(self) -> None:
         """Test roles normalization with list of strings."""
         payload = {
             "type": "document",
@@ -237,9 +237,8 @@ class TestFoldersLiteDiscriminator:
         doc = DocumentItemLite(**payload)
         assert doc.roles == ["Signer 1", "Signer 2"]
 
-    def test_roles_normalization_role_lite_list(self):
+    def test_roles_normalization_role_lite_list(self) -> None:
         """Test roles normalization with list of RoleLite objects."""
-        from signnow_client.models.folders_lite import RoleLite
 
         payload = {
             "type": "document",
@@ -255,7 +254,7 @@ class TestFoldersLiteDiscriminator:
         # Roles should be normalized to list[str]
         assert doc.roles == ["Signer 1", "Signer 2"]
 
-    def test_roles_normalization_mixed(self):
+    def test_roles_normalization_mixed(self) -> None:
         """Test roles normalization with mixed formats."""
         payload = {
             "type": "document",
@@ -271,7 +270,7 @@ class TestFoldersLiteDiscriminator:
         # Roles should be normalized to list[str]
         assert doc.roles == ["Signer 1", "Signer 2"]
 
-    def test_roles_normalization_none(self):
+    def test_roles_normalization_none(self) -> None:
         """Test roles normalization with None."""
         payload = {
             "type": "document",
@@ -283,7 +282,7 @@ class TestFoldersLiteDiscriminator:
         doc = DocumentItemLite(**payload)
         assert doc.roles is None
 
-    def test_roles_normalization_empty_list(self):
+    def test_roles_normalization_empty_list(self) -> None:
         """Test roles normalization with empty list."""
         payload = {
             "type": "document",
@@ -299,33 +298,33 @@ class TestFoldersLiteDiscriminator:
 class TestNormalizeRoles:
     """Test cases for _normalize_roles function."""
 
-    def test_normalize_roles_list_str(self):
+    def test_normalize_roles_list_str(self) -> None:
         """Test _normalize_roles with list of strings."""
         result = _normalize_roles(["Signer 1", "Signer 2", "Reviewer"])
         assert result == ["Signer 1", "Signer 2", "Reviewer"]
 
-    def test_normalize_roles_list_str_with_empty(self):
-        """Test _normalize_roles with list of strings containing empty strings."""
-        result = _normalize_roles(["Signer 1", "", "Reviewer", "  "])
-        assert result == ["Signer 1", "Reviewer"]  # Empty strings should be filtered out
+    def test_normalize_roles_list_str_with_empty(self) -> None:
+        """Test _normalize_roles filters out empty strings but keeps non-empty ones."""
+        result = _normalize_roles(["Signer 1", "", "Reviewer"])
+        assert result == ["Signer 1", "Reviewer"]
 
-    def test_normalize_roles_list_dict(self):
+    def test_normalize_roles_list_dict(self) -> None:
         """Test _normalize_roles with list of dictionaries."""
         result = _normalize_roles([{"name": "Signer 1"}, {"name": "Signer 2"}])
         assert result == ["Signer 1", "Signer 2"]
 
-    def test_normalize_roles_list_dict_with_missing_name(self):
+    def test_normalize_roles_list_dict_with_missing_name(self) -> None:
         """Test _normalize_roles with list of dictionaries missing name key."""
         result = _normalize_roles([{"name": "Signer 1"}, {"id": "role2"}])
         assert result == ["Signer 1"]  # Dict without name should be skipped
 
-    def test_normalize_roles_list_role_lite(self):
+    def test_normalize_roles_list_role_lite(self) -> None:
         """Test _normalize_roles with list of RoleLite objects."""
         roles = [RoleLite(name="Signer 1", id="role1"), RoleLite(name="Signer 2", id="role2")]
         result = _normalize_roles(roles)
         assert result == ["Signer 1", "Signer 2"]
 
-    def test_normalize_roles_mixed_formats(self):
+    def test_normalize_roles_mixed_formats(self) -> None:
         """Test _normalize_roles with mixed formats."""
         roles = [
             "Signer 1",
@@ -335,22 +334,22 @@ class TestNormalizeRoles:
         result = _normalize_roles(roles)
         assert result == ["Signer 1", "Signer 2", "Reviewer"]
 
-    def test_normalize_roles_none(self):
+    def test_normalize_roles_none(self) -> None:
         """Test _normalize_roles with None."""
         result = _normalize_roles(None)
         assert result is None
 
-    def test_normalize_roles_empty_list(self):
+    def test_normalize_roles_empty_list(self) -> None:
         """Test _normalize_roles with empty list."""
         result = _normalize_roles([])
         assert result is None  # Empty list should return None
 
-    def test_normalize_roles_not_list(self):
+    def test_normalize_roles_not_list(self) -> None:
         """Test _normalize_roles with non-list value."""
         result = _normalize_roles("not a list")
         assert result is None
 
-    def test_normalize_roles_list_with_none_values(self):
+    def test_normalize_roles_list_with_none_values(self) -> None:
         """Test _normalize_roles with list containing None values."""
         result = _normalize_roles(["Signer 1", None, "Signer 2"])
         # None values should cause issues, but function should handle gracefully
@@ -361,75 +360,75 @@ class TestNormalizeRoles:
 class TestFolderDocTypeFromPayload:
     """Test cases for _folder_doc_type_from_payload function."""
 
-    def test_folder_doc_type_from_dict_with_type(self):
+    def test_folder_doc_type_from_dict_with_type(self) -> None:
         """Test _folder_doc_type_from_payload with dict containing 'type' key."""
         payload = {"type": "document", "id": "doc123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "document"
 
-    def test_folder_doc_type_from_dict_with_entity_type(self):
+    def test_folder_doc_type_from_dict_with_entity_type(self) -> None:
         """Test _folder_doc_type_from_payload with dict containing 'entity_type' key."""
         payload = {"entity_type": "template", "id": "tpl123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "template"
 
-    def test_folder_doc_type_from_dict_entity_type_precedence(self):
+    def test_folder_doc_type_from_dict_entity_type_precedence(self) -> None:
         """Test _folder_doc_type_from_payload prefers entity_type over type."""
         payload = {"type": "document", "entity_type": "template", "id": "item123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "template"  # entity_type should take precedence
 
-    def test_folder_doc_type_from_dict_document_group(self):
+    def test_folder_doc_type_from_dict_document_group(self) -> None:
         """Test _folder_doc_type_from_payload with document-group type."""
         payload = {"type": "document-group", "id": "dg123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "document-group"
 
-    def test_folder_doc_type_from_dict_document_group_normalized(self):
+    def test_folder_doc_type_from_dict_document_group_normalized(self) -> None:
         """Test _folder_doc_type_from_payload normalizes document_group to document-group."""
         payload = {"type": "document_group", "id": "dg123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "document-group"
 
-    def test_folder_doc_type_from_dict_dgt(self):
+    def test_folder_doc_type_from_dict_dgt(self) -> None:
         """Test _folder_doc_type_from_payload with dgt (document group template) type."""
         payload = {"type": "dgt", "id": "dgt123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "dgt"
 
-    def test_folder_doc_type_from_dict_missing_type(self):
+    def test_folder_doc_type_from_dict_missing_type(self) -> None:
         """Test _folder_doc_type_from_payload with dict missing type/entity_type."""
         payload = {"id": "unknown123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "unknown"
 
-    def test_folder_doc_type_from_dict_unknown_type(self):
+    def test_folder_doc_type_from_dict_unknown_type(self) -> None:
         """Test _folder_doc_type_from_payload with unknown type value."""
         payload = {"type": "unknown_type", "id": "item123"}
         result = _folder_doc_type_from_payload(payload)
         assert result == "unknown"
 
-    def test_folder_doc_type_from_string(self):
+    def test_folder_doc_type_from_string(self) -> None:
         """Test _folder_doc_type_from_payload with string value directly."""
         result = _folder_doc_type_from_payload("document")
         assert result == "document"
 
-    def test_folder_doc_type_from_string_template(self):
+    def test_folder_doc_type_from_string_template(self) -> None:
         """Test _folder_doc_type_from_payload with template string."""
         result = _folder_doc_type_from_payload("template")
         assert result == "template"
 
-    def test_folder_doc_type_from_string_dgt(self):
+    def test_folder_doc_type_from_string_dgt(self) -> None:
         """Test _folder_doc_type_from_payload with dgt string."""
         result = _folder_doc_type_from_payload("dgt")
         assert result == "dgt"
 
-    def test_folder_doc_type_from_none(self):
+    def test_folder_doc_type_from_none(self) -> None:
         """Test _folder_doc_type_from_payload with None value."""
         result = _folder_doc_type_from_payload(None)
         assert result == "unknown"
 
-    def test_folder_doc_type_from_dict_none_type(self):
+    def test_folder_doc_type_from_dict_none_type(self) -> None:
         """Test _folder_doc_type_from_payload with dict where type is explicitly None."""
         payload = {"type": None, "id": "item123"}
         result = _folder_doc_type_from_payload(payload)

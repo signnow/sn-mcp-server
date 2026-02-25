@@ -5,14 +5,13 @@ Unit tests for optional expiration_time and expiration_days handling.
 import pytest
 
 from signnow_client.models.document_groups import DocumentGroupV2FieldInvite
-
 from sn_mcp_server.tools.models import SimplifiedInviteParticipant
 
 
 class TestExpirationHandling:
     """Test cases for optional expiration_time and expiration_days."""
 
-    def test_simplified_invite_participant_from_field_invite_with_expiration(self):
+    def test_simplified_invite_participant_from_field_invite_with_expiration(self) -> None:
         """Test SimplifiedInviteParticipant.from_document_group_v2_field_invite with expiration."""
         now = 1500000000
         field_invite = DocumentGroupV2FieldInvite(
@@ -23,7 +22,7 @@ class TestExpirationHandling:
             expiration_time=2000000000,  # Future expiration
             expiration_days=30,
             signer_email="test@example.com",
-            password_protected="0",
+            password_protected="0",  # noqa: S106
             email_statuses=[],
         )
         participant = SimplifiedInviteParticipant.from_document_group_v2_field_invite(field_invite, now)
@@ -32,7 +31,7 @@ class TestExpirationHandling:
         assert participant.expired is False  # Not expired yet
         assert participant.status == "pending"
 
-    def test_simplified_invite_participant_from_field_invite_without_expiration(self):
+    def test_simplified_invite_participant_from_field_invite_without_expiration(self) -> None:
         """Test SimplifiedInviteParticipant.from_document_group_v2_field_invite without expiration."""
         now = 1500000000
         field_invite = DocumentGroupV2FieldInvite(
@@ -43,7 +42,7 @@ class TestExpirationHandling:
             expiration_time=None,  # No expiration
             expiration_days=None,
             signer_email="test@example.com",
-            password_protected="0",
+            password_protected="0",  # noqa: S106
             email_statuses=[],
         )
         participant = SimplifiedInviteParticipant.from_document_group_v2_field_invite(field_invite, now)
@@ -52,7 +51,7 @@ class TestExpirationHandling:
         assert participant.expired is False  # No expiration means not expired
         assert participant.status == "pending"
 
-    def test_simplified_invite_participant_from_field_invite_expired(self):
+    def test_simplified_invite_participant_from_field_invite_expired(self) -> None:
         """Test SimplifiedInviteParticipant.from_document_group_v2_field_invite with expired invite."""
         now = 2500000000  # After expiration
         field_invite = DocumentGroupV2FieldInvite(
@@ -63,7 +62,7 @@ class TestExpirationHandling:
             expiration_time=2000000000,  # Past expiration
             expiration_days=30,
             signer_email="test@example.com",
-            password_protected="0",
+            password_protected="0",  # noqa: S106
             email_statuses=[],
         )
         participant = SimplifiedInviteParticipant.from_document_group_v2_field_invite(field_invite, now)
@@ -72,7 +71,7 @@ class TestExpirationHandling:
         assert participant.expired is True  # Expired
         assert participant.status == "expired"
 
-    def test_simplified_invite_participant_from_field_invite_expired_status(self):
+    def test_simplified_invite_participant_from_field_invite_expired_status(self) -> None:
         """Test SimplifiedInviteParticipant.from_document_group_v2_field_invite with expired status."""
         now = 1500000000
         field_invite = DocumentGroupV2FieldInvite(
@@ -83,7 +82,7 @@ class TestExpirationHandling:
             expiration_time=2000000000,
             expiration_days=30,
             signer_email="test@example.com",
-            password_protected="0",
+            password_protected="0",  # noqa: S106
             email_statuses=[],
         )
         participant = SimplifiedInviteParticipant.from_document_group_v2_field_invite(field_invite, now)
@@ -99,7 +98,7 @@ class TestExpirationHandling:
             ("signed", 2000000000, 2500000000, False),  # Past expiration but signed status (not in PENDING)
         ],
     )
-    def test_check_expired(self, status: str, expires_at: int | None, now: int, expected: bool):
+    def test_check_expired(self, status: str, expires_at: int | None, now: int, expected: bool) -> None:
         """Test check_expired method with various status, expiration, and time combinations."""
         result = SimplifiedInviteParticipant.check_expired(status, expires_at, now)
         assert result == expected

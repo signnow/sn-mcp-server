@@ -12,10 +12,17 @@ from signnow_client.models.templates_and_documents import (
 
 
 class _DummyDocumentClient(DocumentClientMixin):
-    def __init__(self):
+    def __init__(self) -> None:
         self.last_post = None
 
-    def _post(self, url: str, headers=None, data=None, json_data=None, validate_model=None):
+    def _post(  # noqa: ANN202
+        self,
+        url: str,
+        headers: dict | None = None,
+        data: dict | None = None,
+        json_data: dict | None = None,
+        validate_model: type | None = None,
+    ) -> object:
         self.last_post = {"url": url, "headers": headers, "data": data, "json_data": json_data, "validate_model": validate_model}
         if validate_model is None:
             return None
@@ -27,7 +34,7 @@ class _DummyDocumentClient(DocumentClientMixin):
         return validate_model.model_validate({})
 
 
-def test_create_document_field_invite_request_accepts_from_field_name_and_serializes_alias():
+def test_create_document_field_invite_request_accepts_from_field_name_and_serializes_alias() -> None:
     req = CreateDocumentFieldInviteRequest(document_id="doc123", to=[], from_="sample-apps@signnow.com")
     assert req.from_ == "sample-apps@signnow.com"
 
@@ -36,7 +43,7 @@ def test_create_document_field_invite_request_accepts_from_field_name_and_serial
     assert "from_" not in dumped
 
 
-def test_create_document_freeform_invite_request_accepts_from_field_name_and_serializes_alias():
+def test_create_document_freeform_invite_request_accepts_from_field_name_and_serializes_alias() -> None:
     req = CreateDocumentFreeformInviteRequest(to="signer@example.com", from_="sample-apps@signnow.com")
     assert req.from_ == "sample-apps@signnow.com"
 
@@ -45,19 +52,19 @@ def test_create_document_freeform_invite_request_accepts_from_field_name_and_ser
     assert "from_" not in dumped
 
 
-def test_client_document_field_invite_uses_by_alias_true_when_dumping():
+def test_client_document_field_invite_uses_by_alias_true_when_dumping() -> None:
     client = _DummyDocumentClient()
     request_data = Mock()
     request_data.model_dump.return_value = {"from": "sample-apps@signnow.com"}
 
-    client.create_document_field_invite(token="t", document_id="doc123", request_data=request_data)
+    client.create_document_field_invite(token="t", document_id="doc123", request_data=request_data)  # noqa: S106
     request_data.model_dump.assert_called_once_with(exclude_none=True, by_alias=True)
 
 
-def test_client_document_freeform_invite_uses_by_alias_true_when_dumping():
+def test_client_document_freeform_invite_uses_by_alias_true_when_dumping() -> None:
     client = _DummyDocumentClient()
     request_data = Mock()
     request_data.model_dump.return_value = {"from": "sample-apps@signnow.com"}
 
-    client.create_document_freeform_invite(token="t", document_id="doc123", request_data=request_data)
+    client.create_document_freeform_invite(token="t", document_id="doc123", request_data=request_data)  # noqa: S106
     request_data.model_dump.assert_called_once_with(exclude_none=True, by_alias=True)

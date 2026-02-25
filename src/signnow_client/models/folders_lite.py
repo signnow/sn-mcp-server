@@ -44,6 +44,11 @@ def _normalize_folder_type_value(value: Any) -> Any:
     return value
 
 
+def _normalize_to_unknown(_: object) -> str:
+    """Always return 'unknown' — used as BeforeValidator for UnknownFolderDocLite.type."""
+    return "unknown"
+
+
 def _normalize_roles(value: Any) -> list[str] | None:
     """Normalize roles to list[str] format.
 
@@ -171,7 +176,6 @@ DocTypeDocument = Annotated[Literal["document"], BeforeValidator(_normalize_fold
 DocTypeTemplate = Annotated[Literal["template"], BeforeValidator(_normalize_folder_type_value)]
 DocTypeDocGroup = Annotated[Literal["document-group"], BeforeValidator(_normalize_folder_type_value)]
 DocTypeDgt = Annotated[Literal["dgt"], BeforeValidator(_normalize_folder_type_value)]
-DocTypeUnknown = Annotated[Literal["unknown"], BeforeValidator(_normalize_folder_type_value)]
 
 
 class DocumentItemLite(SNBaseModel):
@@ -272,7 +276,7 @@ class DocumentGroupTemplateItemLite(SNBaseModel):
 class UnknownFolderDocLite(SNBaseModel):
     """Fallback model for folder items with unknown or missing type/entity_type."""
 
-    type: DocTypeUnknown = Field(..., validation_alias=AliasChoices("type", "entity_type"))
+    type: Annotated[Literal["unknown"], BeforeValidator(_normalize_to_unknown)] = Field("unknown", validation_alias=AliasChoices("type", "entity_type"))
 
     id: str
     user_id: str | None = None
