@@ -43,10 +43,15 @@ async def _list_document_groups(
     order: str | None = None,
     folder_id: str | None = None,
     expired_filter: str = "all",
+    limit: int = 50,
+    offset: int = 0,
 ) -> SimplifiedDocumentGroupsResponse:
-    """Provide simplified list of document groups with basic fields.
+    """Provide simplified list of document groups with basic fields, with pagination.
+
+    Fetches the complete list from SignNow API, then applies offset/limit slicing.
 
     Args:
+        ctx: FastMCP context object
         token: Access token for SignNow API
         client: SignNow API client
         filter: signing-status filter value (optional)
@@ -54,9 +59,11 @@ async def _list_document_groups(
         order: Order of sorting (optional, requires sortby)
         folder_id: Filter by folder ID (optional)
         expired_filter: Filter by invite expiredness (optional, default: all)
+        limit: Maximum number of items to return (1-100, default 50)
+        offset: Number of items to skip (default 0)
 
     Returns:
-        SimplifiedDocumentGroupsResponse with documents + document groups
+        SimplifiedDocumentGroupsResponse with paginated results and metadata
     """
     if expired_filter not in (None, "all", "expired", "not-expired"):
         raise ValueError("expired_filter must be one of: all, expired, not-expired")
@@ -171,9 +178,16 @@ async def _list_document_groups(
 
             # other entity_type (template/dgt) are ignored, as before
 
+    total_count = len(simplified_groups)
+    page = simplified_groups[offset : offset + limit]
+    has_more = (offset + limit) < total_count
+
     return SimplifiedDocumentGroupsResponse(
-        document_groups=simplified_groups,
-        document_group_total_count=len(simplified_groups),
+        document_groups=page,
+        document_group_total_count=total_count,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
     )
 
 

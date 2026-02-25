@@ -85,10 +85,13 @@ class TemplateSummary(BaseModel):
 
 
 class TemplateSummaryList(BaseModel):
-    """List of simplified template summaries."""
+    """List of simplified template summaries with pagination."""
 
     templates: list[TemplateSummary]
-    total_count: int = Field(..., description="Total number of templates")
+    total_count: int = Field(..., description="Total number of templates across all pages")
+    offset: int = Field(0, description="Number of items skipped")
+    limit: int = Field(50, description="Maximum number of items in this page")
+    has_more: bool = Field(False, description="Whether more items exist beyond this page")
 
 
 class DocumentField(BaseModel):
@@ -457,10 +460,13 @@ class SimplifiedDocumentGroup(BaseModel):
 
 
 class SimplifiedDocumentGroupsResponse(BaseModel):
-    """Simplified response for MCP tools with document groups"""
+    """Simplified response for MCP tools with document groups and pagination."""
 
     document_groups: list[SimplifiedDocumentGroup]
-    document_group_total_count: int = Field(..., description="Total number of document groups")
+    document_group_total_count: int = Field(..., description="Total number of document groups across all pages")
+    offset: int = Field(0, description="Number of items skipped")
+    limit: int = Field(50, description="Maximum number of items in this page")
+    has_more: bool = Field(False, description="Whether more items exist beyond this page")
 
 
 # Invite sending models

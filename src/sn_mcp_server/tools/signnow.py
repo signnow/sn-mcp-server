@@ -139,9 +139,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     # Initialize token provider
     token_provider = TokenProvider()
 
-    async def _list_all_templates_impl(ctx: Context) -> TemplateSummaryList:
+    async def _list_all_templates_impl(ctx: Context, limit: int = 50, offset: int = 0) -> TemplateSummaryList:
         token, client = _get_token_and_client(token_provider)
-        return await _list_all_templates(ctx, token, client)
+        return await _list_all_templates(ctx, token, client, limit=limit, offset=offset)
 
     @mcp.tool(
         name="list_all_templates",
@@ -155,25 +155,50 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["template", "template_group", "list"],
     )
-    async def list_all_templates(ctx: Context) -> TemplateSummaryList:
+    async def list_all_templates(
+        ctx: Context,
+        limit: Annotated[
+            int,
+            Field(ge=1, le=100, description="Maximum number of items to return (1-100, default 50)"),
+        ] = 50,
+        offset: Annotated[
+            int,
+            Field(ge=0, description="Number of items to skip for pagination (default 0)"),
+        ] = 0,
+    ) -> TemplateSummaryList:
         """Get all templates and template groups from all folders.
 
         This tool combines both individual templates and template groups into a single response.
         Individual templates are marked with entity_type='template' and template groups with entity_type='template_group'.
+        Supports pagination via limit/offset parameters.
 
         Note: Individual templates are deprecated. For new implementations, prefer using template groups
         which are more feature-rich and actively maintained.
+
+        Args:
+            limit: Maximum number of items to return (1-100, default 50)
+            offset: Number of items to skip for pagination (default 0)
         """
-        return await _list_all_templates_impl(ctx)
+        return await _list_all_templates_impl(ctx, limit=limit, offset=offset)
 
     @mcp.resource(
-        "signnow://templates",
+        "signnow://templates{?limit,offset}",
         name="list_all_templates_resource",
         description="Get simplified list of all templates and template groups with basic information" + RESOURCE_PREFERRED_SUFFIX,
         tags=["template", "template_group", "list"],
     )
-    async def list_all_templates_resource(ctx: Context) -> TemplateSummaryList:
-        return await _list_all_templates_impl(ctx)
+    async def list_all_templates_resource(
+        ctx: Context,
+        limit: Annotated[
+            int,
+            Field(ge=1, le=100, description="Maximum number of items to return (1-100, default 50)"),
+        ] = 50,
+        offset: Annotated[
+            int,
+            Field(ge=0, description="Number of items to skip for pagination (default 0)"),
+        ] = 0,
+    ) -> TemplateSummaryList:
+        return await _list_all_templates_impl(ctx, limit=limit, offset=offset)
 
     async def _list_documents_impl(
         ctx: Context,
@@ -182,6 +207,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         order: Literal["asc", "desc"] | None = None,
         folder_id: str | None = None,
         expired_filter: Literal["all", "expired", "not-expired"] = "all",
+        limit: int = 50,
+        offset: int = 0,
     ) -> SimplifiedDocumentGroupsResponse:
         if order is not None and sortby is None:
             raise ValueError("order can be used only with sortby")
@@ -195,6 +222,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             order=order,
             folder_id=folder_id,
             expired_filter=expired_filter,
+            limit=limit,
+            offset=offset,
         )
 
     @mcp.tool(
@@ -234,6 +263,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             Literal["all", "expired", "not-expired"],
             Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
         ] = "all",
+        limit: Annotated[
+            int,
+            Field(ge=1, le=100, description="Maximum number of items to return (1-100, default 50)"),
+        ] = 50,
+        offset: Annotated[
+            int,
+            Field(ge=0, description="Number of items to skip for pagination (default 0)"),
+        ] = 0,
     ) -> SimplifiedDocumentGroupsResponse:
         """Provide simplified list of documents and document groups with basic fields.
 
@@ -242,6 +279,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         a list of document groups, this is the right tool to use.
         You can also use it to fetch specific lists like documents waiting for your
         signature (waiting-for-me) or expired documents (expired_filter=expired).
+        Supports pagination via limit/offset parameters.
 
         Args:
             filter: Filter by document group status (optional)
@@ -249,6 +287,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             order: Order of sorting (optional, requires sortby)
             folder_id: Filter by folder ID (optional)
             expired_filter: Filter by invite expiredness (optional, default: all)
+            limit: Maximum number of items to return (1-100, default 50)
+            offset: Number of items to skip for pagination (default 0)
         """
         return await _list_documents_impl(
             ctx,
@@ -257,10 +297,12 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             order=order,
             folder_id=folder_id,
             expired_filter=expired_filter,
+            limit=limit,
+            offset=offset,
         )
 
     @mcp.resource(
-        "signnow://documents/{?filter,sortby,order,folder_id,expired_filter}",
+        "signnow://documents/{?filter,sortby,order,folder_id,expired_filter,limit,offset}",
         name="list_documents_resource",
         description=(
             "Get simplified list of documents and document groups with basic information. "
@@ -291,6 +333,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             Literal["all", "expired", "not-expired"],
             Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
         ] = "all",
+        limit: Annotated[
+            int,
+            Field(ge=1, le=100, description="Maximum number of items to return (1-100, default 50)"),
+        ] = 50,
+        offset: Annotated[
+            int,
+            Field(ge=0, description="Number of items to skip for pagination (default 0)"),
+        ] = 0,
     ) -> SimplifiedDocumentGroupsResponse:
         return await _list_documents_impl(
             ctx,
@@ -299,6 +349,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             order=order,
             folder_id=folder_id,
             expired_filter=expired_filter,
+            limit=limit,
+            offset=offset,
         )
 
     @mcp.tool(

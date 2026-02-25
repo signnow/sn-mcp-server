@@ -5,7 +5,7 @@ Unit tests for optional expiration_time and expiration_days handling.
 import pytest
 
 from signnow_client.models.document_groups import DocumentGroupV2FieldInvite
-from sn_mcp_server.tools.models import SimplifiedInviteParticipant
+from sn_mcp_server.tools.models import InviteStatusValues, SimplifiedInviteParticipant
 
 
 class TestExpirationHandling:
@@ -102,3 +102,39 @@ class TestExpirationHandling:
         """Test check_expired method with various status, expiration, and time combinations."""
         result = SimplifiedInviteParticipant.check_expired(status, expires_at, now)
         assert result == expected
+
+
+class TestInviteStatusValues:
+    """Test cases for InviteStatusValues.from_raw_status status normalization."""
+
+    @pytest.mark.parametrize(
+        "raw_status, expected",
+        [
+            (None, "unknown"),
+            ("", "unknown"),
+            ("  ", "unknown"),
+            ("garbage_xyz", "unknown"),
+            ("sent", "pending"),
+            ("pending", "pending"),
+            ("waiting", "pending"),
+            ("fulfilled", "completed"),
+            ("signed", "completed"),
+            ("completed", "completed"),
+            ("done", "completed"),
+            ("declined", "declined"),
+            ("rejected", "declined"),
+            ("canceled", "declined"),
+            ("cancelled", "declined"),
+            ("expired", "expired"),
+            ("created", "created"),
+            ("new", "created"),
+        ],
+    )
+    def test_from_raw_status(self, raw_status: str | None, expected: str) -> None:
+        """Test that raw API status strings are correctly normalized to unified values."""
+        assert InviteStatusValues.from_raw_status(raw_status) == expected
+
+    def test_from_raw_status_strips_whitespace(self) -> None:
+        """Test that leading/trailing whitespace is stripped before normalization."""
+        assert InviteStatusValues.from_raw_status("  sent  ") == "pending"
+        assert InviteStatusValues.from_raw_status("  fulfilled  ") == "completed"
