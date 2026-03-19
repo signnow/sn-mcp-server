@@ -52,7 +52,7 @@ class DocumentSignature(BaseModel):
 class DocumentFieldJsonAttributes(BaseModel):
     """Document field JSON attributes."""
 
-    name: str = Field(..., description="Field name")
+    name: str | None = Field(None, description="Field name")
     prefilled_text: str | None = Field(None, description="Prefilled text")
 
 
