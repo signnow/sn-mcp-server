@@ -389,7 +389,7 @@ class CreateDocumentEmbeddedEditorRequest(BaseModel):
     """Request model for creating document embedded editor link."""
 
     redirect_uri: str | None = Field(None, description="Page that opens after the editing session ends")
-    link_expiration: int | None = Field(15, description="Link expiration in minutes (default: 15, max: 43200 for Admin users)")
+    link_expiration: int | None = Field(15, ge=15, le=45, description="Link expiration in minutes (default: 15, max: 45)")
     redirect_target: str | None = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:
