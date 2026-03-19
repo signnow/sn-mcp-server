@@ -536,7 +536,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")] = None,
+        link_expiration: Annotated[int | None, Field(ge=15, le=45, description="Optional link expiration in minutes (15-45)")] = None,
     ) -> CreateEmbeddedEditorResponse:
         """Create embedded editor for editing a document or document group.
 
@@ -548,7 +548,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             redirect_uri: Optional redirect URI for the editor link
             redirect_target: Optional redirect target for the editor link
-            link_expiration: Optional number of minutes for the editor link to expire (15-43200)
+            link_expiration: Optional number of minutes for the editor link to expire (15-45)
 
         Returns:
             CreateEmbeddedEditorResponse with editor ID and entity type
@@ -733,7 +733,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         name: Annotated[str | None, Field(description="Name for the new document or document group")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")] = None,
+        link_expiration: Annotated[int | None, Field(ge=15, le=45, description="Optional link expiration in minutes (15-45)")] = None,
     ) -> CreateEmbeddedEditorFromTemplateResponse:
         """Create document or document group from template and create embedded editor immediately.
 
@@ -750,7 +750,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             name: Optional name for the new document or document group
             redirect_uri: Optional redirect URI after completion
             redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-            link_expiration: Optional link expiration in minutes (15-43200)
+            link_expiration: Optional link expiration in minutes (15-45)
 
         Returns:
             CreateEmbeddedEditorFromTemplateResponse with created entity info and embedded editor details

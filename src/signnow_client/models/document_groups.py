@@ -212,7 +212,7 @@ class CreateDocumentGroupEmbeddedEditorRequest(BaseModel):
     """Request model for creating document group embedded editor link."""
 
     redirect_uri: str | None = Field(None, description="Link that opens after editing the document group")
-    link_expiration: int | None = Field(15, description="Link expiration in minutes (default: 15, max: 43200 for Admin users)")
+    link_expiration: int | None = Field(15, ge=15, le=45, description="Link expiration in minutes (default: 15, max: 45)")
     redirect_target: str | None = Field("self", description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
     def model_dump(self: Self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401

@@ -561,7 +561,7 @@ class CreateEmbeddedEditorRequest(BaseModel):
     entity_type: str | None = Field(None, description="Type of entity: 'document' or 'document_group'. If not provided, will be auto-detected")
     redirect_uri: str | None = Field(None, description="URL to redirect to after editing is complete")
     redirect_target: str | None = Field("self", description="Redirect target: 'self' for same tab, 'blank' for new tab")
-    link_expiration: int | None = Field(None, ge=15, le=43200, description="Link expiration time in minutes (15-43200)")
+    link_expiration: int | None = Field(None, ge=15, le=45, description="Link expiration time in minutes (15-45)")
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
