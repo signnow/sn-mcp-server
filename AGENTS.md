@@ -13,9 +13,9 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 
 - **auth.py module-level side effects.** Importing `auth.py` triggers: config load → RSA keygen (if no PEM) → stdout print of all config → SignNowAPIClient creation. In tests, mock or avoid importing directly.
 - **No token caching.** Password grant fires a network call on EVERY tool invocation. Can hit SignNow rate limits under load.
-- **RSA key regenerated silently.** If `OAUTH_RSA_PRIVATE_KEY` PEM is missing, `get_rsa_private_key()` generates a new key each restart, invalidating all issued JWTs. No warning logged.
+- **RSA key regenerated silently.** If `OAUTH_RSA_PRIVATE_PEM` is missing, `get_rsa_private_key()` generates a new key each restart, invalidating all issued JWTs. No warning logged.
 - **`.env` read from CWD.** Both config classes use `env_file=".env"` relative to current working directory, not project root.
-- **Empty env vars become defaults silently.** All config field validators convert `""` to `None` or default values. `OAUTH_ISSUER=""` silently becomes `http://localhost:8000`.
+- **Empty env vars become defaults silently (string fields only).** String field validators convert `""` to `None` or default values — e.g. `OAUTH_ISSUER=""` silently becomes `http://localhost:8000`. Boolean fields without a custom validator (e.g. `FASTMCP_STATELESS_HTTP`) will raise a Pydantic `ValidationError` on empty string.
 - **Dead env vars in `.env.example`.** `SIGNNOW_TOKEN`, `RESOURCE_HTTP_URL`, `RESOURCE_SSE_URL` are not consumed by any config class.
 - **Middleware order matters.** Starlette wraps LIFO: actual execution is Bearer → TrailingSlash → CORS → App. Reordering in `app.py` breaks auth.
 - **BearerJWT middleware bypassed in password-grant mode.** When config credentials are set, HTTP endpoints have zero token validation.

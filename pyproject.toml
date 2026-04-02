@@ -9,7 +9,7 @@ description = "A Model Context Protocol (MCP) server that provides SignNow API i
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastmcp>=3.1.0",
+    "fastmcp>=3.1.0,<4",
     "uvicorn[standard]>=0.24",
     "typer>=0.9",
     "mcp[cli]>=1.10,<2",
