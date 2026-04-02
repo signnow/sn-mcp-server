@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     allowed_redirects: str = Field(default="http://localhost,http://127.0.0.1", description="Comma-separated list of allowed redirect URIs", alias="ALLOWED_REDIRECTS")
     stateless_http: bool = Field(default=True, description="Run MCP HTTP transport in stateless mode (no session persistence)", alias="FASTMCP_STATELESS_HTTP")
 
+    @field_validator("stateless_http", mode="before")
+    @classmethod
+    def validate_stateless_http(cls: type["Settings"], v: str | bool | None) -> bool:
+        """Handle empty string for stateless_http (pydantic-settings passes "" when env var is set but empty)."""
+        if isinstance(v, bool):
+            return v
+        if v == "" or v is None:
+            return True
+        if isinstance(v, str):
+            return v.lower() not in ("false", "0", "no", "off")
+        return bool(v)
+
     # OAuth RSA key configuration
     oauth_rsa_private_pem: str | None = Field(default=None, description="OAuth RSA private key in PEM format", alias="OAUTH_RSA_PRIVATE_PEM")
     oauth_jwk_kid: str = Field(default="mcp-dev-key", description="OAuth JWK key ID", alias="OAUTH_JWK_KID")

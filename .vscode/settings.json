@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^source \\.venv/bin/activate && ruff check src/ tests/ && ruff format --check src/ tests/ && echo \"OK\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

@@ -42,6 +42,7 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 - Include entity IDs in all error messages — name what failed, why, and which entity
 - Unit test every `tools/<feature>.py` function with a mocked `SignNowAPIClient`
 - Mask secrets with `_mask_secret_value` in any diagnostic output
+- **Report progress for every API call in a pagination loop.** Use `ctx.report_progress(progress=loaded, total=api_total, message=f"Loading X")` before each subsequent batch so the client knows work is ongoing, not stalled.
 
 ### Never
 

@@ -13,10 +13,8 @@ from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 from signnow_client.models.folders_lite import (
-    DocumentGroupInviteLite,
     DocumentGroupItemLite,
     DocumentItemLite,
-    FieldInviteLite,
 )
 
 from .models import (
@@ -24,10 +22,8 @@ from .models import (
     SimplifiedDocumentGroupDocument,
     SimplifiedDocumentGroupsResponse,
     SimplifiedInvite,
-    SimplifiedInviteParticipant,
 )
 from .utils import extract_role_names
-
 
 # ----------------------------
 # main
@@ -67,6 +63,10 @@ async def _list_document_groups(
     """
     if expired_filter not in (None, "all", "expired", "not-expired"):
         raise ValueError("expired_filter must be one of: all, expired, not-expired")
+    if limit < 1:
+        raise ValueError(f"limit must be >= 1, got {limit}")
+    if offset < 0:
+        raise ValueError(f"offset must be >= 0, got {offset}")
 
     await ctx.report_progress(progress=0, message="Selecting all folders")
 
