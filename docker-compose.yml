@@ -56,5 +56,7 @@ services:
       # OAuth RSA key configuration
       - OAUTH_RSA_PRIVATE_PEM=${OAUTH_RSA_PRIVATE_PEM}
       - OAUTH_JWK_KID=${OAUTH_JWK_KID}
+      # MCP HTTP transport
+      - FASTMCP_STATELESS_HTTP=${FASTMCP_STATELESS_HTTP:-true}
     command: ["sn-mcp", "http"]
     restart: unless-stopped 

@@ -41,7 +41,7 @@ def create_http_app() -> Starlette:
 
     # Use modern approach instead of deprecated sse_app
     sse_app = create_sse_app(_mcp, message_path="/", sse_path="/")
-    mcp_app = _mcp.http_app(path="/")
+    mcp_app = _mcp.http_app(path="/", stateless_http=settings.stateless_http)
 
     # Get OAuth routes from auth module
     auth_routes = get_auth_routes()

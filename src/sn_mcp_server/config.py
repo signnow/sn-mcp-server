@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     access_ttl: int = Field(default=3600, description="Access token TTL in seconds", alias="ACCESS_TTL")
     refresh_ttl: int = Field(default=2592000, description="Refresh token TTL in seconds", alias="REFRESH_TTL")  # 30 days
     allowed_redirects: str = Field(default="http://localhost,http://127.0.0.1", description="Comma-separated list of allowed redirect URIs", alias="ALLOWED_REDIRECTS")
+    stateless_http: bool = Field(default=True, description="Run MCP HTTP transport in stateless mode (no session persistence)", alias="FASTMCP_STATELESS_HTTP")
 
     # OAuth RSA key configuration
     oauth_rsa_private_pem: str | None = Field(default=None, description="OAuth RSA private key in PEM format", alias="OAUTH_RSA_PRIVATE_PEM")
