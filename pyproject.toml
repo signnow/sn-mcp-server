@@ -9,7 +9,7 @@ description = "A Model Context Protocol (MCP) server that provides SignNow API i
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "fastmcp>=2.13.0,<3",
+    "fastmcp>=3.1.0,<4",
     "uvicorn[standard]>=0.24",
     "typer>=0.9",
     "mcp[cli]>=1.10,<2",
@@ -19,6 +19,7 @@ dependencies = [
     "starlette>=0.27",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "mcp-ui-server>=1.0.0",
 ]
 
 [project.scripts]

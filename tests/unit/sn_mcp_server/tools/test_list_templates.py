@@ -195,7 +195,7 @@ class TestListAllTemplates:
         # Verify API calls
         mock_client.get_folders.assert_called_once_with("test_token")
         mock_client.get_folder_by_id.assert_called()
-        mock_client.get_document_template_groups.assert_called_once_with("test_token", limit=50)
+        mock_client.get_document_template_groups.assert_called_once_with("test_token", limit=50, offset=0)
 
     @pytest.mark.asyncio
     async def test_list_all_templates_empty_folders(self, mock_context: AsyncMock, mock_client: MagicMock) -> None:
@@ -358,7 +358,7 @@ class TestListAllTemplates:
         assert calls[1][1]["message"] == "Processing root folder"
         assert calls[4][1]["progress"] == 4
         assert calls[4][1]["total"] == 4
-        assert calls[4][1]["message"] == "Processing template groups"
+        assert calls[4][1]["message"] == "Loading template groups"
 
 
 class TestListAllTemplatesPagination:

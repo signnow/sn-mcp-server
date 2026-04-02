@@ -8,6 +8,7 @@ from the SignNow API and converting them to simplified formats for MCP tools.
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
+from signnow_client.models.document_groups import DocumentGroupTemplate
 from signnow_client.models.folders_lite import DocumentItemLite, TemplateItemLite
 
 from .models import TemplateSummary, TemplateSummaryList
@@ -34,6 +35,11 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
     Returns:
         TemplateSummaryList with paginated results and metadata
     """
+    if limit < 1:
+        raise ValueError(f"limit must be >= 1, got {limit}")
+    if offset < 0:
+        raise ValueError(f"offset must be >= 0, got {offset}")
+
     await ctx.report_progress(progress=0, message="Selecting all folders")
 
     # Get all folders first
@@ -127,15 +133,34 @@ async def _list_all_templates(ctx: Context, token: str, client: SignNowAPIClient
             # Skip folders that can't be accessed; continue processing remaining folders
             continue
 
-    # Get template groups
-    await ctx.report_progress(progress=progress, total=total, message="Processing template groups")
-    progress += 1
+    # Get template groups — paginate through the API so accounts with >100 groups are not silently truncated
+    await ctx.report_progress(progress=progress, total=total, message="Loading template groups")
 
-    # Use the client to get document template groups - now returns validated model
-    full_response = client.get_document_template_groups(token, limit=50)
+    batch_size = 50
+    all_template_groups: list[DocumentGroupTemplate] = []
+    api_offset = 0
+    first_batch = client.get_document_template_groups(token, limit=batch_size, offset=api_offset)
+    api_total = first_batch.document_group_template_total_count
+    # Now that we know the real total, expand the overall progress total if more batches are needed
+    num_batches = max(1, (api_total + batch_size - 1) // batch_size)
+    total += num_batches - 1  # was 1 slot pre-allocated; add slots for any extra batches
+    progress += 1
+    all_template_groups.extend(first_batch.document_group_templates)
+    while len(all_template_groups) < api_total:
+        api_offset += batch_size
+        await ctx.report_progress(
+            progress=progress,
+            total=total,
+            message=f"Loading template groups: {len(all_template_groups)}/{api_total}",
+        )
+        progress += 1
+        next_batch = client.get_document_template_groups(token, limit=batch_size, offset=api_offset)
+        if not next_batch.document_group_templates:
+            break
+        all_template_groups.extend(next_batch.document_group_templates)
 
     # Convert to simplified structure
-    for template_group in full_response.document_group_templates:
+    for template_group in all_template_groups:
         # Collect all unique roles from all templates in the group
         all_roles = set()
         for template in template_group.templates:
