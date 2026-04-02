@@ -1,17 +1,24 @@
 # Tests for sn-mcp-server
 
-This directory contains unit and integration tests for the SignNow MCP server.
+This directory contains unit, integration, and API-level tests for the SignNow MCP server.
 
 ## Structure
 
 ```
 tests/
-├── unit/                    # Unit tests
-│   └── sn_mcp_server/
-│       └── tools/          # Tests for MCP tools
-│           └── test_list_templates.py
-├── integration/            # Integration tests (future)
-└── README.md              # This file
+├── unit/                    # Unit tests — mock SignNowAPIClient
+│   ├── sn_mcp_server/
+│   │   └── tools/
+│   └── signnow_client/
+├── integration/             # Integration tests — tool → client → HTTP (respx mocked)
+│   ├── fixtures/            # JSON response fixtures
+│   ├── conftest.py
+│   └── test_*.py
+├── api/                     # API client tests — client method → HTTP (respx mocked)
+│   ├── fixtures/            # JSON response fixtures
+│   ├── conftest.py
+│   └── test_*.py
+└── README.md
 ```
 
 ## Running Tests
@@ -60,8 +67,11 @@ pytest tests/unit/sn_mcp_server/tools/test_list_templates.py::TestListAllTemplat
 
 ### Test Categories
 
-- **Unit Tests**: Test individual functions in isolation with mocked dependencies
-- **Integration Tests**: Test complete workflows with real or near-real dependencies (planned)
+- **Unit Tests** (`tests/unit/`): Test individual functions in isolation. `SignNowAPIClient` is mocked with `MagicMock()`.
+- **Integration Tests** (`tests/integration/`): Test tool functions end-to-end. `respx` intercepts `httpx` — no real API calls. Fixture: `sn_client`, `mock_api`, `token`, `load_fixture`.
+- **API Tests** (`tests/api/`): Test `SignNowAPIClient` methods directly. Verifies URL construction, headers, and response parsing. Same respx pattern, fixture: `client`, `mock_api`, `token`, `load_fixture`.
+
+**Key:** Both `integration/` and `api/` use `SignNowConfig.model_construct()` in conftest to bypass the credential `@model_validator`. Using `SignNowConfig(...)` directly will raise `ValidationError`.
 
 ## Writing New Tests
 
@@ -114,4 +124,5 @@ Test dependencies are defined in `pyproject.toml` under `[project.optional-depen
 - `pytest>=7.0`: Test framework
 - `pytest-asyncio>=0.21`: Async test support
 - `pytest-mock>=3.10`: Mocking utilities
-- `httpx>=0.25`: HTTP client for integration tests
+- `httpx>=0.25`: HTTP client for integration and API tests
+- `respx>=0.22`: HTTP mocking for integration and API tests

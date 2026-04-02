@@ -1,6 +1,6 @@
 # Architecture blueprint
 
-> Last generated: 2026-03-28
+> Last generated: 2026-04-02
 > Generator: architecture-blueprint skill
 
 ## Architectural overview
@@ -247,17 +247,21 @@ Tools that operate on both documents and document groups use a try/except ladder
 
 ## Testing architecture
 
-| Layer | Test type | Location | Coverage |
-|-------|-----------|----------|----------|
-| Tool models | Unit | `tests/unit/sn_mcp_server/tools/test_expiration.py` | Expiration computation |
-| Tool logic | Unit | `tests/unit/sn_mcp_server/tools/test_list_*.py` | Template/document listing |
-| Folder models | Unit | `tests/unit/sn_mcp_server/tools/test_folders_lite.py` | Discriminated union parsing |
-| HTTP middleware | Unit | `tests/unit/sn_mcp_server/test_cors_expose_headers.py` | CORS preflight behavior |
-| Client imports | Unit | `tests/unit/signnow_client/test_invite_from_alias.py` | Re-export validation |
+| Layer | Test type | Location | Mocking | Coverage |
+|-------|-----------|----------|---------|----------|
+| Tool models | Unit | `tests/unit/sn_mcp_server/tools/test_expiration.py` | None | Expiration computation |
+| Tool logic | Unit | `tests/unit/sn_mcp_server/tools/test_list_*.py` | `MagicMock(SignNowAPIClient)` | Template/document listing |
+| Folder models | Unit | `tests/unit/sn_mcp_server/tools/test_folders_lite.py` | None | Discriminated union parsing |
+| HTTP middleware | Unit | `tests/unit/sn_mcp_server/test_cors_expose_headers.py` | None | CORS preflight behavior |
+| Client imports | Unit | `tests/unit/signnow_client/test_invite_from_alias.py` | None | Re-export validation |
+| Tool → client | Integration | `tests/integration/` | `respx` (HTTP layer) | Tool function calls right endpoint, parses response |
+| Client method | API | `tests/api/` | `respx` (HTTP layer) | URL, method, headers, response model, error mapping |
 
-**Mocking pattern:** `MagicMock()` for `SignNowAPIClient`, `AsyncMock(spec=Context)` for FastMCP `Context`. Fixtures use real Pydantic model instances.
+**Mocking pattern:** Unit tests use `MagicMock()` for `SignNowAPIClient`, `AsyncMock(spec=Context)` for FastMCP `Context`. Integration and API tests use `respx.mock(base_url=...)` to intercept `httpx` calls — no real SignNow API calls. Both use `SignNowConfig.model_construct()` to construct the client without triggering credential validation.
 
-**Not tested:** `auth.py`, `token_provider.py`, all write tools (`send_invite`, `create_from_template`, `embedded_*`, `update_document_fields`), entity auto-detection logic, client error handling chain. No integration tests. No CI for tests.
+**JSON fixtures:** `tests/{integration,api}/fixtures/*.json`. Naming: `{http_method}_{resource}__{variant}.json` for success, `error__{description}.json` for error bodies.
+
+**Not tested:** `auth.py`, `token_provider.py`, all write tools (`send_invite`, `create_from_template`, `embedded_*`, `update_document_fields`), entity auto-detection logic. No CI for tests.
 
 ## Known deviations
 
