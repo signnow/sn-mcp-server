@@ -42,6 +42,7 @@ class TestGetDocumentDownloadLink:
         assert request.url.path == "/document/doc_001/download/link"
         assert request.headers["authorization"] == f"Bearer {token}"
         assert request.headers["content-type"] == "application/json"
+        assert request.headers["accept"] == "application/json"
 
     def test_not_found_raises(
         self,
@@ -52,15 +53,19 @@ class TestGetDocumentDownloadLink:
     ) -> None:
         """POST /document/{id}/download/link → 404 → SignNowAPINotFoundError."""
         # ARRANGE
-        mock_api.post("/document/doc_999/download/link").respond(
+        error_fixture = load_fixture("error__document_not_found")
+        route = mock_api.post("/document/doc_999/download/link").respond(
             404,
-            json=load_fixture("error__document_not_found"),
+            json=error_fixture,
         )
 
         # ACT & ASSERT
         with pytest.raises(SignNowAPINotFoundError) as exc_info:
             client.get_document_download_link(token=token, document_id="doc_999")
 
+        # ASSERT — HTTP call was made
+        assert route.called
+
         assert exc_info.value.status_code == 404
-        assert "Document not found" in str(exc_info.value)
-        assert exc_info.value.response_data == {"error": "Document not found"}
+        assert exc_info.value.message == "Document not found"
+        assert exc_info.value.response_data == error_fixture

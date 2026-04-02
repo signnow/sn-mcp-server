@@ -42,6 +42,8 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 - Combine related document/document_group operations into one tool — the tool picks the API path
 - Include entity IDs in all error messages — name what failed, why, and which entity
 - Unit test every `tools/<feature>.py` function with a mocked `SignNowAPIClient`
+- Add integration tests (`tests/integration/`) for every new tool function — one happy path, one error path per tool
+- Add API-layer tests (`tests/api/`) for every new `signnow_client` method — assert URL, headers, model type, and each error variant
 - Mask secrets with `_mask_secret_value` in any diagnostic output
 - **Report progress for every API call in a pagination loop.** Use `ctx.report_progress(progress=loaded, total=api_total, message=f"Loading X")` before each subsequent batch so the client knows work is ongoing, not stalled.
 
