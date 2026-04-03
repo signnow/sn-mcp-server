@@ -53,7 +53,7 @@ from .signing_link import _get_signing_link
 
 RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
 
-TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer the resource version of this endpoint; " "this tool exists as a compatibility fallback for tool-only clients."
+TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer the resource version of this endpoint; this tool exists as a compatibility fallback for tool-only clients."
 
 
 def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAPIClient]:
@@ -248,20 +248,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         filter: Annotated[
             Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
+            Field(description=("Filter by document group status (optional). Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
         ] = None,
         sortby: Annotated[
             Literal["updated", "created", "document-name"] | None,
-            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
+            Field(description=("Sort by created date, updated date, or document name (optional). Available values: updated, created, document-name.")),
         ] = None,
         order: Annotated[
             Literal["asc", "desc"] | None,
-            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
+            Field(description=("Order of sorting (optional, can be used only with sortby). Available values: asc, desc.")),
         ] = None,
         folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
         expired_filter: Annotated[
             Literal["all", "expired", "not-expired"],
-            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
+            Field(description=("Filter by invite expiredness (optional, default: all). Available values: all, expired, not-expired.")),
         ] = "all",
         limit: Annotated[
             int,
@@ -318,20 +318,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         filter: Annotated[
             Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
+            Field(description=("Filter by document group status (optional). Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
         ] = None,
         sortby: Annotated[
             Literal["updated", "created", "document-name"] | None,
-            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
+            Field(description=("Sort by created date, updated date, or document name (optional). Available values: updated, created, document-name.")),
         ] = None,
         order: Annotated[
             Literal["asc", "desc"] | None,
-            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
+            Field(description=("Order of sorting (optional, can be used only with sortby). Available values: asc, desc.")),
         ] = None,
         folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
         expired_filter: Annotated[
             Literal["all", "expired", "not-expired"],
-            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
+            Field(description=("Filter by invite expiredness (optional, default: all). Available values: all, expired, not-expired.")),
         ] = "all",
         limit: Annotated[
             int,
@@ -488,7 +488,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=14, le=45, description="Optional link expiration in days (14-45)")] = None,
+        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15-45). Default: 15 min.")] = None,
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage",
     ) -> CreateEmbeddedSendingResponse:
         """Create embedded sending for managing, editing, or sending invites for a document or document group.
@@ -501,7 +501,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             redirect_uri: Optional redirect URI for the sending link
             redirect_target: Optional redirect target for the sending link
-            link_expiration: Optional number of days for the sending link to expire (14-45)
+            link_expiration_minutes: Link lifetime in minutes (15-45). Default: 15 min.
             type: Specifies the sending step: 'manage' (default), 'edit', 'send-invite'
 
         Returns:
@@ -509,7 +509,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
 
-        return _create_embedded_sending(entity_id, entity_type, redirect_uri, redirect_target, link_expiration, type, token, client)
+        return _create_embedded_sending(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, type, token, client)
 
     @mcp.tool(
         name="create_embedded_editor",
@@ -536,7 +536,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=15, le=45, description="Optional link expiration in minutes (15-45)")] = None,
+        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15-45). Default: 15 min.")] = None,
     ) -> CreateEmbeddedEditorResponse:
         """Create embedded editor for editing a document or document group.
 
@@ -548,14 +548,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             redirect_uri: Optional redirect URI for the editor link
             redirect_target: Optional redirect target for the editor link
-            link_expiration: Optional number of minutes for the editor link to expire (15-45)
+            link_expiration_minutes: Link lifetime in minutes (15-45). Default: 15 min.
 
         Returns:
             CreateEmbeddedEditorResponse with editor ID and entity type
         """
         token, client = _get_token_and_client(token_provider)
 
-        return _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration, token, client)
+        return _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, token, client)
 
     @mcp.tool(
         name="create_from_template",
@@ -679,7 +679,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=14, le=45, description="Optional link expiration in days (14-45)")] = None,
+        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15-45). Default: 15 min.")] = None,
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None,
     ) -> CreateEmbeddedSendingFromTemplateResponse:
         """Create document or document group from template and create embedded sending immediately.
@@ -697,7 +697,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             name: Optional name for the new document or document group
             redirect_uri: Optional redirect URI after completion
             redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-            link_expiration: Optional link expiration in days (14-45)
+            link_expiration_minutes: Link lifetime in minutes (15-45). Default: 15 min.
             type: Type of sending step: 'manage', 'edit', or 'send-invite'
 
         Returns:
@@ -705,7 +705,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
 
-        return await _create_embedded_sending_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration, type, token, client, ctx)
+        return await _create_embedded_sending_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration_minutes, type, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_editor_from_template",
@@ -733,7 +733,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         name: Annotated[str | None, Field(description="Name for the new document or document group")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=15, le=45, description="Optional link expiration in minutes (15-45)")] = None,
+        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15-45). Default: 15 min.")] = None,
     ) -> CreateEmbeddedEditorFromTemplateResponse:
         """Create document or document group from template and create embedded editor immediately.
 
@@ -750,7 +750,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             name: Optional name for the new document or document group
             redirect_uri: Optional redirect URI after completion
             redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-            link_expiration: Optional link expiration in minutes (15-45)
+            link_expiration_minutes: Link lifetime in minutes (15-45). Default: 15 min.
 
         Returns:
             CreateEmbeddedEditorFromTemplateResponse with created entity info and embedded editor details
@@ -758,7 +758,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         token, client = _get_token_and_client(token_provider)
 
         # Initialize client and use the imported function from embedded_editor module
-        return await _create_embedded_editor_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration, token, client, ctx)
+        return await _create_embedded_editor_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration_minutes, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_invite_from_template",

@@ -4,6 +4,7 @@ Document Tools
 Tools for working with documents in SignNow.
 """
 
+import time
 from typing import Literal
 
 from signnow_client import SignNowAPIClient
@@ -14,8 +15,6 @@ from signnow_client.models.document_groups import (
 from signnow_client.models.templates_and_documents import (
     DocumentResponse,
 )
-
-import time
 
 from .models import (
     DocumentField,
@@ -220,7 +219,7 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
                     template_group_data = client.get_document_group_template(token, entity_id)
                     entity_type = "template_group"
                 except Exception:
-                    raise ValueError(f"Entity with ID {entity_id} not found as either document, template, template group or document group")
+                    raise ValueError(f"Entity with ID {entity_id} not found as either document, template, template group or document group") from None
     else:
         # Entity type is provided, get the entity data
         if entity_type == "document_group":

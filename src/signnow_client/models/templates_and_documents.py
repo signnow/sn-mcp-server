@@ -392,7 +392,7 @@ class CreateDocumentEmbeddedEditorRequest(BaseModel):
     link_expiration: int | None = Field(15, ge=15, le=45, description="Link expiration in minutes (default: 15, max: 45)")
     redirect_target: str | None = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -417,10 +417,10 @@ class CreateDocumentEmbeddedSendingRequest(BaseModel):
 
     type: str = Field(..., description="Type of invite settings: 'invite' (Send Invite page) or 'document' (editor + Send Invite page)")
     redirect_uri: str | None = Field(None, description="Page that opens after the signing session ends")
-    link_expiration: str | None = Field("15", description="Link expiration in minutes (default: 15, max: 43200 for Admin users)")
+    link_expiration: int | None = Field(15, ge=15, le=45, description="Link expiration in minutes (default: 15, range: 15-45)")
     redirect_target: str | None = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -484,7 +484,7 @@ class DocumentFieldInviteRecipient(BaseModel):
     email: str | None = Field(None, description="Recipient's email address")
     email_group: DocumentFieldInviteEmailGroup | None = Field(
         None,
-        description="A group of users that should receive the invite. When one of the users signs the document, the document is completed. Must be used with the 'email_groups' array. Required if 'email' or 'phone_invite' is not added but cannot be used at the same time with either of these parameters",
+        description="A group of users that should receive the invite. When one of the users signs the document, the document is completed. Must be used with the 'email_groups' array. Required if 'email' or 'phone_invite' is not added but cannot be used at the same time with either of these parameters",  # noqa: E501
     )
     phone_invite: str | None = Field(None, description="Recipient's phone number. Required for Invite via SMS")
     role_id: str | None = Field(None, description="ID of the recipient's Signer role. Optional if the role parameter is specified")
@@ -515,7 +515,7 @@ class DocumentFieldInviteRecipient(BaseModel):
     redirect_uri: str | None = Field(None, description="When all the requested fields are completed and signed, the signer is redirected to this URI")
     redirect_target: str | None = Field(
         None,
-        description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab",
+        description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab",  # noqa: E501
     )
     decline_redirect_uri: str | None = Field(None, description="The link that opens after the signing session has been declined by the signer")
     close_redirect_uri: str | None = Field(None, description="The link that opens when a signer clicks 'Save Progress and Finish Later' during a signing session or 'Close' in view mode")
@@ -533,14 +533,14 @@ class DocumentFieldInviteRecipient(BaseModel):
     )
     language: str | None = Field(
         None,
-        description="Sets the language of the signing session and notification emails for the signer. Possible values: 'en' for English, 'es' for Spanish, and 'fr' for French. If not set, the language is determined by the language of your SignNow account. If emails are branded, you can set up your own email texts in different languages",
+        description="Sets the language of the signing session and notification emails for the signer. Possible values: 'en' for English, 'es' for Spanish, and 'fr' for French. If not set, the language is determined by the language of your SignNow account. If emails are branded, you can set up your own email texts in different languages",  # noqa: E501
     )
     signature: DocumentFieldInviteSignature | None = Field(
         None,
-        description="This object is used to request QES signatures from signers. To use it, a user must be a member of an organization with QES settings enabled. If QES is used, it must be used for all signers in the invite",
+        description="This object is used to request QES signatures from signers. To use it, a user must be a member of an organization with QES settings enabled. If QES is used, it must be used for all signers in the invite",  # noqa: E501
     )
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -654,7 +654,7 @@ class FieldInviteAction(BaseModel):
     language: str | None = Field(None, description="Signing session and email language: 'en', 'es', 'fr'")
     signature: FieldInviteSignature | None = Field(None, description="QES signature settings")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -777,7 +777,7 @@ class FreeformInviteRecipient(BaseModel):
     redirect_target: str | None = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     language: str | None = Field(None, description="Signing session and notification email language: 'en', 'es', 'fr'")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -910,7 +910,7 @@ class DocumentFreeformInviteRecipient(BaseModel):
     redirect_target: str | None = Field(None, description="Redirect target: 'blank' for new tab, 'self' for same tab")
     language: str | None = Field(None, description="Signing session and notification email language: 'en', 'es', 'fr'")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -939,7 +939,7 @@ class CreateDocumentFreeformInviteRequest(BaseModel):
     close_redirect_uri: str | None = Field(None, description="The link that opens after a signer selects the 'Close' button")
     redirect_target: str | None = Field(
         None,
-        description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab",
+        description="Determines whether to open the redirect link in the new tab in the browser, or in the same tab after the signing session. Possible values: 'blank' - opens the link in the new tab, 'self' - opens the link in the same tab",  # noqa: E501
     )
 
 

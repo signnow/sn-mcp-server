@@ -18,14 +18,18 @@ from .models import (
 
 
 def _create_document_group_embedded_sending(
-    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration: int | None, sending_type: str | None
+    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration_minutes: int | None, sending_type: str | None
 ) -> CreateEmbeddedSendingResponse:
-    """Private function to create document group embedded sending."""
+    """Private function to create document group embedded sending.
+
+    Args:
+        link_expiration_minutes: Link lifetime in minutes (15–45).
+    """
     from signnow_client import (
         CreateDocumentGroupEmbeddedSendingRequest as SignNowEmbeddedSendingRequest,
     )
 
-    request_data = SignNowEmbeddedSendingRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration, type=sending_type)
+    request_data = SignNowEmbeddedSendingRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration_minutes, type=sending_type)
 
     response = client.create_document_group_embedded_sending(token, entity_id, request_data)
 
@@ -33,9 +37,13 @@ def _create_document_group_embedded_sending(
 
 
 def _create_document_embedded_sending(
-    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration: int | None, sending_type: str | None
+    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration_minutes: int | None, sending_type: str | None
 ) -> CreateEmbeddedSendingResponse:
-    """Private function to create document embedded sending."""
+    """Private function to create document embedded sending.
+
+    Args:
+        link_expiration_minutes: Link lifetime in minutes (15–45).
+    """
     from signnow_client import CreateDocumentEmbeddedSendingRequest
 
     # Map sending type to entity type for documents BEFORE making the request
@@ -44,7 +52,7 @@ def _create_document_embedded_sending(
     else:  # manage or edit
         mapped_type = "document"
 
-    request_data = CreateDocumentEmbeddedSendingRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration, type=mapped_type)
+    request_data = CreateDocumentEmbeddedSendingRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration_minutes, type=mapped_type)
 
     response = client.create_document_embedded_sending(token, entity_id, request_data)
 
@@ -56,7 +64,7 @@ def _create_embedded_sending(
     entity_type: Literal["document", "document_group"] | None,
     redirect_uri: str | None,
     redirect_target: str | None,
-    link_expiration: int | None,
+    link_expiration_minutes: int | None,
     sending_type: str | None,
     token: str,
     client: SignNowAPIClient,
@@ -68,7 +76,7 @@ def _create_embedded_sending(
         entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
         redirect_uri: Optional redirect URI for the sending link
         redirect_target: Optional redirect target for the sending link
-        link_expiration: Optional number of days for the sending link to expire (14-45)
+        link_expiration_minutes: Link lifetime in minutes (15–45). None uses API default (15 min).
         sending_type: Specifies the sending step: 'manage' (default), 'edit', 'send-invite'
         token: Access token for SignNow API
         client: SignNow API client instance
@@ -98,10 +106,10 @@ def _create_embedded_sending(
         if not document_group:
             document_group = client.get_document_group(token, entity_id)
 
-        return _create_document_group_embedded_sending(client, token, entity_id, redirect_uri, redirect_target, link_expiration, sending_type)
+        return _create_document_group_embedded_sending(client, token, entity_id, redirect_uri, redirect_target, link_expiration_minutes, sending_type)
     else:
         # Create document embedded sending
-        return _create_document_embedded_sending(client, token, entity_id, redirect_uri, redirect_target, link_expiration, sending_type)
+        return _create_document_embedded_sending(client, token, entity_id, redirect_uri, redirect_target, link_expiration_minutes, sending_type)
 
 
 async def _create_embedded_sending_from_template(
@@ -110,7 +118,7 @@ async def _create_embedded_sending_from_template(
     name: str | None,
     redirect_uri: str | None,
     redirect_target: str | None,
-    link_expiration: int | None,
+    link_expiration_minutes: int | None,
     sending_type: str | None,
     token: str,
     client: SignNowAPIClient,
@@ -124,7 +132,7 @@ async def _create_embedded_sending_from_template(
         name: Optional name for the new document or document group
         redirect_uri: Optional redirect URI after completion
         redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-        link_expiration: Optional link expiration in days (14-45)
+        link_expiration_minutes: Link lifetime in minutes (15–45). None uses API default (15 min).
         sending_type: Type of sending step: 'manage', 'edit', or 'send-invite'
         token: Access token for SignNow API
         client: SignNow API client instance
@@ -146,7 +154,7 @@ async def _create_embedded_sending_from_template(
     await ctx.report_progress(progress=2, total=3)
 
     if created_entity.entity_type == "document_group":
-        sending_response = _create_document_group_embedded_sending(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration, sending_type)
+        sending_response = _create_document_group_embedded_sending(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration_minutes, sending_type)
         # Report final progress after embedded sending creation
         await ctx.report_progress(progress=3, total=3)
         return CreateEmbeddedSendingFromTemplateResponse(
@@ -159,7 +167,7 @@ async def _create_embedded_sending_from_template(
         )
     else:
         # Create document embedded sending
-        sending_response = _create_document_embedded_sending(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration, sending_type)
+        sending_response = _create_document_embedded_sending(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration_minutes, sending_type)
         # Report final progress after embedded sending creation
         await ctx.report_progress(progress=3, total=3)
         return CreateEmbeddedSendingFromTemplateResponse(
