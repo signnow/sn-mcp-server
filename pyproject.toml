@@ -49,6 +49,8 @@ test = [
   "httpx>=0.25",
   "respx>=0.22",
   "pytest-cov>=5.0",
+  "pytest-httpserver>=1.0",
+  "smolagents[mcp]>=1.20",
 ]
 
 [tool.coverage.run]
@@ -88,7 +90,7 @@ strict = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["tests.unit.*", "tests.integration.*", "tests.api.*", "tests.conftest"]
+module = ["tests.unit.*", "tests.integration.*", "tests.api.*", "tests.e2e.*", "tests.conftest"]
 disable_error_code = ["misc"]
 
 [tool.hatch.version]
