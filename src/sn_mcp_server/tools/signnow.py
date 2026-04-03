@@ -53,7 +53,7 @@ from .signing_link import _get_signing_link
 
 RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
 
-TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer the resource version of this endpoint; " "this tool exists as a compatibility fallback for tool-only clients."
+TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer the resource version of this endpoint; this tool exists as a compatibility fallback for tool-only clients."
 
 
 def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAPIClient]:
@@ -248,20 +248,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         filter: Annotated[
             Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
+            Field(description=("Filter by document group status (optional). Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
         ] = None,
         sortby: Annotated[
             Literal["updated", "created", "document-name"] | None,
-            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
+            Field(description=("Sort by created date, updated date, or document name (optional). Available values: updated, created, document-name.")),
         ] = None,
         order: Annotated[
             Literal["asc", "desc"] | None,
-            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
+            Field(description=("Order of sorting (optional, can be used only with sortby). Available values: asc, desc.")),
         ] = None,
         folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
         expired_filter: Annotated[
             Literal["all", "expired", "not-expired"],
-            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
+            Field(description=("Filter by invite expiredness (optional, default: all). Available values: all, expired, not-expired.")),
         ] = "all",
         limit: Annotated[
             int,
@@ -318,20 +318,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         filter: Annotated[
             Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(description=("Filter by document group status (optional). " "Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
+            Field(description=("Filter by document group status (optional). Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
         ] = None,
         sortby: Annotated[
             Literal["updated", "created", "document-name"] | None,
-            Field(description=("Sort by created date, updated date, or document name (optional). " "Available values: updated, created, document-name.")),
+            Field(description=("Sort by created date, updated date, or document name (optional). Available values: updated, created, document-name.")),
         ] = None,
         order: Annotated[
             Literal["asc", "desc"] | None,
-            Field(description=("Order of sorting (optional, can be used only with sortby). " "Available values: asc, desc.")),
+            Field(description=("Order of sorting (optional, can be used only with sortby). Available values: asc, desc.")),
         ] = None,
         folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
         expired_filter: Annotated[
             Literal["all", "expired", "not-expired"],
-            Field(description=("Filter by invite expiredness (optional, default: all). " "Available values: all, expired, not-expired.")),
+            Field(description=("Filter by invite expiredness (optional, default: all). Available values: all, expired, not-expired.")),
         ] = "all",
         limit: Annotated[
             int,
@@ -373,15 +373,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         orders: Annotated[
-            list[InviteOrder] | str | None,
+            list[InviteOrder],
             Field(
                 description="List of orders with recipients (can be a list or JSON string)",
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
-                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}]',
                 ],
             ),
-        ] = None,
+        ] = [],  # noqa: B006
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -428,15 +427,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         orders: Annotated[
-            list[EmbeddedInviteOrder] | str | None,
+            list[EmbeddedInviteOrder],
             Field(
                 description="List of orders with recipients (can be a list or JSON string)",
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}],
-                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}]',
                 ],
             ),
-        ] = None,
+        ] = [],  # noqa: B006
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -612,12 +610,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         orders: Annotated[
-            list[InviteOrder] | str,
+            list[InviteOrder],
             Field(
                 description="List of orders with recipients for the invite (can be a list or JSON string)",
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
-                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}]',
                 ],
             ),
         ],
@@ -780,15 +777,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         orders: Annotated[
-            list[EmbeddedInviteOrder] | str | None,
+            list[EmbeddedInviteOrder],
             Field(
                 description="List of orders with recipients for the embedded invite (can be a list or JSON string)",
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}],
-                    '[{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}]',
                 ],
             ),
-        ] = None,
+        ] = [],  # noqa: B006
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
