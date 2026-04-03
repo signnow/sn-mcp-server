@@ -23,7 +23,7 @@ def _create_document_group_embedded_sending(
     """Private function to create document group embedded sending.
 
     Args:
-        link_expiration_minutes: Link lifetime in minutes (15–43200).
+        link_expiration_minutes: Link lifetime in minutes (15–45).
     """
     from signnow_client import (
         CreateDocumentGroupEmbeddedSendingRequest as SignNowEmbeddedSendingRequest,
@@ -42,7 +42,7 @@ def _create_document_embedded_sending(
     """Private function to create document embedded sending.
 
     Args:
-        link_expiration_minutes: Link lifetime in minutes (15–43200).
+        link_expiration_minutes: Link lifetime in minutes (15–45).
     """
     from signnow_client import CreateDocumentEmbeddedSendingRequest
 
@@ -76,7 +76,7 @@ def _create_embedded_sending(
         entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
         redirect_uri: Optional redirect URI for the sending link
         redirect_target: Optional redirect target for the sending link
-        link_expiration_minutes: Link lifetime in minutes (15–43200). None uses API default (15 min).
+        link_expiration_minutes: Link lifetime in minutes (15–45). None uses API default (15 min).
         sending_type: Specifies the sending step: 'manage' (default), 'edit', 'send-invite'
         token: Access token for SignNow API
         client: SignNow API client instance
@@ -132,7 +132,7 @@ async def _create_embedded_sending_from_template(
         name: Optional name for the new document or document group
         redirect_uri: Optional redirect URI after completion
         redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-        link_expiration_minutes: Link lifetime in minutes (15–43200). None uses API default (15 min).
+        link_expiration_minutes: Link lifetime in minutes (15–45). None uses API default (15 min).
         sending_type: Type of sending step: 'manage', 'edit', or 'send-invite'
         token: Access token for SignNow API
         client: SignNow API client instance

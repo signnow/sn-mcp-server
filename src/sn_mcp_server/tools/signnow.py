@@ -423,7 +423,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=43200, description="Link lifetime in minutes (15–43200). Default: 15 min.")] = None,
+        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15–45). Default: 15 min.")] = None,
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage",
     ) -> CreateEmbeddedSendingResponse:
         """Create embedded sending for managing, editing, or sending invites for a document or document group.
@@ -436,7 +436,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
             redirect_uri: Optional redirect URI for the sending link
             redirect_target: Optional redirect target for the sending link
-            link_expiration_minutes: Link lifetime in minutes (15–43200). Default: 15 min.
+            link_expiration_minutes: Link lifetime in minutes (15–45). Default: 15 min.
             type: Specifies the sending step: 'manage' (default), 'edit', 'send-invite'
 
         Returns:
@@ -612,7 +612,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=43200, description="Link lifetime in minutes (15–43200). Default: 15 min.")] = None,
+        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15–45). Default: 15 min.")] = None,
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None,
     ) -> CreateEmbeddedSendingFromTemplateResponse:
         """Create document or document group from template and create embedded sending immediately.
@@ -630,7 +630,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             name: Optional name for the new document or document group
             redirect_uri: Optional redirect URI after completion
             redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-            link_expiration_minutes: Link lifetime in minutes (15–43200). Default: 15 min.
+            link_expiration_minutes: Link lifetime in minutes (15–45). Default: 15 min.
             type: Type of sending step: 'manage', 'edit', or 'send-invite'
 
         Returns:
