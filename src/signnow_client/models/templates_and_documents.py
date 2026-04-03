@@ -389,7 +389,7 @@ class CreateDocumentEmbeddedEditorRequest(BaseModel):
     """Request model for creating document embedded editor link."""
 
     redirect_uri: str | None = Field(None, description="Page that opens after the editing session ends")
-    link_expiration: int | None = Field(15, ge=15, le=45, description="Link expiration in minutes (default: 15, max: 45)")
+    link_expiration: int | None = Field(15, ge=15, le=43200, description="Link expiration in minutes (default: 15; max: 43200 for Admin users)")
     redirect_target: str | None = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
@@ -417,7 +417,7 @@ class CreateDocumentEmbeddedSendingRequest(BaseModel):
 
     type: str = Field(..., description="Type of invite settings: 'invite' (Send Invite page) or 'document' (editor + Send Invite page)")
     redirect_uri: str | None = Field(None, description="Page that opens after the signing session ends")
-    link_expiration: int | None = Field(15, ge=15, le=45, description="Link expiration in minutes (default: 15, range: 15-45)")
+    link_expiration: int | None = Field(15, ge=15, le=43200, description="Link expiration in minutes (default: 15; max: 43200 for Admin users)")
     redirect_target: str | None = Field(None, description="Redirect target: 'blank' (new tab) or 'self' (same tab)")
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
