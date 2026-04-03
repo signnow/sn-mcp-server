@@ -581,6 +581,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
 
+        if not orders:
+            raise ValueError("orders must contain at least one recipient order")
+
         return await _send_invite_from_template(entity_id, entity_type, name, orders, token, client, ctx)
 
     @mcp.tool(
@@ -743,6 +746,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             CreateEmbeddedInviteFromTemplateResponse with created entity info and embedded invite details
         """
         token, client = _get_token_and_client(token_provider)
+
+        if not orders:
+            raise ValueError("orders must contain at least one recipient order")
 
         return await _create_embedded_invite_from_template(entity_id, entity_type, name, orders, token, client, ctx)
 
