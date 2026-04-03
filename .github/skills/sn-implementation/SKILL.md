@@ -98,13 +98,109 @@ When fixing a documented bug:
    - ✅ **Testable** (logic, transformation, errors, validation): produce a prompt for the Tester agent with bug name, affected files, changes made, and what to assert.
    - ❌ **Not testable** (transport, OAuth2 e2e, external API): state why and request manual verification with `sn-mcp serve` / `sn-mcp http`.
 
+## Pre-commit Rules (write it right the first time)
+
+Pre-commit runs: `ruff check` → `ruff format` → `black` → `mypy --strict`.
+Every file you create or edit must pass all four before committing.
+
+### Imports
+
+```python
+# 1. Always first line in every file
+from __future__ import annotations
+
+# 2. Order: stdlib → third-party → local. One blank line between groups.
+# ruff (I001) enforces this automatically — just keep groups separate.
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+import respx
+
+from signnow_client import SignNowAPIClient
+```
+
+### Type annotations (ANN rules — all enforced)
+
+```python
+# ✅ All public functions must have full annotations
+def get_link(client: SignNowAPIClient, token: str, doc_id: str) -> str:
+    ...
+
+# ✅ Use X | Y syntax (UP007), not Optional or Union
+def foo(value: str | None = None) -> dict[str, Any]:
+    ...
+
+# ✅ ANN401: avoid bare Any — use it only to wrap untyped externals
+# If you must, add a comment explaining why
+def _handle(data: dict[str, Any]) -> None:  # Any because SignNow API schema varies
+    ...
+
+# ❌ Missing return type → ruff ANN201 + mypy error
+def bad(x: str):
+    return x
+```
+
+**`self` and `cls` are exempt** — `ANN101`/`ANN102` are in `lint.ignore`. Do NOT annotate them.
+
+### Test files specifically
+
+```python
+# ✅ Import fixture types from their actual packages
+from collections.abc import Callable, Generator
+import respx
+from signnow_client import SignNowAPIClient
+
+# ✅ All test method params must be typed, return -> None
+def test_something(
+    self,
+    client: SignNowAPIClient,
+    mock_api: respx.MockRouter,
+    token: str,
+    load_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    ...
+
+# ✅ Fixture return types
+@pytest.fixture()
+def mock_api() -> Generator[respx.MockRouter, None, None]:
+    with respx.mock(...) as router:
+        yield router
+
+@pytest.fixture()
+def load_fixture() -> Callable[[str], dict[str, Any]]:
+    return _load_fixture
+```
+
+### Hardcoded secrets in tests (S105/S106)
+
+```python
+# ✅ Suppress with noqa — it's intentional fake test data
+FAKE_TOKEN = "test-token"  # noqa: S105
+cfg = SignNowConfig.model_construct(client_secret="test_secret")  # noqa: S106
+```
+
+### json.loads return type (mypy no-any-return)
+
+```python
+# ✅ Suppress the Any return from json.loads
+return json.loads(path.read_text())  # type: ignore[no-any-return]
+```
+
+### mypy in tests
+
+`[[tool.mypy.overrides]]` disables `misc` for `tests.*` — so `@pytest.fixture()` decorators
+won't trigger mypy. No action needed; just keep the full type annotations above.
+
 ## Verification Checklist
 
 Complete ALL before declaring done:
 
-1. **Static analysis:**
-   - `ruff check src/ 2>&1` — must pass
-   - `ruff format --check src/ 2>&1` — must pass
+1. **Static analysis (run on changed files):**
+   - `ruff check src/ tests/ 2>&1` — must pass
+   - `ruff format --check src/ tests/ 2>&1` — must pass
+   - `mypy src/ tests/ 2>&1` — must pass
 
 2. **Runtime validation** (if business logic or API client changed):
    - Create `scripts/verify-fix.py` → import and call your new function with mock data
@@ -112,7 +208,7 @@ Complete ALL before declaring done:
    - Delete the script when passing.
 
 3. **Regression tests** (if related tests exist):
-   - `pytest tests/unit/ -v 2>&1`
+   - `pytest tests/ -v 2>&1`
    - If fails, fix and retry until green.
 
 Do not ask the user to test. YOU test.

@@ -6,3 +6,7 @@ __pycache__/
 src/sn_mcp_server/_version.py
 server.json
 .playwright-mcp/
+
+# Coverage
+.coverage
+htmlcov/
