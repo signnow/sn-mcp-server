@@ -71,7 +71,7 @@ pytest tests/unit/sn_mcp_server/tools/test_list_templates.py::TestListAllTemplat
 - **Integration Tests** (`tests/integration/`): Test tool functions end-to-end. `respx` intercepts `httpx` — no real API calls. Fixture: `sn_client`, `mock_api`, `token`, `load_fixture`.
 - **API Tests** (`tests/api/`): Test `SignNowAPIClient` methods directly. Verifies URL construction, headers, and response parsing. Same respx pattern, fixture: `client`, `mock_api`, `token`, `load_fixture`.
 
-**Key:** Both `integration/` and `api/` use `SignNowConfig.model_construct()` in conftest to bypass the credential `@model_validator`. Using `SignNowConfig(...)` directly will raise `ValidationError`.
+**Key:** Both `integration/` and `api/` use `SignNowConfig.model_construct()` in conftest to bypass the credential `@model_validator`, which enforces that at least one valid credential combination is present. `SignNowConfig(client_id=..., client_secret=...)` with real or fake values validates successfully; `model_construct()` is only needed when tests intentionally supply no credentials at all.
 
 ## Writing New Tests
 

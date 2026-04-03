@@ -26,7 +26,8 @@ def sn_client(mock_api: respx.MockRouter) -> SignNowAPIClient:
 
     mock_api is declared as a parameter so pytest activates the respx interceptor
     before the client is constructed.
-    basic_token=None suppresses the @model_validator that requires real credentials.
+    model_construct() bypasses all Pydantic validators; the value of basic_token is
+    irrelevant to whether validation runs.
     """
     cfg = SignNowConfig.model_construct(
         api_base=AnyHttpUrl(FAKE_API_BASE),

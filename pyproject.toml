@@ -82,6 +82,7 @@ format.preview = true
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"] # assert is idiomatic in pytest
+"src/sn_mcp_server/auth.py" = ["S101"] # unreachable type-narrowing asserts; see auth.py:181,191,230
 
 [tool.mypy]
 python_version = "3.10"

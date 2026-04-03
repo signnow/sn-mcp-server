@@ -8,7 +8,7 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 - Build requires `.git/` directory — `hatch-vcs` reads git tags for version. Without it: version becomes `0.0.0`.
 - `pytest` — asyncio-mode=auto, no `@pytest.mark.asyncio` decorators needed. Warnings are suppressed.
 - `run_tests.py` has a side effect: runs `pip install -e .[test]` before tests.
-- Three test layers: `tests/unit/` (mock `SignNowAPIClient`), `tests/integration/` (mock HTTP layer, test tool→client), `tests/api/` (mock HTTP layer, test client method + request construction). All use `respx` — no real API calls. Both `integration/` and `api/` conftest fixtures use `SignNowConfig.model_construct()` to bypass the credential `@model_validator`; using `SignNowConfig(...)` directly will raise `ValidationError`.
+- Three test layers: `tests/unit/` (mock `SignNowAPIClient`), `tests/integration/` (mock HTTP layer, test tool→client), `tests/api/` (mock HTTP layer, test client method + request construction). All use `respx` — no real API calls. Both `integration/` and `api/` conftest fixtures use `SignNowConfig.model_construct()` to bypass the credential `@model_validator`. Calling `SignNowConfig()` without any valid credential combination (no `client_id`/`client_secret`, no `basic_token`, no `user_email`/`password`) raises `ValidationError` — `model_construct()` is used in tests to allow a config with all credential fields absent or placeholder.
 
 ## Gotchas
 

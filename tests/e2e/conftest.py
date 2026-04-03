@@ -22,7 +22,7 @@ from collections.abc import Generator  # noqa: E402
 
 import pytest  # noqa: E402
 from mcp import StdioServerParameters  # noqa: E402
-from pydantic import BaseModel, ValidationInfo, field_validator  # noqa: E402
+from pydantic import BaseModel, Field, ValidationInfo, field_validator  # noqa: E402
 from pytest_httpserver import HTTPServer  # noqa: E402
 from smolagents import ActionStep, OpenAIServerModel, ToolCallingAgent  # noqa: E402
 
@@ -52,7 +52,7 @@ class ToolCallAssertion(BaseModel):
     expected_tools: list[str]
     """Tool names that MUST appear in tool_calls (order ignored)."""
 
-    forbidden_tools: list[str] = []
+    forbidden_tools: list[str] = Field(default_factory=list)
     """Tool names that MUST NOT appear in tool_calls."""
 
     @field_validator("expected_tools")
