@@ -100,10 +100,9 @@ class TestSendInviteReminderAutoDetect:
         """entity_type=None → group endpoint succeeds → entity_type='document_group'."""
         # ARRANGE
         grp_fixture = load_fixture("get_document_group_v2__with_pending_invite")
-        email2_fixture = load_fixture("post_email2__success")
 
         mock_api.get(f"/v2/document-groups/{GRP_ID}").respond(200, json=grp_fixture)
-        mock_api.post(f"/document/{DOC_ID}/email2").respond(200, json=email2_fixture)
+        mock_api.post(f"/v2/document-groups/{GRP_ID}/send-email").respond(204)
 
         # ACT
         result = await _send_invite_reminder(
@@ -165,13 +164,12 @@ class TestSendInviteReminderDocumentGroup:
         token: str,
         load_fixture: Callable[[str], dict[str, Any]],
     ) -> None:
-        """Document group with 1 pending invite → signer reminded."""
+        """Document group with 1 pending invite → signer reminded via send-email."""
         # ARRANGE
         grp_fixture = load_fixture("get_document_group_v2__with_pending_invite")
-        email2_fixture = load_fixture("post_email2__success")
 
         mock_api.get(f"/v2/document-groups/{GRP_ID}").respond(200, json=grp_fixture)
-        mock_api.post(f"/document/{DOC_ID}/email2").respond(200, json=email2_fixture)
+        mock_api.post(f"/v2/document-groups/{GRP_ID}/send-email").respond(204)
 
         # ACT
         result = await _send_invite_reminder(

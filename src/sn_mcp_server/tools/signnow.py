@@ -1061,12 +1061,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="send_invite_reminder",
-        description=(
-            "Send a signing reminder to pending signers on a document or document group. "
-            "Auto-detects entity type by trying document_group first, then document as fallback. "
-            "Sends a copy of the document via email to each pending signer. "
-            "For document groups, only the first document with pending invites is processed."
-        ),
+        description=("Send a signing reminder to pending signers on a document or document group. "),
         annotations=ToolAnnotations(
             title="Send signing reminder",
             readOnlyHint=False,
@@ -1097,12 +1092,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
         Auto-detects entity type by trying GET /documentgroup/{id} (v2) first (modern),
         then GET /document/{id} as legacy fallback. Non-404 errors propagate immediately.
-        Sends a copy of the document to each pending signer via POST /document/{id}/email2.
-        For document groups, targets only the first document that has pending invites.
-        Pending signers on subsequent documents in the group are not included in any output list.
+
+        For documents: sends a copy via POST /document/{id}/email2 to each pending signer.
+        For document groups: uses POST /v2/document-groups/{id}/send-email to notify all
+        pending signers across all documents in the group.
 
         Skips signers whose invite is already completed or cancelled (reported in 'skipped').
-        API failures per-batch are reported in 'failed' and can be retried.
+        API failures are reported in 'failed' and can be retried.
 
         Tip: if entity_type is known, pass it explicitly to avoid an extra auto-detection GET.
         Tip: use list_documents first to discover document IDs by name or criteria.

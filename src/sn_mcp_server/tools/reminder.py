@@ -1,19 +1,23 @@
 """
 Send invite reminder business logic for SignNow MCP server.
 
-Sends signing reminders to pending signers by calling POST /document/{id}/email2
-(send document copy by email). Supports both documents and document groups with
-auto-detection of entity type (document_group tried first, document as fallback).
+Sends signing reminders to pending signers on documents and document groups.
+- Documents: POST /document/{id}/email2 (send document copy by email), batched by 5.
+- Document groups: POST /v2/document-groups/{id}/send-email (native group endpoint).
+
+Supports auto-detection of entity type (document_group tried first, document as fallback).
 """
 
 from __future__ import annotations
+
+import time
 
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 from signnow_client.exceptions import SignNowAPIError
 from signnow_client.models.document_groups import GetDocumentGroupV2Response
-from signnow_client.models.templates_and_documents import DocumentResponse
+from signnow_client.models.templates_and_documents import DocumentResponse, SendEmailRequest
 
 from .models import InviteStatusValues, ReminderRecipientResult, SendReminderResponse
 
@@ -33,16 +37,17 @@ async def _send_invite_reminder(
     """Send signing reminders to pending signers on a document or document group.
 
     Resolves entity type (auto-detects if not provided), determines pending signers,
-    and calls send_document_copy_by_email in batches of at most 5 per API call.
+    and sends reminders:
+    - Documents: calls send_document_copy_by_email (POST /document/{id}/email2) in batches of 5.
+    - Document groups: calls send_document_group_email (POST /v2/document-groups/{id}/send-email) once.
 
     Auto-detection order: document_group (v2) first (modern), document as legacy fallback.
     Non-404 API errors propagate immediately without attempting fallback.
 
-    For document_group: targets only the first document with pending invites.
-    Pending signers on subsequent documents in the group are not included in any output list.
+    For document groups: collects all pending signers across all documents in the group.
 
-    Reports progress via ctx.report_progress before each email2 batch call when ctx is
-    provided (AGENTS.md requirement: report progress for every API call in a loop).
+    Reports progress via ctx.report_progress when ctx is provided
+    (AGENTS.md requirement: report progress for every API call in a loop).
 
     Args:
         client: Authenticated SignNow API client.
@@ -173,10 +178,11 @@ async def _remind_document_group(
     message: str | None,
     ctx: Context | None,
 ) -> SendReminderResponse:
-    """Build and send reminders for a document group.
+    """Build and send reminders for a document group via POST /v2/document-groups/{id}/send-email.
 
-    Processes only the first document with pending invites (matching the optional email
-    filter). Pending signers on subsequent documents are not included in any output list.
+    Collects all pending signers across every document in the group. Uses the native
+    document-group send-email endpoint — a single API call for the entire group (no
+    per-document batching).
 
     Args:
         client: Authenticated SignNow API client.
@@ -184,58 +190,40 @@ async def _remind_document_group(
         entity_id: Document group ID.
         group_response: GetDocumentGroupV2Response from client.get_document_group_v2().
         email: Optional single-recipient filter.
-        subject: Optional email subject.
-        message: Optional email body.
+        subject: Optional email subject (not used by send-email endpoint; reserved for future use).
+        message: Optional email body (not used by send-email endpoint; reserved for future use).
         ctx: Optional MCP Context for progress reporting.
 
     Returns:
         SendReminderResponse with entity_type='document_group'.
     """
-    first_pending_doc = None
     pending_emails: list[str] = []
     all_signer_emails: set[str] = set()
-    skipped_on_first_doc: list[ReminderRecipientResult] = []
+    skipped: list[ReminderRecipientResult] = []
 
     for doc in group_response.data.documents:
         for fi in doc.field_invites:
             all_signer_emails.add(fi.signer_email)
-
-            if first_pending_doc is not None and doc.id != first_pending_doc.id:
-                # Only process invites on the first pending document found.
-                continue
-
             status = InviteStatusValues.from_raw_status(fi.status)
             is_pending = status in _PENDING_STATUSES
 
-            if not is_pending:
-                # Track non-pending signers on the first pending doc for skipped output.
-                if first_pending_doc is None or doc.id == first_pending_doc.id:
-                    if email is None or fi.signer_email == email:
-                        skipped_on_first_doc.append(
-                            ReminderRecipientResult(
-                                email=fi.signer_email,
-                                document_id=doc.id,
-                                reason=f"invite status: {InviteStatusValues.from_raw_status(fi.status)}",
-                            )
-                        )
-                continue
-
             if email is not None and fi.signer_email != email:
-                # Filtered by caller — skip to next invite
                 continue
 
-            if first_pending_doc is None:
-                first_pending_doc = doc
+            if is_pending:
+                if fi.signer_email not in pending_emails:
+                    pending_emails.append(fi.signer_email)
+            else:
+                skipped.append(
+                    ReminderRecipientResult(
+                        email=fi.signer_email,
+                        document_id=doc.id,
+                        reason=f"invite status: {status}",
+                    )
+                )
 
-            if doc.id == first_pending_doc.id:
-                pending_emails.append(fi.signer_email)
-
-    if first_pending_doc is None:
-        # No pending document found.
-        skipped: list[ReminderRecipientResult] = []
+    if not pending_emails:
         if email is not None:
-            # Email filter was specified but didn't match any pending signer.
-            # Only report the filtered email — don't dump all signers as "no pending".
             if email not in all_signer_emails:
                 skipped.append(
                     ReminderRecipientResult(
@@ -243,7 +231,7 @@ async def _remind_document_group(
                         reason=f"no pending invite found for {email} in document_group {entity_id}",
                     )
                 )
-            else:
+            elif not any(s.email == email for s in skipped):
                 skipped.append(
                     ReminderRecipientResult(
                         email=email,
@@ -251,22 +239,49 @@ async def _remind_document_group(
                     )
                 )
         else:
-            # No email filter — all signers are truly non-pending, report them.
             skipped = [ReminderRecipientResult(email=se, reason="no pending invite in group") for se in all_signer_emails]
+
         return SendReminderResponse(
             entity_id=entity_id,
             entity_type="document_group",
             skipped=skipped,
         )
 
-    doc_id = first_pending_doc.id
-    reminded, failed = await _send_in_batches(client, token, doc_id, pending_emails, subject, message, ctx)
+    # Build SendEmailRequest payload for the native group send-email endpoint.
+    request_data = SendEmailRequest(
+        to=[{"email": addr} for addr in pending_emails],
+        with_history=False,
+        client_timestamp=int(time.time()),
+    )
+
+    reminded: list[ReminderRecipientResult] = []
+    failed: list[ReminderRecipientResult] = []
+
+    try:
+        client.send_document_group_email(token, entity_id, request_data)
+        for addr in pending_emails:
+            reminded.append(ReminderRecipientResult(email=addr))
+    except SignNowAPIError as err:
+        for addr in pending_emails:
+            failed.append(
+                ReminderRecipientResult(
+                    email=addr,
+                    reason=f"Failed to send reminder for document_group {entity_id}: {err}",
+                )
+            )
+
+    if ctx is not None:
+        await ctx.report_progress(
+            progress=1,
+            total=1,
+            message="Sent group reminder",
+        )
 
     return SendReminderResponse(
         entity_id=entity_id,
         entity_type="document_group",
         recipients_reminded=reminded,
-        skipped=skipped_on_first_doc,
+        skipped=skipped,
         failed=failed,
     )
 
