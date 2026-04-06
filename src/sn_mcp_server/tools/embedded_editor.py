@@ -18,14 +18,14 @@ from .models import (
 
 
 def _create_document_group_embedded_editor(
-    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration: int | None
+    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration_minutes: int | None
 ) -> CreateEmbeddedEditorResponse:
     """Private function to create document group embedded editor."""
     from signnow_client import (
         CreateDocumentGroupEmbeddedEditorRequest as SignNowEmbeddedEditorRequest,
     )
 
-    request_data = SignNowEmbeddedEditorRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration)
+    request_data = SignNowEmbeddedEditorRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration_minutes)
 
     response = client.create_document_group_embedded_editor(token, entity_id, request_data)
 
@@ -33,12 +33,12 @@ def _create_document_group_embedded_editor(
 
 
 def _create_document_embedded_editor(
-    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration: int | None
+    client: SignNowAPIClient, token: str, entity_id: str, redirect_uri: str | None, redirect_target: str | None, link_expiration_minutes: int | None
 ) -> CreateEmbeddedEditorResponse:
     """Private function to create document embedded editor."""
     from signnow_client import CreateDocumentEmbeddedEditorRequest
 
-    request_data = CreateDocumentEmbeddedEditorRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration)
+    request_data = CreateDocumentEmbeddedEditorRequest(redirect_uri=redirect_uri, redirect_target=redirect_target, link_expiration=link_expiration_minutes)
 
     response = client.create_document_embedded_editor(token, entity_id, request_data)
 
@@ -50,7 +50,7 @@ def _create_embedded_editor(
     entity_type: Literal["document", "document_group"] | None,
     redirect_uri: str | None,
     redirect_target: str | None,
-    link_expiration: int | None,
+    link_expiration_minutes: int | None,
     token: str,
     client: SignNowAPIClient,
 ) -> CreateEmbeddedEditorResponse:
@@ -61,7 +61,7 @@ def _create_embedded_editor(
         entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
         redirect_uri: Optional redirect URI for the editor link
         redirect_target: Optional redirect target for the editor link
-        link_expiration: Optional number of minutes for the editor link to expire (15-45)
+        link_expiration_minutes: Link lifetime in minutes (15–43200). None uses API default (15 min).
         token: Access token for SignNow API
         client: SignNow API client instance
 
@@ -90,10 +90,10 @@ def _create_embedded_editor(
         if not document_group:
             document_group = client.get_document_group(token, entity_id)
 
-        return _create_document_group_embedded_editor(client, token, entity_id, redirect_uri, redirect_target, link_expiration)
+        return _create_document_group_embedded_editor(client, token, entity_id, redirect_uri, redirect_target, link_expiration_minutes)
     else:
         # Create document embedded editor
-        return _create_document_embedded_editor(client, token, entity_id, redirect_uri, redirect_target, link_expiration)
+        return _create_document_embedded_editor(client, token, entity_id, redirect_uri, redirect_target, link_expiration_minutes)
 
 
 async def _create_embedded_editor_from_template(
@@ -102,7 +102,7 @@ async def _create_embedded_editor_from_template(
     name: str | None,
     redirect_uri: str | None,
     redirect_target: str | None,
-    link_expiration: int | None,
+    link_expiration_minutes: int | None,
     token: str,
     client: SignNowAPIClient,
     ctx: Context,
@@ -115,7 +115,7 @@ async def _create_embedded_editor_from_template(
         name: Optional name for the new document or document group
         redirect_uri: Optional redirect URI after completion
         redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-        link_expiration: Optional link expiration in minutes (15-45)
+        link_expiration_minutes: Link lifetime in minutes (15–43200). None uses API default (15 min).
         token: Access token for SignNow API
         client: SignNow API client instance
         ctx: FastMCP context for progress reporting
@@ -136,7 +136,7 @@ async def _create_embedded_editor_from_template(
     await ctx.report_progress(progress=2, total=3)
 
     if created_entity.entity_type == "document_group":
-        editor_response = _create_document_group_embedded_editor(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration)
+        editor_response = _create_document_group_embedded_editor(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration_minutes)
         # Report final progress after embedded editor creation
         await ctx.report_progress(progress=3, total=3)
         return CreateEmbeddedEditorFromTemplateResponse(
@@ -148,7 +148,7 @@ async def _create_embedded_editor_from_template(
             editor_url=editor_response.editor_url,
         )
     else:
-        editor_response = _create_document_embedded_editor(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration)
+        editor_response = _create_document_embedded_editor(client, token, created_entity.entity_id, redirect_uri, redirect_target, link_expiration_minutes)
         # Report final progress after embedded editor creation
         await ctx.report_progress(progress=3, total=3)
         return CreateEmbeddedEditorFromTemplateResponse(

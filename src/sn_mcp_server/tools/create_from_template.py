@@ -8,8 +8,23 @@ from existing templates and template groups.
 from typing import Literal
 
 from signnow_client import DocumentGroupTemplate, SignNowAPIClient
+from signnow_client.exceptions import SignNowAPIHTTPError
 
 from .models import CreateFromTemplateResponse
+
+
+def _is_not_found_error(exc: SignNowAPIHTTPError) -> bool:
+    """Return True when a 400 error represents a 'not found' response from SignNow.
+
+    SignNow returns 400 with error code 65582 on not-found conditions, with varying
+    messages depending on the endpoint:
+      - /template/{id}/copy          → "Document not found"
+      - /documentgroup/template/{id} → "unable to find document group template"
+    """
+    if exc.status_code == 400:
+        errors = (exc.response_data or {}).get("errors", [])
+        return any(e.get("code") == 65582 or "not found" in e.get("message", "").lower() or "unable to find" in e.get("message", "").lower() for e in errors)
+    return False
 
 
 def _create_document_from_template(client: SignNowAPIClient, token: str, entity_id: str, name: str | None) -> CreateFromTemplateResponse:
@@ -21,8 +36,14 @@ def _create_document_from_template(client: SignNowAPIClient, token: str, entity_
     if name:
         request_data = CreateDocumentFromTemplateRequest(document_name=name)
 
-    # Create document from template
-    response = client.create_document_from_template(token, entity_id, request_data)
+    # Create document from template.
+    # SignNow returns 400 (not 404) with error code 65582 when the template is not found.
+    try:
+        response = client.create_document_from_template(token, entity_id, request_data)
+    except SignNowAPIHTTPError as exc:
+        if _is_not_found_error(exc):
+            raise ValueError(f"Template not found: {entity_id}") from None
+        raise
 
     # Use provided name or fallback to response document_name or entity_id
     document_name = name or getattr(response, "document_name", None) or f"Document_{response.id[:8]}"
@@ -41,7 +62,12 @@ def _create_document_group_from_template(client: SignNowAPIClient, token: str, e
     request_data = CreateDocumentGroupFromTemplateRequest(group_name=name)
 
     # Create document group from template group
-    response = client.create_document_group_from_template(token, entity_id, request_data)
+    try:
+        response = client.create_document_group_from_template(token, entity_id, request_data)
+    except SignNowAPIHTTPError as exc:
+        if _is_not_found_error(exc):
+            raise ValueError(f"Template group not found: {entity_id}") from None
+        raise
 
     # Extract document group ID from response data
     response_data = response.data
@@ -118,8 +144,13 @@ def _create_from_template(entity_id: str, entity_type: Literal["template", "temp
                     name = found_template_group.template_group_name
                 else:
                     # Get template group by ID to extract name (more reliable method)
-                    template_group_data = client.get_document_group_template(token, entity_id)
-                    name = template_group_data.group_name
+                    try:
+                        template_group_data = client.get_document_group_template(token, entity_id)
+                        name = template_group_data.group_name
+                    except SignNowAPIHTTPError as exc:
+                        if _is_not_found_error(exc):
+                            raise ValueError(f"Template group not found: {entity_id}") from None
+                        raise
 
         return _create_document_group_from_template(client, token, entity_id, name)
     else:
