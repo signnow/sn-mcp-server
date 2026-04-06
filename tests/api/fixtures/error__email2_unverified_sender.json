@@ -1,0 +1,8 @@
+{
+  "errors": [
+    {
+      "code": 22200,
+      "message": "Unverified sender email"
+    }
+  ]
+}

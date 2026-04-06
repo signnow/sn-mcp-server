@@ -14,7 +14,6 @@ from signnow_client.models.document_groups import DocumentGroupV2FieldInvite
 from signnow_client.models.folders_lite import DocumentGroupInviteLite, FieldInviteLite
 from signnow_client.models.templates_and_documents import DocumentFieldInviteStatus
 
-
 # ----------------------------
 # Status constants
 # ----------------------------
@@ -302,7 +301,7 @@ class SimplifiedInvite(BaseModel):
         return (status or "").strip().lower()
 
     @staticmethod
-    def pick_expires_at(participants: list["SimplifiedInviteParticipant"]) -> int | None:
+    def pick_expires_at(participants: list[SimplifiedInviteParticipant]) -> int | None:
         """Pick expiration time from participants (prefer pending, then any minimum)."""
         # 1) nearest deadline among pending (most useful for UI)
         pending_times = [p.expires_at for p in participants if p.expires_at and SimplifiedInvite._normalize_status(p.status) in InviteStatusSets.PENDING]
@@ -314,7 +313,7 @@ class SimplifiedInvite(BaseModel):
 
     @staticmethod
     def compute_status(
-        participants: list["SimplifiedInviteParticipant"],
+        participants: list[SimplifiedInviteParticipant],
         invite_expired: bool,
         raw_status: str | None = None,
     ) -> str:
@@ -470,6 +469,33 @@ class SimplifiedDocumentGroupsResponse(BaseModel):
 
 
 # Invite sending models
+class InviteReminderSettings(BaseModel):
+    """Reminder schedule for signing invites.
+
+    All fields are optional — set only the ones you need.
+    remind_after and remind_before must be less than expiration_days.
+    """
+
+    remind_after: int | None = Field(
+        None,
+        description="Send a reminder X days after the invite is sent (1–179). Must be less than expiration_days.",
+        ge=1,
+        le=179,
+    )
+    remind_before: int | None = Field(
+        None,
+        description="Send a reminder X days before the invite expires (1–179). Must be less than expiration_days.",
+        ge=1,
+        le=179,
+    )
+    remind_repeat: int | None = Field(
+        None,
+        description="Send a reminder every X days after the invite is sent (1–7).",
+        ge=1,
+        le=7,
+    )
+
+
 class InviteRecipient(BaseModel):
     """Recipient information for invite."""
 
@@ -482,6 +508,20 @@ class InviteRecipient(BaseModel):
     redirect_target: str | None = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     decline_redirect_uri: str | None = Field(None, description="URL that opens after decline")
     close_redirect_uri: str | None = Field(None, description="Link that opens when clicking 'Close' button")
+    reminder: InviteReminderSettings | None = Field(
+        None,
+        description="Automatic reminder email schedule. Reminders are sent by SignNow after the invite is created.",
+    )
+    expiration_days: int | None = Field(
+        None,
+        description=(
+            "Number of days until the invite expires (3–180). "
+            "When omitted (None), this value is explicitly passed as None to the API model, "
+            "overriding its Field(30) default, so SignNow uses the account-configured expiration instead."
+        ),
+        ge=3,
+        le=180,
+    )
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
@@ -787,3 +827,35 @@ class UpdateDocumentFieldsResponse(BaseModel):
     """Response model for updating document fields."""
 
     results: list[UpdateDocumentFieldsResult] = Field(..., description="Array of update results for each document")
+
+
+# ----------------------------
+# Reminder tool models
+# ----------------------------
+
+
+class ReminderRecipientResult(BaseModel):
+    """Result for a single recipient in a reminder operation."""
+
+    email: str = Field(..., description="Recipient email address")
+    document_id: str | None = Field(None, description="Document ID the reminder was sent for")
+    reason: str | None = Field(None, description="Human-readable reason (for skipped or failed entries)")
+
+
+class SendReminderResponse(BaseModel):
+    """Response from the send_invite_reminder tool."""
+
+    entity_id: str = Field(..., description="Document or document group ID")
+    entity_type: str = Field(..., description="'document' or 'document_group'")
+    recipients_reminded: list[ReminderRecipientResult] = Field(
+        default_factory=list,
+        description="Recipients who successfully received the reminder email",
+    )
+    skipped: list[ReminderRecipientResult] = Field(
+        default_factory=list,
+        description="Recipients skipped because their invite is not pending (completed, cancelled, etc.)",
+    )
+    failed: list[ReminderRecipientResult] = Field(
+        default_factory=list,
+        description="Recipients for whom the API call failed (transient error — may be retried)",
+    )

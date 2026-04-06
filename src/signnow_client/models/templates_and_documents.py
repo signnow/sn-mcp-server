@@ -963,3 +963,26 @@ class UploadDocumentResponse(BaseModel):
     """Response model for uploading document."""
 
     id: str = Field(..., description="ID of the uploaded document")
+
+
+class SendDocumentCopyByEmailRequest(BaseModel):
+    """Request body for POST /document/{id}/email2.
+
+    Sends a copy of the document to one or more email addresses.
+    Null fields are excluded from the payload — SignNow treats absent fields as defaults.
+    """
+
+    emails: list[str] = Field(..., description="Recipient email addresses (min 1, max 5)")
+    message: str | None = Field(None, description="Optional message body")
+    subject: str | None = Field(None, description="Optional email subject")
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Exclude null fields — SignNow treats absent fields as defaults."""
+        data = super().model_dump(**kwargs)
+        return {k: v for k, v in data.items() if v is not None}
+
+
+class SendDocumentCopyByEmailResponse(BaseModel):
+    """Response from POST /document/{id}/email2."""
+
+    status: str = Field(..., description="'success' on success")

@@ -101,6 +101,9 @@ __all__ = [
     # Document upload models
     "UploadDocumentRequest",
     "UploadDocumentResponse",
+    # Document copy by email models
+    "SendDocumentCopyByEmailRequest",
+    "SendDocumentCopyByEmailResponse",
     # General Embedded Invite models (for document signing)
     "EmbeddedInviteAuthentication",
     "EmbeddedInviteDocument",
