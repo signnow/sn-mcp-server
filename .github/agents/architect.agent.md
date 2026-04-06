@@ -8,6 +8,7 @@ tools:
   - edit
   - search
   - web
+model: Claude Opus 4.6 (copilot)
 ---
 
 ## Role
