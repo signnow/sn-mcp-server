@@ -35,6 +35,8 @@ from .models import (
     MergeDocumentsRequest,
     MergeDocumentsResponse,
     PrefillTextFieldsRequest,
+    SendDocumentCopyByEmailRequest,
+    SendDocumentCopyByEmailResponse,
     UploadDocumentResponse,
 )
 
@@ -446,4 +448,48 @@ class DocumentClientMixin:
             headers=headers,
             json_data=request_data.model_dump(exclude_none=True, by_alias=True),
             validate_model=CreateDocumentFreeformInviteResponse,
+        )
+
+    def send_document_copy_by_email(
+        self,
+        token: str,
+        document_id: str,
+        emails: list[str],
+        message: str | None = None,
+        subject: str | None = None,
+    ) -> SendDocumentCopyByEmailResponse:
+        """
+        Send a copy of a document to one or more email addresses.
+
+        Fires POST /document/{document_id}/email2.
+        The sender's email must be verified on the SignNow account.
+        Max 5 recipients per call — caller is responsible for batching.
+
+        Args:
+            token: Bearer access token.
+            document_id: Document ID to share.
+            emails: Recipient email addresses (1–5).
+            message: Optional message body.
+            subject: Optional email subject.
+
+        Returns:
+            SendDocumentCopyByEmailResponse with status='success'.
+
+        Raises:
+            ValueError: If emails list is empty or exceeds 5 items.
+            SignNowAPIError: On API error (unverified sender, invalid doc ID, etc.).
+        """
+        if len(emails) == 0:
+            raise ValueError("emails list must contain at least one address")
+        if len(emails) > 5:
+            raise ValueError(f"emails list must not exceed 5 addresses (got {len(emails)})")
+
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        request_data = SendDocumentCopyByEmailRequest(emails=emails, message=message, subject=subject)
+
+        return self._post(
+            f"/document/{document_id}/email2",
+            headers=headers,
+            json_data=request_data.model_dump(),
+            validate_model=SendDocumentCopyByEmailResponse,
         )

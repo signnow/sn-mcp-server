@@ -1,0 +1,33 @@
+{
+  "data": {
+    "id": "grp1",
+    "name": "Test Document Group",
+    "created": 1700000000,
+    "invite_id": null,
+    "pending_step_id": null,
+    "state": "pending",
+    "last_invite_id": null,
+    "documents": [
+      {
+        "roles": ["Signer 1"],
+        "document_name": "Test Document",
+        "id": "doc1",
+        "updated": 1700000100,
+        "field_invites": [
+          {
+            "id": "fi1",
+            "created": 1700000000,
+            "updated": 1700000100,
+            "status": "pending",
+            "expiration_time": null,
+            "expiration_days": null,
+            "signer_email": "signer@example.com",
+            "password_protected": "0",
+            "email_group": null,
+            "email_statuses": []
+          }
+        ]
+      }
+    ]
+  }
+}

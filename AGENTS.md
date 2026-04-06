@@ -29,7 +29,6 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 
 ## Known issues (need fix)
 
-- **Entity type detection order inconsistent.** `send_invite`, `embedded_*` try document_group first; `_get_document` tries document first. Should be unified.
 - **Dual formatters.** Both `ruff-format` and `black` run in pre-commit. Can conflict. Pick one.
 - **`REGISTERED_CLIENTS` mutable dict in `auth.py`.** Module-level mutable state, violates stateless principle.
 - **`cfg` parameter unused.** `register_tools(mcp, cfg)` passes `cfg` to `bind()`, which ignores it.
@@ -46,6 +45,8 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 - Add API-layer tests (`tests/api/`) for every new `signnow_client` method — assert URL, headers, model type, and each error variant
 - Mask secrets with `_mask_secret_value` in any diagnostic output
 - **Report progress for every API call in a pagination loop.** Use `ctx.report_progress(progress=loaded, total=api_total, message=f"Loading X")` before each subsequent batch so the client knows work is ongoing, not stalled.
+- **Entity type auto-detection order: document_group first, document second.** document_group is the modern entity type; document is legacy. All auto-detection across ALL tools must try `get_document_group_v2` first, fall back to `get_document`. Exceptions must be explicitly justified in code comments.
+- **`POST /document/{id}/email2` is the accepted reminder mechanism.** Until SignNow adds a dedicated reminder API, `email2` (send document copy) is the standard way to remind pending signers. When a proper reminder endpoint is available in the SignNow API, migrate `send_invite_reminder` to use it.
 
 ### Never
 
@@ -64,6 +65,6 @@ Aggressive. When touching code, enforce current standards. Refactor adjacent iss
 
 ---
 
-Last updated: 2026-04-02
+Last updated: 2026-04-03
 
 Maintained by: AI Agents under human supervision

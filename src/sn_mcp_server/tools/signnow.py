@@ -41,12 +41,14 @@ from .models import (
     InviteStatus,
     SendInviteFromTemplateResponse,
     SendInviteResponse,
+    SendReminderResponse,
     SigningLinkResponse,
     SimplifiedDocumentGroupsResponse,
     TemplateSummaryList,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
 )
+from .reminder import _send_invite_reminder
 from .send_invite import _send_invite, _send_invite_from_template
 from .signing_link import _get_signing_link
 
@@ -1056,5 +1058,66 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     #     # Initialize client and use the imported function from upload_document module
     #     client = SignNowAPIClient(token_provider.signnow_config)
     #     return _upload_document(file_content, filename, check_fields, token, client)
+
+    @mcp.tool(
+        name="send_invite_reminder",
+        description=(
+            "Send a signing reminder to pending signers on a document or document group. "
+            "Auto-detects entity type by trying document_group first, then document as fallback. "
+            "Sends a copy of the document via email to each pending signer. "
+            "For document groups, only the first document with pending invites is processed."
+        ),
+        annotations=ToolAnnotations(
+            title="Send signing reminder",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["send_invite", "reminder", "document", "document_group", "workflow"],
+    )
+    async def send_invite_reminder(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="Document ID or document group ID")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description=("Entity type: 'document' or 'document_group'. Auto-detected if omitted (document_group tried first). Pass explicitly to avoid an extra auto-detection GET.")),
+        ] = None,
+        email: Annotated[
+            str | None,
+            Field(
+                description="Remind only this specific recipient. If omitted, all pending signers are reminded.",
+                pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+            ),
+        ] = None,
+        subject: Annotated[str | None, Field(description="Custom email subject for the reminder.")] = None,
+        message: Annotated[str | None, Field(description="Custom message body for the reminder.")] = None,
+    ) -> SendReminderResponse:
+        """Send a signing reminder to pending signers on a document or document group.
+
+        Auto-detects entity type by trying GET /documentgroup/{id} (v2) first (modern),
+        then GET /document/{id} as legacy fallback. Non-404 errors propagate immediately.
+        Sends a copy of the document to each pending signer via POST /document/{id}/email2.
+        For document groups, targets only the first document that has pending invites.
+        Pending signers on subsequent documents in the group are not included in any output list.
+
+        Skips signers whose invite is already completed or cancelled (reported in 'skipped').
+        API failures per-batch are reported in 'failed' and can be retried.
+
+        Tip: if entity_type is known, pass it explicitly to avoid an extra auto-detection GET.
+        Tip: use list_documents first to discover document IDs by name or criteria.
+
+        Args:
+            entity_id: Document ID or document group ID.
+            entity_type: Optional discriminator ('document' or 'document_group').
+            email: Optional — target a single recipient.
+            subject: Optional custom email subject.
+            message: Optional custom message body.
+
+        Returns:
+            SendReminderResponse with entity_id, entity_type, recipients_reminded, skipped, failed.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return await _send_invite_reminder(client, token, entity_id, entity_type, email, subject, message, ctx=ctx)
 
     return

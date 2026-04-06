@@ -10,6 +10,7 @@ from typing import Any, Literal
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
+from signnow_client.exceptions import SignNowAPIError
 
 from .models import InviteOrder, SendInviteFromTemplateResponse, SendInviteResponse
 
@@ -20,6 +21,7 @@ def _send_document_group_field_invite(client: SignNowAPIClient, token: str, enti
         CreateFieldInviteRequest,
         FieldInviteAction,
         FieldInviteEmail,
+        FieldInviteReminder,
         FieldInviteStep,
     )
 
@@ -31,7 +33,22 @@ def _send_document_group_field_invite(client: SignNowAPIClient, token: str, enti
 
         for recipient in order_info.recipients:
             # Create FieldInviteEmail for each recipient
-            invite_email = FieldInviteEmail(email=recipient.email, subject=recipient.subject, message=recipient.message)
+            invite_email_kwargs: dict[str, Any] = {
+                "email": recipient.email,
+                "subject": recipient.subject,
+                "message": recipient.message,
+                # ALWAYS pass expiration_days to override the API model's Field(30) default.
+                # When recipient.expiration_days is None, the model receives None which is
+                # excluded from the serialised payload, so SignNow uses the account default.
+                "expiration_days": recipient.expiration_days,
+            }
+            if recipient.reminder:
+                invite_email_kwargs["reminder"] = FieldInviteReminder(
+                    remind_after=recipient.reminder.remind_after,
+                    remind_before=recipient.reminder.remind_before,
+                    remind_repeat=recipient.reminder.remind_repeat,
+                )
+            invite_email = FieldInviteEmail(**invite_email_kwargs)
             invite_emails.append(invite_email)
 
             # Create FieldInviteAction only for documents with matching roles
@@ -71,6 +88,7 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
     from signnow_client import (
         CreateDocumentFieldInviteRequest,
         DocumentFieldInviteRecipient,
+        DocumentFieldInviteReminder,
     )
 
     # Get user info to use primary email as 'from' address
@@ -95,6 +113,17 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
             # Only add redirect_target if redirect_uri is provided and not empty
             if recipient.redirect_uri and recipient.redirect_uri.strip():
                 recipient_data["redirect_target"] = recipient.redirect_target
+
+            if recipient.reminder:
+                recipient_data["reminder"] = DocumentFieldInviteReminder(
+                    remind_after=recipient.reminder.remind_after,
+                    remind_before=recipient.reminder.remind_before,
+                    remind_repeat=recipient.reminder.remind_repeat,
+                )
+            # ALWAYS pass expiration_days to override the API model's Field(30) default.
+            # When recipient.expiration_days is None, the model receives None which is
+            # excluded from the serialised payload, so SignNow uses the account default.
+            recipient_data["expiration_days"] = recipient.expiration_days
 
             doc_recipient = DocumentFieldInviteRecipient(**recipient_data)
             recipients.append(doc_recipient)
@@ -129,12 +158,16 @@ def _send_invite(entity_id: str, entity_type: Literal["document", "document_grou
         try:
             document_group = client.get_document_group(token, entity_id)
             entity_type = "document_group"
-        except Exception:
-            # If document group not found, try document
+        except SignNowAPIError as exc:
+            if exc.status_code != 404:
+                raise
+            # 404 on group: try document path.
             try:
                 client.get_document(token, entity_id)
                 entity_type = "document"
-            except Exception:
+            except SignNowAPIError as exc2:
+                if exc2.status_code != 404:
+                    raise
                 raise ValueError(f"Entity with ID {entity_id} not found as either document group or document") from None
 
     if entity_type == "document_group":
