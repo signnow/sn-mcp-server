@@ -118,6 +118,14 @@ class TestListSkills:
         with pytest.raises(ValueError, match="Skills directory not found"):
             _list_skills(nonexistent)
 
+    def test_list_skills_raises_when_path_is_file(self, tmp_path: Path) -> None:
+        """Test that _list_skills raises ValueError when skills_dir is a file, not a directory."""
+        fake_dir = tmp_path / "not_a_dir"
+        fake_dir.write_text("I am a file, not a directory", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Skills directory not found"):
+            _list_skills(fake_dir)
+
     def test_list_skills_degraded_frontmatter(self, tmp_path: Path) -> None:
         """Test graceful degradation when a file has no front-matter."""
         (tmp_path / "nofm.md").write_text("Some content without front-matter.", encoding="utf-8")
@@ -222,6 +230,21 @@ class TestGetSkill:
         (tmp_path / "my-skill_v2.md").write_text("---\nname: my-skill_v2\ndescription: d\n---\nbody", encoding="utf-8")
         result = _get_skill(tmp_path, "my-skill_v2")
         assert result.name == "my-skill_v2"
+
+    def test_get_skill_raises_when_skills_dir_is_file(self, tmp_path: Path) -> None:
+        """Test that _get_skill raises ValueError when skills_dir is a file, not a directory."""
+        fake_dir = tmp_path / "not_a_dir"
+        fake_dir.write_text("I am a file, not a directory", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="Skills directory not found"):
+            _get_skill(fake_dir, "signnow101")
+
+    def test_get_skill_raises_when_skills_dir_missing(self, tmp_path: Path) -> None:
+        """Test that _get_skill raises ValueError when skills_dir does not exist."""
+        missing = tmp_path / "does_not_exist"
+
+        with pytest.raises(ValueError, match="Skills directory not found"):
+            _get_skill(missing, "signnow101")
 
 
 class TestBind:

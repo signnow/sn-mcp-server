@@ -82,7 +82,7 @@ def _list_skills(skills_dir: Path) -> SkillResponse:
     Raises:
         ValueError: If skills_dir does not exist.
     """
-    if not skills_dir.exists():
+    if not skills_dir.is_dir():
         raise ValueError(f"Skills directory not found: {skills_dir}")
 
     summaries: list[SkillSummary] = []
@@ -110,6 +110,9 @@ def _get_skill(skills_dir: Path, skill_name: str) -> SkillResponse:
     """
     if not _SKILL_NAME_RE.match(skill_name):
         raise ValueError(f"Invalid skill name '{skill_name}'. Names must contain only letters, digits, hyphens, and underscores.")
+
+    if not skills_dir.is_dir():
+        raise ValueError(f"Skills directory not found: {skills_dir}")
 
     target = skills_dir / f"{skill_name}.md"
     if not target.exists():
