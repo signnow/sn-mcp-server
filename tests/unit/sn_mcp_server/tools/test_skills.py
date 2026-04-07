@@ -50,6 +50,24 @@ class TestParseFrontmatter:
         fm, body = _parse_frontmatter(content)
         assert fm["name"] == "spaced value"
 
+    def test_parse_frontmatter_strips_surrounding_double_quotes(self) -> None:
+        """Test that values wrapped in double quotes have those quotes stripped (P3)."""
+        content = '---\ndescription: "Quoted description"\n---\nbody'
+        fm, _ = _parse_frontmatter(content)
+        assert fm["description"] == "Quoted description"
+
+    def test_parse_frontmatter_strips_surrounding_single_quotes(self) -> None:
+        """Test that values wrapped in single quotes have those quotes stripped (P3)."""
+        content = "---\ndescription: 'Quoted description'\n---\nbody"
+        fm, _ = _parse_frontmatter(content)
+        assert fm["description"] == "Quoted description"
+
+    def test_parse_frontmatter_does_not_strip_mismatched_quotes(self) -> None:
+        """Test that mismatched quotes are not stripped (only symmetric pairs)."""
+        content = "---\nname: \"mismatched'\n---\nbody"
+        fm, _ = _parse_frontmatter(content)
+        assert fm["name"] == "\"mismatched'"
+
 
 class TestListSkills:
     """Test cases for _list_skills."""
@@ -183,6 +201,54 @@ class TestGetSkill:
 
         assert result.name == "bare"
         assert result.body == "Just a bare body with no front-matter."
+
+    def test_get_skill_rejects_path_traversal(self, tmp_path: Path) -> None:
+        """Test that path traversal via .. is rejected before any file access (P1)."""
+        with pytest.raises(ValueError, match="[Ii]nvalid skill name"):
+            _get_skill(tmp_path, "../../etc/passwd")
+
+    def test_get_skill_rejects_slash_in_name(self, tmp_path: Path) -> None:
+        """Test that a slash in skill_name is rejected (P1)."""
+        with pytest.raises(ValueError, match="[Ii]nvalid skill name"):
+            _get_skill(tmp_path, "foo/bar")
+
+    def test_get_skill_rejects_empty_name(self, tmp_path: Path) -> None:
+        """Test that an empty skill_name is rejected (P1)."""
+        with pytest.raises(ValueError, match="[Ii]nvalid skill name"):
+            _get_skill(tmp_path, "")
+
+    def test_get_skill_allows_hyphens_and_underscores(self, tmp_path: Path) -> None:
+        """Test that skill names with hyphens and underscores are accepted (P1)."""
+        (tmp_path / "my-skill_v2.md").write_text("---\nname: my-skill_v2\ndescription: d\n---\nbody", encoding="utf-8")
+        result = _get_skill(tmp_path, "my-skill_v2")
+        assert result.name == "my-skill_v2"
+
+
+class TestBind:
+    """Smoke tests for the bind() function."""
+
+    def test_bind_tags_is_a_list(self) -> None:
+        """tags must be a list, not a set — sets are not JSON-serializable (P2)."""
+        import json
+        from unittest.mock import MagicMock
+
+        from sn_mcp_server.tools.skills import bind
+
+        captured: dict = {}
+
+        def capture_tool(**kwargs: object) -> object:
+            captured.update(kwargs)
+            return lambda fn: fn
+
+        mock_mcp = MagicMock()
+        mock_mcp.tool.side_effect = capture_tool
+
+        bind(mock_mcp, None)
+
+        assert "tags" in captured, "bind() must pass tags= to mcp.tool()"
+        assert isinstance(captured["tags"], list), f"tags must be a list, got {type(captured['tags']).__name__}"
+        # Serialize to JSON — would raise TypeError if tags is a set
+        json.dumps(captured["tags"])
 
 
 class TestSignnow101Staleness:

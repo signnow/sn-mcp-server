@@ -1,6 +1,6 @@
 ---
 name: signnow101
-description: "SignNow entity types and MCP tool reference. Load this skill whenever the agent needs to interact with SignNow via MCP tools — including listing, sending, signing, checking status, or working with documents, templates, or groups. Also load when the agent is unsure which entity type or tool applies to the user's request. Do NOT load for general questions about e-signatures that do not involve the SignNow MCP tools."
+description: SignNow entity types and MCP tool reference. Load this skill whenever the agent needs to interact with SignNow via MCP tools — including listing, sending, signing, checking status, or working with documents, templates, or groups. Also load when the agent is unsure which entity type or tool applies to the user's request. Do NOT load for general questions about e-signatures that do not involve the SignNow MCP tools.
 ---
 
 # SignNow 101 — Concepts Reference

@@ -21,6 +21,9 @@ from .models import SkillResponse, SkillSummary
 # do not switch to PyYAML without updating the constraint in the spec.
 _SKILLS_DIR: Path = Path(__file__).parent.parent / "skills"
 
+# P1: only alphanumerics, hyphens, and underscores are safe as filesystem identifiers.
+_SKILL_NAME_RE: re.Pattern[str] = re.compile(r"^[a-zA-Z0-9_\-]+$")
+
 
 def _parse_frontmatter(content: str) -> tuple[dict[str, str], str]:
     """Parse YAML front-matter delimited by --- from Markdown content.
@@ -41,9 +44,26 @@ def _parse_frontmatter(content: str) -> tuple[dict[str, str], str]:
 
     yaml_block = content[4:end_idx]
     matches = re.findall(r"^(\w+)\s*:\s*(.+)$", yaml_block, re.MULTILINE)
-    frontmatter = {key: value.strip() for key, value in matches}
+    frontmatter = {key: _strip_quotes(value.strip()) for key, value in matches}
     body = content[end_idx + 4 :]
     return frontmatter, body
+
+
+def _strip_quotes(value: str) -> str:
+    """Strip a single pair of matching surrounding quotes from a string value.
+
+    Handles both double-quotes and single-quotes. Only symmetric pairs are stripped.
+    Mismatched quotes (e.g. ``\"foo'``) are returned unchanged.
+
+    Args:
+        value: A string that may be surrounded by matching quotes.
+
+    Returns:
+        The value with surrounding quote pair removed, or the original string.
+    """
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
 
 
 def _list_skills(skills_dir: Path) -> SkillResponse:
@@ -88,6 +108,9 @@ def _get_skill(skills_dir: Path, skill_name: str) -> SkillResponse:
         ValueError: If skill_name does not match any file in skills_dir.
                     Error message includes the list of available skill names.
     """
+    if not _SKILL_NAME_RE.match(skill_name):
+        raise ValueError(f"Invalid skill name '{skill_name}'. Names must contain only letters, digits, hyphens, and underscores.")
+
     target = skills_dir / f"{skill_name}.md"
     if not target.exists():
         available = [f.stem for f in sorted(skills_dir.glob("*.md"))]
@@ -119,7 +142,7 @@ def bind(mcp: FastMCP, cfg: Any) -> None:  # noqa: ANN401
             idempotentHint=True,
             openWorldHint=False,
         ),
-        tags={"skill", "reference"},
+        tags=["skill", "reference"],
     )
     async def signnow_skills(
         skill_name: Annotated[
