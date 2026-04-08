@@ -1,6 +1,10 @@
+import asyncio
+import pathlib
 from typing import Annotated, Any, Literal
+from urllib.parse import urlparse
 
 from fastmcp import Context
+from fastmcp.resources import ResourceContent, ResourceResult
 from fastmcp.server.dependencies import get_http_headers
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -9,7 +13,7 @@ from signnow_client import SignNowAPIClient
 
 from ..token_provider import TokenProvider
 from .create_from_template import _create_from_template
-from .document import _get_document, _update_document_fields
+from .document import _get_document, _update_document_fields, _upload_document
 from .document_download_link import _get_document_download_link
 from .embedded_editor import (
     _create_embedded_editor,
@@ -47,6 +51,7 @@ from .models import (
     TemplateSummaryList,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
+    UploadDocumentResponse,
 )
 from .reminder import _send_invite_reminder
 from .send_invite import _send_invite, _send_invite_from_template
@@ -1025,39 +1030,109 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         # Initialize client and use the imported function from document module
         return _update_document_fields(client, token, update_requests)
 
-    # @mcp.tool(
-    #     name="upload_document",
-    #     description="Upload a document to SignNow",
-    #     tags=["document", "upload", "file"]
-    # )
-    # def upload_document(
-    #     ctx: Context,
-    #     file_content: Annotated[bytes, Field(description="Document file content as bytes")],
-    #     filename: Annotated[str, Field(description="Name of the file to upload")],
-    #     check_fields: Annotated[bool, Field(description="Whether to check for fields in the document (default: True)")] = True
-    # ) -> UploadDocumentResponse:
-    #     """Upload a document to SignNow.
+    @mcp.tool(
+        name="upload_document",
+        description=(
+            "Upload a document to SignNow from a local file path, public URL, or MCP resource attachment. "
+            "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
+            "NOTE: For URL uploads, the returned filename is locally inferred and may differ from "
+            "how SignNow names the document."
+        ),
+        annotations=ToolAnnotations(
+            title="Upload document",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["document", "upload", "file"],
+    )
+    async def upload_document(
+        ctx: Context,
+        resource_uri: Annotated[
+            str | None,
+            Field(
+                description=("MCP resource URI of an attached file (preferred when your client supports resource attachments). Provide exactly one of resource_uri, file_path, or file_url."),
+            ),
+        ] = None,
+        file_path: Annotated[
+            str | None,
+            Field(
+                description=("Absolute or ~-relative path to a local file to upload. Supported: .pdf, .doc, .docx, .png, .jpg, .jpeg. Provide exactly one of resource_uri, file_path, or file_url."),
+            ),
+        ] = None,
+        file_url: Annotated[
+            str | None,
+            Field(
+                description=("Publicly accessible URL to the file to upload. SignNow will fetch the file from this URL. Provide exactly one of resource_uri, file_path, or file_url."),
+            ),
+        ] = None,
+        filename: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Optional custom name for the document as it will appear in SignNow. "
+                    "If omitted, the name is derived from the file path, URL, or resource URI. "
+                    "Required when using resource_uri and the filename cannot be inferred."
+                ),
+            ),
+        ] = None,
+    ) -> UploadDocumentResponse:
+        """Upload a document to SignNow.
 
-    #     This tool uploads a document file to SignNow and returns the document ID.
-    #     The uploaded document can then be used for signing workflows.
+        Provide exactly one of: resource_uri, file_path, or file_url.
+        Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB.
 
-    #     Args:
-    #         file_content: Document file content as bytes
-    #         filename: Name of the file to upload
-    #         check_fields: Whether to check for fields in the document (default: True)
+        Preferred source order:
+        1. resource_uri — if the user @-attached a file in their MCP client
+        2. file_path — if the user provided a local path
+        3. file_url — if the user provided a public URL
 
-    #     Returns:
-    #         UploadDocumentResponse with uploaded document ID, filename, and check_fields status
-    #     """
-    #     headers = get_http_headers()
-    #     token = token_provider.get_access_token(headers)
+        After upload, load the 'signnow101' skill for guidance on next steps:
+        - Sign the document yourself
+        - Send for signing as a freeform invite
+        - Prepare a role-based invite
+        - Turn the document into a reusable template
 
-    #     if not token:
-    #         raise ValueError("No access token available")
+        Args:
+            ctx: FastMCP context (injected)
+            resource_uri: MCP resource URI from an attached file
+            file_path: Local file path (absolute or ~-relative)
+            file_url: Public URL to the file
+            filename: Optional custom document name in SignNow
+        """
+        token, client = _get_token_and_client(token_provider)
 
-    #     # Initialize client and use the imported function from upload_document module
-    #     client = SignNowAPIClient(token_provider.signnow_config)
-    #     return _upload_document(file_content, filename, check_fields, token, client)
+        resource_bytes: bytes | None = None
+        if resource_uri is not None:
+            # L-5: Validate resource_uri is not empty/whitespace
+            if not resource_uri.strip():
+                raise ValueError("resource_uri must not be empty. Provide a valid MCP resource URI.")
+            result: ResourceResult = await ctx.read_resource(resource_uri)
+            # H-1: Guard against empty contents list
+            if not result.contents:
+                raise ValueError(f"Resource at {resource_uri!r} returned no content. Ensure the URI points to a valid binary file.")
+            first: ResourceContent = result.contents[0]
+            if not isinstance(first.content, bytes):
+                raise ValueError(f"Resource at {resource_uri} returned text, expected binary file content. Ensure the resource provides raw file bytes.")
+            resource_bytes = first.content
+            if filename is None:
+                parsed_name = pathlib.PurePosixPath(urlparse(str(resource_uri)).path).name
+                # M-5: Raise explicit error when filename cannot be inferred from URI
+                if not parsed_name:
+                    raise ValueError(f"Cannot infer filename from resource URI {resource_uri!r}. Provide the 'filename' parameter explicitly.")
+                filename = parsed_name
+
+        # H-3: Run synchronous _upload_document off the async event loop
+        return await asyncio.to_thread(
+            _upload_document,
+            client=client,
+            token=token,
+            resource_bytes=resource_bytes,
+            file_path=file_path,
+            file_url=file_url,
+            filename=filename,
+        )
 
     @mcp.tool(
         name="send_invite_reminder",

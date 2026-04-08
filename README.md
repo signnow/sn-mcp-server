@@ -414,6 +414,8 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`get_signing_link`** — Get signing link for a document or document group.
 * **`get_document`** — Normalized document/group structure with field values.
 * **`update_document_fields`** — Prefill text fields in individual documents.
+* **`upload_document`** — Upload a document from a local file path (`file_path`), public URL (`file_url`), or MCP resource attachment (`resource_uri`). Supported: PDF, DOC, DOCX, PNG, JPG, JPEG. Max 40 MB. Returns `document_id`, `filename`, `source`.
+* **`send_invite_reminder`** — Send a signing reminder to pending signers on a document or document group.
 * **`signnow_skills`** — Query the bundled SignNow skill library. Omit `skill_name` to list all available skills with descriptions; provide `skill_name` (e.g. `signnow101`) to fetch the full Markdown body. Use `signnow101` to learn SignNow entity types, invite types, and tool mappings.
   * List mode example: `{"skills": [{"name": "signnow101", "description": "SignNow 101 concepts reference... (description truncated for brevity)"}]}`
   * Fetch mode example: `{"name": "signnow101", "body": "# SignNow 101 — Concepts Reference\n..."}`
