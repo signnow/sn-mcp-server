@@ -49,7 +49,7 @@ When a user wants to upload a document to SignNow:
 
    | User intent | What to do |
    |-------------|------------|
-   | "I want to sign it myself" | Call `send_invite` with the user as recipient, then call `create_signing_link` to get a link the user can open to sign. |
+   | "I want to sign it myself" | Call `send_invite` with the user as recipient, then call `get_signing_link` to get a link the user can open to sign. |
    | "Send it for someone else to sign (freeform)" | Ask for the recipient’s email, then call `send_invite` with that email as recipient. |
    | "Prepare a role-based invite" | Call `create_embedded_sending` to get a link the user can open in SignNow to prepare fields and roles. |
    | "Turn it into a template" | Inform the user they can use the document ID with SignNow’s template creation features. Call `create_embedded_editor` to get a link the user can open to prepare the template. |

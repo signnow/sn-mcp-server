@@ -1058,7 +1058,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         file_path: Annotated[
             str | None,
             Field(
-                description=("Absolute or ~-relative path to a local file to upload. Supported: .pdf, .doc, .docx, .png, .jpg, .jpeg. Provide exactly one of resource_uri, file_path, or file_url."),
+                description=(
+                    "Absolute or ~-relative path to a local file to upload. "
+                    "The resolved path must be within the safe upload base directory "
+                    "(SAFE_UPLOAD_BASE, defaulting to your home directory); "
+                    "paths outside that base (e.g. /tmp/foo.pdf) will be rejected. "
+                    "Supported: .pdf, .doc, .docx, .png, .jpg, .jpeg. "
+                    "Provide exactly one of resource_uri, file_path, or file_url."
+                ),
             ),
         ] = None,
         file_url: Annotated[
@@ -1102,6 +1109,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             filename: Optional custom document name in SignNow
         """
         token, client = _get_token_and_client(token_provider)
+
+        # Validate mutually-exclusive source inputs before any I/O
+        provided = sum(x is not None for x in (resource_uri, file_path, file_url))
+        if provided > 1:
+            raise ValueError("Provide exactly one of resource_uri, file_path, or file_url — not multiple")
+        if provided == 0:
+            raise ValueError("Provide one of: resource_uri, file_path, or file_url")
 
         resource_bytes: bytes | None = None
         if resource_uri is not None:
