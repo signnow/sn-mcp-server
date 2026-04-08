@@ -4,8 +4,10 @@ Document Tools
 Tools for working with documents in SignNow.
 """
 
+import pathlib
 import time
 from typing import Literal
+from urllib.parse import urlparse
 
 from signnow_client import SignNowAPIClient
 from signnow_client.models.document_groups import (
@@ -13,6 +15,7 @@ from signnow_client.models.document_groups import (
     GetDocumentGroupV2Response,
 )
 from signnow_client.models.templates_and_documents import (
+    CreateDocumentFromUrlRequest,
     DocumentResponse,
 )
 
@@ -27,26 +30,124 @@ from .models import (
     UploadDocumentResponse,
 )
 
+ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"})
+MAX_FILE_SIZE_BYTES: int = 40 * 1024 * 1024  # SignNow API limit
+SAFE_UPLOAD_BASE: pathlib.Path = pathlib.Path.home().resolve()
 
-def _upload_document(file_content: bytes, filename: str, check_fields: bool, token: str, client: SignNowAPIClient) -> UploadDocumentResponse:
+
+def _validate_extension(filename: str) -> None:
+    """Validate filename has a supported extension.
+
+    Raises ValueError with a clear message for missing or unsupported extensions.
     """
-    Upload a document to SignNow.
+    ext = pathlib.Path(filename).suffix.lower()
+    if not ext:
+        raise ValueError(f"Cannot determine file type for '{filename}' — filename has no extension. Add an extension. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
+    if ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
+
+
+def _upload_document(
+    *,
+    client: SignNowAPIClient,
+    token: str,
+    file_path: str | None = None,
+    file_url: str | None = None,
+    resource_bytes: bytes | None = None,
+    filename: str | None = None,
+) -> UploadDocumentResponse:
+    """Upload a document to SignNow from a local path, public URL, or pre-read MCP resource bytes.
+
+    Exactly one of ``file_path``, ``file_url``, or ``resource_bytes`` must be provided.
+    If ``filename`` is omitted, it is derived from the path or URL (required when resource_bytes used).
+
+    Local-path upload (source='local_file'):
+      - Expands ``~`` and resolves to absolute path.
+      - Validates file extension against ALLOWED_EXTENSIONS.
+      - Reads bytes and checks against MAX_FILE_SIZE_BYTES.
+      - Calls ``client.upload_document()`` → ``POST /document``.
+
+    URL upload (source='url'):
+      - Validates URL scheme is ``https`` (or ``http`` for local dev).
+      - Delegates to ``client.create_document_from_url()`` → ``POST /v2/documents/url``.
+      - SignNow server fetches the file — no local download.
+
+    Resource bytes upload (source='resource'):
+      - Bytes already resolved by the caller via ``ctx.read_resource()``.
+      - Validates file extension against ALLOWED_EXTENSIONS (from filename).
+      - Checks size against MAX_FILE_SIZE_BYTES.
+      - Calls ``client.upload_document()`` → ``POST /document``.
 
     Args:
-        file_content: Document file content as bytes
-        filename: Name of the file to upload
-        check_fields: Whether to check for fields in the document
-        token: Access token for authentication
         client: SignNow API client instance
+        token: Access token for authentication
+        file_path: Absolute or ~ path to a local file
+        file_url: Publicly accessible URL to the file
+        resource_bytes: Raw file bytes read from an MCP resource (caller resolves resource_uri)
+        filename: Custom name for the document in SignNow.
+                  Required when resource_bytes provided; otherwise derived from path/URL.
 
     Returns:
-        UploadDocumentResponse with uploaded document ID
+        UploadDocumentResponse with document_id, filename, and source
+
+    Raises:
+        ValueError: Multiple or no sources provided, unsupported extension, file too large,
+                    file not found, filename missing for resource bytes
     """
+    provided = sum(x is not None for x in (file_path, file_url, resource_bytes))
+    if provided > 1:
+        raise ValueError("Provide exactly one of resource_uri, file_path, or file_url — not multiple")
+    if provided == 0:
+        raise ValueError("Provide one of: resource_uri, file_path, or file_url")
 
-    # Upload document using the client
-    response = client.upload_document(token=token, file_content=file_content, filename=filename, check_fields=check_fields)
+    if resource_bytes is not None:
+        if filename is None:
+            raise ValueError("filename is required when uploading from a resource URI")
+        _validate_extension(filename)
+        if len(resource_bytes) > MAX_FILE_SIZE_BYTES:
+            raise ValueError(f"File too large ({len(resource_bytes)} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes (40 MB)")
+        response = client.upload_document(token=token, file_content=resource_bytes, filename=filename, check_fields=True)
+        return UploadDocumentResponse(document_id=response.id, filename=filename, source="resource")
 
-    return UploadDocumentResponse(document_id=response.id, filename=filename, check_fields=check_fields)
+    if file_path is not None:
+        path = pathlib.Path(file_path).expanduser().resolve()
+        # C-1/C-2: Directory containment — prevent path traversal and symlink attacks
+        try:
+            path.relative_to(SAFE_UPLOAD_BASE)
+        except ValueError:
+            raise ValueError(f"file_path must be within the home directory ({SAFE_UPLOAD_BASE}). Resolved path '{path}' is outside the allowed root.") from None
+        if not path.exists():
+            raise ValueError(f"File not found: {path}")
+        if not path.is_file():
+            raise ValueError(f"Path is not a file: {path}")
+        _validate_extension(path.name if not filename else filename)
+        # H-4: Read first, then check size to eliminate TOCTOU race
+        file_content = path.read_bytes()
+        if len(file_content) > MAX_FILE_SIZE_BYTES:
+            raise ValueError(f"File too large ({len(file_content):,} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES:,} bytes (40 MB)")
+        effective_filename = filename if filename else path.name
+        response = client.upload_document(token=token, file_content=file_content, filename=effective_filename, check_fields=True)
+        return UploadDocumentResponse(document_id=response.id, filename=effective_filename, source="local_file")
+
+    # file_url branch — provided == 1 guarantees file_url is not None at this point
+    assert file_url is not None  # noqa: S101  # unreachable: provided==1 guarantees this
+    parsed = urlparse(file_url)
+    if parsed.scheme not in {"https", "http"}:
+        raise ValueError(f"URL must use http or https (got '{parsed.scheme}')")
+    if not parsed.netloc:
+        raise ValueError(f"URL must include a hostname: {file_url!r}")
+    url_filename = pathlib.PurePosixPath(parsed.path).name
+    effective_filename = filename if filename else (url_filename if url_filename else None)
+    if effective_filename:
+        ext = pathlib.Path(effective_filename).suffix.lower()
+        if ext and ext not in ALLOWED_EXTENSIONS:
+            raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
+    request = CreateDocumentFromUrlRequest(url=file_url, check_fields=True)
+    url_response = client.create_document_from_url(token=token, request_data=request)
+    # NOTE (H-2): CreateDocumentFromUrlRequest has no 'name' field — effective_filename
+    # is locally inferred and not transmitted to SignNow. The actual document name in
+    # SignNow may differ (set by SignNow from URL path or Content-Disposition header).
+    return UploadDocumentResponse(document_id=url_response.id, filename=effective_filename, source="url")
 
 
 def _get_full_document(client: SignNowAPIClient, token: str, document_id: str, document_data: DocumentResponse) -> DocumentGroupDocument:

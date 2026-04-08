@@ -6,7 +6,7 @@ Pydantic models for MCP tools results and responses.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -523,7 +523,7 @@ class InviteRecipient(BaseModel):
         le=180,
     )
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -563,7 +563,7 @@ class EmbeddedInviteRecipient(BaseModel):
     message: str | None = Field(None, description="Invite email message (max 5000 chars)")
     delivery_type: str | None = Field("link", description="Invite delivery method: 'email' or 'link', use 'link' if you wand to get a link to sign. If you want to send an email, use 'email'")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -603,7 +603,7 @@ class CreateEmbeddedEditorRequest(BaseModel):
     redirect_target: str | None = Field("self", description="Redirect target: 'self' for same tab, 'blank' for new tab")
     link_expiration: int | None = Field(None, ge=15, le=45, description="Link expiration time in minutes (15-45)")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -628,7 +628,7 @@ class CreateEmbeddedSendingRequest(BaseModel):
     link_expiration: int | None = Field(None, ge=14, le=45, description="Link expiration time in days (14-45)")
     type: str | None = Field("manage", description="Specifies the sending step: 'manage' (default), 'edit', 'send-invite'")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -676,7 +676,7 @@ class CreateEmbeddedSendingFromTemplateRequest(BaseModel):
     link_expiration: int | None = Field(None, ge=14, le=45, description="Optional link expiration in days (14-45)")
     type: str | None = Field(None, description="Type of sending step: 'manage', 'edit', or 'send-invite'")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -718,7 +718,7 @@ class CreateEmbeddedInviteFromTemplateRequest(BaseModel):
     redirect_target: str | None = Field(None, description="Optional redirect target: 'self', 'blank', or 'self' (default)")
     link_expiration: int | None = Field(None, ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
         data = super().model_dump(**kwargs)
         if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
@@ -796,9 +796,19 @@ class CreateFromTemplateResponse(BaseModel):
 class UploadDocumentResponse(BaseModel):
     """Response model for uploading document."""
 
-    document_id: str = Field(..., description="ID of the uploaded document")
-    filename: str = Field(..., description="Name of the uploaded file")
-    check_fields: bool = Field(..., description="Whether fields were checked in the document")
+    document_id: str = Field(..., description="ID of the uploaded document in SignNow")
+    filename: str | None = Field(
+        ...,
+        description=(
+            "Name of the uploaded file. For 'local_file' and 'resource' sources this matches "
+            "the name sent to SignNow. For 'url' source this is locally inferred from the URL "
+            "and may differ from how SignNow actually names the document."
+        ),
+    )
+    source: Literal["local_file", "url", "resource"] = Field(
+        ...,
+        description=("How the file was provided: 'local_file' (read from local path), 'url' (fetched by SignNow from URL), 'resource' (attached via MCP resource protocol)"),
+    )
 
 
 class FieldToUpdate(BaseModel):
