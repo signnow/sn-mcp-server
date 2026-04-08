@@ -81,6 +81,20 @@ SCENARIOS: list[tuple[str, str, ToolCallAssertion]] = [
             forbidden_tools=["create_embedded_sending_from_template", "create_embedded_invite"],
         ),
     ),
+    (
+        "skills_list",
+        "What SignNow skills are available?",
+        ToolCallAssertion(
+            expected_tools=["signnow_skills"],
+        ),
+    ),
+    (
+        "skills_get_by_name",
+        "Show me the signnow101 skill",
+        ToolCallAssertion(
+            expected_tools=["signnow_skills"],
+        ),
+    ),
 ]
 
 

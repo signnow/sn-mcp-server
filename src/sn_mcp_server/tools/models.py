@@ -859,3 +859,37 @@ class SendReminderResponse(BaseModel):
         default_factory=list,
         description="Recipients for whom the API call failed (transient error — may be retried)",
     )
+
+
+# ----------------------------
+# Skills tool models
+# ----------------------------
+
+
+class SkillSummary(BaseModel):
+    """Name and description of a single bundled skill."""
+
+    name: str = Field(description="Skill identifier (filename without .md extension)")
+    description: str = Field(description="One-line description from skill front-matter")
+
+
+class SkillResponse(BaseModel):
+    """Response from the signnow_skills tool.
+
+    Exactly one mode is active per call:
+    - List mode (skill_name omitted): ``skills`` is populated; ``name`` and ``body`` are None.
+    - Fetch mode (skill_name provided): ``name`` and ``body`` are populated; ``skills`` is None.
+    """
+
+    skills: list[SkillSummary] | None = Field(
+        default=None,
+        description="Available skills with descriptions (list mode only)",
+    )
+    name: str | None = Field(
+        default=None,
+        description="Skill identifier (fetch mode only)",
+    )
+    body: str | None = Field(
+        default=None,
+        description="Skill content in Markdown, front-matter removed (fetch mode only)",
+    )

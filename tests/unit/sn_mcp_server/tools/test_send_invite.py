@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastmcp import Context
 
+from signnow_client.exceptions import SignNowAPINotFoundError
 from sn_mcp_server.tools.models import InviteOrder, InviteRecipient, SendInviteResponse
 from sn_mcp_server.tools.send_invite import (
     _send_document_field_invite,
@@ -164,7 +165,7 @@ class TestSendInvite:
 
     def test_auto_detects_document_when_group_lookup_fails(self, mock_client: MagicMock) -> None:
         """Test auto-detection falls back to document when group lookup fails."""
-        mock_client.get_document_group.side_effect = Exception("not a group")
+        mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
         mock_client.get_document.return_value = MagicMock()  # Document found
         mock_client.get_user_info.return_value = MagicMock(primary_email="owner@test.com")
         mock_client.create_document_field_invite.return_value = MagicMock(status="doc_fallback")
@@ -175,8 +176,8 @@ class TestSendInvite:
 
     def test_raises_value_error_when_entity_not_found(self, mock_client: MagicMock) -> None:
         """Test ValueError raised when entity not found as group or document."""
-        mock_client.get_document_group.side_effect = Exception("not group")
-        mock_client.get_document.side_effect = Exception("not document")
+        mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
+        mock_client.get_document.side_effect = SignNowAPINotFoundError()
 
         with pytest.raises(ValueError, match="entity_gone"):
             _send_invite("entity_gone", None, [_make_order()], "tok", mock_client)

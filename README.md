@@ -414,8 +414,11 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`get_signing_link`** — Get signing link for a document or document group.
 * **`get_document`** — Normalized document/group structure with field values.
 * **`update_document_fields`** — Prefill text fields in individual documents.
+* **`signnow_skills`** — Query the bundled SignNow skill library. Omit `skill_name` to list all available skills with descriptions; provide `skill_name` (e.g. `signnow101`) to fetch the full Markdown body. Use `signnow101` to learn SignNow entity types, invite types, and tool mappings.
+  * List mode example: `{"skills": [{"name": "signnow101", "description": "SignNow 101 concepts reference... (description truncated for brevity)"}]}`
+  * Fetch mode example: `{"name": "signnow101", "body": "# SignNow 101 — Concepts Reference\n..."}`
 
-> Tip: Start with `list_all_templates` → `create_from_template` → `create_embedded_*` / `send_invite`, then `get_invite_status` and `get_document_download_link`.
+> Tip: Start with `signnow_skills` (no arguments) to discover available skills, then `list_all_templates` → `create_from_template` → `create_embedded_*` / `send_invite`, then `get_invite_status` and `get_document_download_link`.
 
 ---
 
