@@ -4,8 +4,10 @@ SignNow API Client - Other Methods
 Methods for authentication, folders, and other utilities.
 """
 
+import json
 from typing import Any
 
+from signnow_client.models.contacts import CrmContactsResponse
 from signnow_client.models.folders_lite import GetFolderByIdResponseLite, GetFoldersResponseLite
 
 from .models import User
@@ -218,3 +220,57 @@ class OtherClientMixin:
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
 
         return self._get("/user", headers=headers, validate_model=User)
+
+    def get_contacts(
+        self,
+        token: str,
+        query: str | None = None,
+        per_page: int = 15,
+    ) -> CrmContactsResponse:
+        """Retrieve CRM contacts from SignNow.
+
+        Calls GET /v2/crm/contacts. When ``query`` is provided, serializes
+        a JSON ``filters`` parameter using the ``_OR`` combinator so the API
+        matches on email, first_name, last_name, or full_name (LIKE, % wildcards).
+
+        Filter JSON shape (from API docs)::
+
+            filters=[{"_OR":[
+                {"email":     {"type": "like", "value": "query"}},
+                {"first_name":{"type": "like", "value": "query"}},
+                {"last_name": {"type": "like", "value": "query"}},
+                {"full_name": {"type": "like", "value": "query"}},
+                {"phone":     {"type": "like", "value": "query"}}
+            ]}]
+
+        Args:
+            token: Access token for authentication.
+            query: Optional search string to filter contacts by name or email.
+            per_page: Number of contacts to return per page (1–100, default 15).
+
+        Returns:
+            Validated CrmContactsResponse with list of contacts.
+
+        Raises:
+            SignNowAPIAuthenticationError: Invalid or expired token.
+            SignNowAPIRateLimitError: Rate limit exceeded.
+            SignNowAPIServerError: SignNow backend error.
+        """
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params: dict[str, str | int] = {"per_page": per_page, "page": 1}
+
+        stripped_query = (query or "").strip()
+        if stripped_query:
+            params["filters"] = json.dumps([
+                {
+                    "_OR": [
+                        {"email": {"type": "like", "value": stripped_query}},
+                        {"first_name": {"type": "like", "value": stripped_query}},
+                        {"last_name": {"type": "like", "value": stripped_query}},
+                        {"full_name": {"type": "like", "value": stripped_query}},
+                        {"phone": {"type": "like", "value": stripped_query}},
+                    ]
+                }
+            ])
+
+        return self._get("/v2/crm/contacts", headers=headers, params=params, validate_model=CrmContactsResponse)
