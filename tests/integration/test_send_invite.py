@@ -147,14 +147,18 @@ class TestSendInviteDocumentPhoneAuth:
         assert recipient["phone"] == "+1234567890"
         assert recipient["method"] == "sms"
 
-    async def test_phone_auth_without_method_uses_model_default(
+    async def test_phone_auth_without_method_omits_method_from_request(
         self,
         sn_client: SignNowAPIClient,
         mock_api: respx.MockRouter,
         token: str,
         load_fixture: Callable[[str], dict[str, Any]],
     ) -> None:
-        """Phone auth without explicit method uses DocumentFieldInviteRecipient default ('sms')."""
+        """Phone auth without explicit method omits method key from the API request.
+
+        method=None overrides DocumentFieldInviteRecipient's 'sms' default and is
+        then excluded by model_dump(exclude_none=True), so the key is absent.
+        """
         # ARRANGE
         user_fixture = load_fixture("get_user_info__success")
         mock_api.get("/user").respond(200, json=user_fixture)
@@ -165,12 +169,11 @@ class TestSendInviteDocumentPhoneAuth:
         # ACT
         _send_document_field_invite(sn_client, token, DOC_ID, [order])
 
-        # ASSERT — method key not explicitly set by our code; model default "sms" applies
+        # ASSERT — method=None overrides model default; exclude_none drops the key
         body = json.loads(invite_route.calls[0].request.content)
         recipient = body["to"][0]
         assert recipient["authentication_type"] == "phone"
-        assert "method" in recipient  # model default "sms" is serialised
-        assert recipient["method"] == "sms"
+        assert "method" not in recipient  # omitted via exclude_none=True
 
 
 class TestSendInviteDocumentGroupPhoneAuth:

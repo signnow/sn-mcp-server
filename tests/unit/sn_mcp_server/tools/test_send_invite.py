@@ -282,6 +282,16 @@ class TestSignerAuthentication:
         assert auth.type == "password"
         assert auth.password == "s3cr3t"  # noqa: S105
 
+    def test_password_with_whitespace_is_normalized(self) -> None:
+        """Test leading/trailing whitespace is stripped from stored password."""
+        auth = SignerAuthentication(type="password", password="  s3cr3t  ")  # noqa: S106
+        assert auth.password == "s3cr3t"  # noqa: S105
+
+    def test_phone_with_whitespace_is_normalized(self) -> None:
+        """Test leading/trailing whitespace is stripped from stored phone."""
+        auth = SignerAuthentication(type="phone", phone="  +1234567890  ")
+        assert auth.phone == "+1234567890"
+
     def test_valid_phone_type_constructs(self) -> None:
         """Test valid phone auth constructs without error."""
         auth = SignerAuthentication(type="phone", phone="+1234567890")
@@ -354,11 +364,16 @@ class TestBuildDocumentAuthKwargs:
         result = _build_document_auth_kwargs(auth)
         assert result["method"] == "phone_call"
 
-    def test_phone_type_without_method_excludes_method_key(self) -> None:
-        """Test phone type with method=None does not include method key."""
+    def test_phone_type_without_method_sets_method_to_none(self) -> None:
+        """Test phone type with method=None sets method=None in kwargs.
+
+        The None value overrides DocumentFieldInviteRecipient's 'sms' field default.
+        model_dump(exclude_none=True) then drops the key from the API request.
+        """
         auth = SignerAuthentication(type="phone", phone="+1234")  # method=None by default
         result = _build_document_auth_kwargs(auth)
-        assert "method" not in result
+        assert "method" in result
+        assert result["method"] is None
 
     def test_phone_type_with_sms_message(self) -> None:
         """Test phone type with sms_message includes authentication_sms_message key."""

@@ -32,8 +32,10 @@ def _build_document_auth_kwargs(authentication: SignerAuthentication | None) -> 
         kwargs["password"] = authentication.password
     elif authentication.type == "phone":
         kwargs["phone"] = authentication.phone
-        if authentication.method is not None:
-            kwargs["method"] = authentication.method
+        # Always set method — even when None — so it overrides the DocumentFieldInviteRecipient
+        # field default of 'sms'. A None value is then dropped by model_dump(exclude_none=True),
+        # meaning the key is omitted from the API request when not explicitly specified.
+        kwargs["method"] = authentication.method
         if authentication.sms_message:
             kwargs["authentication_sms_message"] = authentication.sms_message
     return kwargs

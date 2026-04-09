@@ -552,11 +552,19 @@ class SignerAuthentication(BaseModel):
 
     @model_validator(mode="after")
     def _validate_required_credentials(self) -> SignerAuthentication:
-        """Enforce that the credential matching the selected type is present and non-blank."""
-        if self.type == "password" and not (self.password or "").strip():
-            raise ValueError("password is required when authentication type is 'password'")
-        if self.type == "phone" and not (self.phone or "").strip():
-            raise ValueError("phone is required when authentication type is 'phone'")
+        """Enforce that the credential matching the selected type is present and non-blank.
+
+        Also normalizes stored values by stripping leading/trailing whitespace so
+        the model guarantees the persisted value is trimmed before reaching the API.
+        """
+        if self.type == "password":
+            if not (self.password or "").strip():
+                raise ValueError("password is required when authentication type is 'password'")
+            self.password = self.password.strip()  # type: ignore[union-attr]
+        if self.type == "phone":
+            if not (self.phone or "").strip():
+                raise ValueError("phone is required when authentication type is 'phone'")
+            self.phone = self.phone.strip()  # type: ignore[union-attr]
         return self
 
     def __repr__(self) -> str:
