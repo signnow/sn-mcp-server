@@ -1,0 +1,20 @@
+{
+  "id": "user_test_1",
+  "first_name": "Test",
+  "last_name": "Owner",
+  "active": "1",
+  "type": 1,
+  "pro": 0,
+  "created": "1700000000",
+  "emails": ["owner@example.com"],
+  "primary_email": "owner@example.com",
+  "credits": 0,
+  "has_atticus_access": false,
+  "cloud_export_account_details": null,
+  "is_logged_in": true,
+  "document_count": 0,
+  "monthly_document_count": 0,
+  "lifetime_document_count": 0,
+  "googleapps": false,
+  "facebookapps": false
+}

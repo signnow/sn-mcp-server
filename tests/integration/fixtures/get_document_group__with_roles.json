@@ -1,0 +1,14 @@
+{
+  "id": "grp1",
+  "group_name": "Test Group",
+  "invite_id": null,
+  "documents": [
+    {
+      "id": "doc1",
+      "document_name": "Test Document",
+      "thumbnail": {},
+      "roles": ["Signer 1"]
+    }
+  ],
+  "originator_organization_settings": []
+}

@@ -462,6 +462,7 @@ class DocumentFieldInviteReminder(BaseModel):
     remind_repeat: int | None = Field(None, description="A recipient gets a reminder email each x days after the invite is sent", ge=1, le=7)
 
 
+# Unused — document path uses flat fields on DocumentFieldInviteRecipient; scheduled for cleanup
 class DocumentFieldInviteAuthentication(BaseModel):
     """Authentication settings for document field invite recipient."""
 
@@ -976,7 +977,7 @@ class SendDocumentCopyByEmailRequest(BaseModel):
     message: str | None = Field(None, description="Optional message body")
     subject: str | None = Field(None, description="Optional email subject")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Exclude null fields — SignNow treats absent fields as defaults."""
         data = super().model_dump(**kwargs)
         return {k: v for k, v in data.items() if v is not None}
