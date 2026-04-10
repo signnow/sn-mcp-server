@@ -11,20 +11,7 @@ from signnow_client import DocumentGroupTemplate, SignNowAPIClient
 from signnow_client.exceptions import SignNowAPIHTTPError
 
 from .models import CreateFromTemplateResponse
-
-
-def _is_not_found_error(exc: SignNowAPIHTTPError) -> bool:
-    """Return True when a 400 error represents a 'not found' response from SignNow.
-
-    SignNow returns 400 with error code 65582 on not-found conditions, with varying
-    messages depending on the endpoint:
-      - /template/{id}/copy          → "Document not found"
-      - /documentgroup/template/{id} → "unable to find document group template"
-    """
-    if exc.status_code == 400:
-        errors = (exc.response_data or {}).get("errors", [])
-        return any(e.get("code") == 65582 or "not found" in e.get("message", "").lower() or "unable to find" in e.get("message", "").lower() for e in errors)
-    return False
+from .utils import _is_not_found_error
 
 
 def _create_document_from_template(client: SignNowAPIClient, token: str, entity_id: str, name: str | None) -> CreateFromTemplateResponse:
@@ -102,7 +89,6 @@ def _find_template_group(entity_id: str, token: str, client: SignNowAPIClient) -
         if template_group.template_group_id == entity_id:
             return template_group
     return None
-
 
 def _create_from_template(entity_id: str, entity_type: Literal["template", "template_group"] | None, name: str | None, token: str, client: SignNowAPIClient) -> CreateFromTemplateResponse:
     """Private function to create a new document or document group from an existing template or template group.

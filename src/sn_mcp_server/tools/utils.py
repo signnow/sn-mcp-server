@@ -6,6 +6,7 @@ This module contains shared utility functions used across multiple tool modules.
 
 from typing import Protocol, Union
 
+from signnow_client.exceptions import SignNowAPIHTTPError
 from signnow_client.models.folders_lite import RoleLite, _normalize_roles
 
 
@@ -16,6 +17,20 @@ class HasName(Protocol):
 
 
 RoleType = Union[RoleLite, str, dict[str, str], HasName]
+
+
+def _is_not_found_error(exc: SignNowAPIHTTPError) -> bool:
+    """Return True when a 400 error represents a 'not found' response from SignNow.
+
+    SignNow returns 400 with error code 65582 on not-found conditions, with varying
+    messages depending on the endpoint:
+      - /template/{id}/copy          → "Document not found"
+      - /documentgroup/template/{id} → "unable to find document group template"
+    """
+    if exc.status_code == 400:
+        errors = (exc.response_data or {}).get("errors", [])
+        return any(e.get("code") == 65582 or "not found" in e.get("message", "").lower() or "unable to find" in e.get("message", "").lower() for e in errors)
+    return False
 
 
 def extract_role_names(roles: list[RoleType] | None) -> list[str]:

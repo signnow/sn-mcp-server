@@ -539,10 +539,25 @@ class InviteOrder(BaseModel):
 
 
 class SendInviteResponse(BaseModel):
-    """Response model for sending invite."""
+    """Response model for sending invite.
+
+    When the invite is sent for a template-originated entity, the created_entity_*
+    fields are populated. For direct document/document_group calls they are None.
+    """
 
     invite_id: str = Field(..., description="ID of the created invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+
+    # Nullable fields — populated only when entity_type was template/template_group
+    created_entity_id: str | None = Field(
+        None, description="ID of the entity created from template (None when entity was document/document_group)"
+    )
+    created_entity_type: str | None = Field(
+        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
+    )
+    created_entity_name: str | None = Field(
+        None, description="Name of the entity created from template (None when entity was document/document_group)"
+    )
 
 
 # Embedded invite models
@@ -641,27 +656,6 @@ class CreateEmbeddedSendingResponse(BaseModel):
 
     sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
     sending_url: str = Field(..., description="URL for the embedded sending")
-
-
-# Template to invite workflow models
-class SendInviteFromTemplateRequest(BaseModel):
-    """Request model for creating document/group from template and sending invite immediately."""
-
-    entity_id: str = Field(..., description="ID of the template or template group")
-    entity_type: str | None = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
-    name: str | None = Field(None, description="Optional name for the new document or document group")
-    folder_id: str | None = Field(None, description="Optional ID of the folder to store the document group")
-    orders: list[InviteOrder] = Field(default=[], description="List of orders with recipients for the invite")
-
-
-class SendInviteFromTemplateResponse(BaseModel):
-    """Response model for creating document/group from template and sending invite immediately."""
-
-    created_entity_id: str = Field(..., description="ID of the created document or document group")
-    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
-    created_entity_name: str = Field(..., description="Name of the created entity")
-    invite_id: str = Field(..., description="ID of the created invite")
-    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
 
 
 # Template to embedded sending workflow models

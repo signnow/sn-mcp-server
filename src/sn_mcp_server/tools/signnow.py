@@ -43,7 +43,6 @@ from .models import (
     EmbeddedInviteOrder,
     InviteOrder,
     InviteStatus,
-    SendInviteFromTemplateResponse,
     SendInviteResponse,
     SendReminderResponse,
     SigningLinkResponse,
@@ -54,7 +53,7 @@ from .models import (
     UploadDocumentResponse,
 )
 from .reminder import _send_invite_reminder
-from .send_invite import _send_invite, _send_invite_from_template
+from .send_invite import _send_invite
 from .signing_link import _get_signing_link
 
 RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
@@ -305,9 +304,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="send_invite",
         description=(
-            "Send invite to sign a document or document group. "
-            "This tool is ONLY for documents and document groups. "
-            "If you have template or template_group, use the alternative tool: send_invite_from_template"
+            "Send invite to sign a document, document group, template, or template group. "
+            "For templates and template groups, automatically creates a document/group first, then sends the invite."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -316,11 +314,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             idempotentHint=False,
             openWorldHint=True,
         ),
-        tags=["send_invite", "document", "document_group", "sign", "workflow"],
+        tags=["send_invite", "document", "document_group", "template", "template_group", "sign", "workflow"],
     )
-    def send_invite(
+    async def send_invite(
         ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         orders: Annotated[
             list[InviteOrder],
             Field(
@@ -331,29 +329,35 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             ),
         ],
         entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
         ] = None,
+        name: Annotated[str | None, Field(description="Optional name for the new document or document group (used only when entity_type is template or template_group)")] = None,
     ) -> SendInviteResponse:
-        """Send invite to sign a document or document group.
+        """Send invite to sign a document, document group, template, or template group.
 
-        This tool is ONLY for documents and document groups.
-        If you have template or template_group, use the alternative tool: send_invite_from_template
+        When entity_type is 'template' or 'template_group', this tool automatically:
+        1. Creates a document/group from the template (create_from_template)
+        2. Sends an invite to the created entity
+
+        For direct document/document_group calls the invite is sent immediately.
+        The entity type is auto-detected if not provided.
 
         Args:
-            entity_id: ID of the document or document group
+            entity_id: ID of the document, document group, template, or template group
             orders: List of orders with recipients.
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            entity_type: Type of entity (optional, auto-detected if not provided).
+            name: Optional name for the new document or document group (template flows only)
 
         Returns:
-            SendInviteResponse with invite ID and entity type
+            SendInviteResponse with invite details; created_entity_* fields populated for template flows
         """
         token, client = _get_token_and_client(token_provider)
 
         if not orders:
             raise ValueError("orders must contain at least one recipient order")
 
-        return _send_invite(entity_id, entity_type, orders, token, client)
+        return await _send_invite(entity_id, entity_type, orders, token, client, name, ctx)
 
     @mcp.tool(
         name="create_embedded_invite",
@@ -533,65 +537,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         token, client = _get_token_and_client(token_provider)
 
         return _create_from_template(entity_id, entity_type, name, token, client)
-
-    @mcp.tool(
-        name="send_invite_from_template",
-        description=(
-            "Create document/group from template and send invite immediately. "
-            "This tool is ONLY for templates and template groups. "
-            "If you have document or document_group, use the alternative tool: send_invite"
-        ),
-        annotations=ToolAnnotations(
-            title="Create from template and send invite",
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
-        ),
-        tags=["template", "template_group", "document", "document_group", "send_invite", "workflow"],
-    )
-    async def send_invite_from_template(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the template or template group")],
-        orders: Annotated[
-            list[InviteOrder],
-            Field(
-                description="List of orders with recipients for the invite.",
-                examples=[
-                    [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
-                ],
-            ),
-        ],
-        entity_type: Annotated[
-            Literal["template", "template_group"] | None,
-            Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-        name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
-    ) -> SendInviteFromTemplateResponse:
-        """Create document or document group from template and send invite immediately.
-
-        This tool is ONLY for templates and template groups.
-        If you have document or document_group, use the alternative tool: send_invite
-
-        This tool combines two operations:
-        1. Creates a document/group from template using create_from_template
-        2. Sends an invite to the created entity using send_invite
-
-        Args:
-            entity_id: ID of the template or template group
-            orders: List of orders with recipients for the invite.
-            entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
-            name: Optional name for the new document or document group
-
-        Returns:
-            SendInviteFromTemplateResponse with created entity info and invite details
-        """
-        token, client = _get_token_and_client(token_provider)
-
-        if not orders:
-            raise ValueError("orders must contain at least one recipient order")
-
-        return await _send_invite_from_template(entity_id, entity_type, name, orders, token, client, ctx)
 
     @mcp.tool(
         name="create_embedded_sending_from_template",

@@ -10,9 +10,10 @@ from typing import Any, Literal
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
-from signnow_client.exceptions import SignNowAPIError
+from signnow_client.exceptions import SignNowAPIError, SignNowAPIHTTPError
 
-from .models import InviteOrder, SendInviteFromTemplateResponse, SendInviteResponse
+from .models import InviteOrder, SendInviteResponse
+from .utils import _is_not_found_error
 
 
 def _send_document_group_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: Any) -> SendInviteResponse:
@@ -136,91 +137,130 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
     return SendInviteResponse(invite_id=response.status, invite_entity="document")  # Document field invite returns status, not id
 
 
-def _send_invite(entity_id: str, entity_type: Literal["document", "document_group"] | None, orders: list[InviteOrder], token: str, client: SignNowAPIClient) -> SendInviteResponse:
-    """Private function to send invite to sign a document or document group.
+def _detect_send_invite_entity_type(
+    entity_id: str,
+    token: str,
+    client: SignNowAPIClient,
+) -> tuple[Literal["document", "document_group", "template", "template_group"], Any]:
+    """Detect the entity type for the given ID using a 4-probe waterfall.
+
+    Probe order (stops at first match, re-raises non-detection errors):
+      1. get_document_group   → "document_group" (returns loaded group as side-effect)
+      2. get_document_group_template → "template_group"
+      3. get_document         → "document"
+      4. (no probe)           → "template" (last resort)
 
     Args:
-        entity_id: ID of the document or document group
-        entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+        entity_id: ID to classify
+        token: Access token for SignNow API
+        client: SignNow API client instance
+
+    Returns:
+        Tuple of (entity_type, preloaded_group) where preloaded_group is the
+        GetDocumentGroupResponse when type is "document_group", None otherwise.
+    """
+    # Probe 1: document group
+    try:
+        group = client.get_document_group(token, entity_id)
+        return ("document_group", group)
+    except SignNowAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    # Probe 2: template group (SignNow returns 400/65582 or 404 when not found)
+    try:
+        client.get_document_group_template(token, entity_id)
+        return ("template_group", None)
+    except SignNowAPIHTTPError as exc:
+        if exc.status_code != 404 and not _is_not_found_error(exc):
+            raise
+    except SignNowAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    # Probe 3: document
+    try:
+        client.get_document(token, entity_id)
+        return ("document", None)
+    except SignNowAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    # Probe 4: last resort — assume template; creation will surface the error if wrong
+    return ("template", None)
+
+
+async def _send_invite(
+    entity_id: str,
+    entity_type: Literal["document", "document_group", "template", "template_group"] | None,
+    orders: list[InviteOrder],
+    token: str,
+    client: SignNowAPIClient,
+    name: str | None = None,
+    ctx: Context | None = None,
+) -> SendInviteResponse:
+    """Send invite to sign a document, document group, template, or template group.
+
+    When entity_type is 'template' or 'template_group', creates a document/group
+    from the template first, then sends the invite on the created entity.
+
+    Args:
+        entity_id: ID of the document, document group, template, or template group
+        entity_type: Entity type (optional, auto-detected if None)
         orders: List of orders with recipients
         token: Access token for SignNow API
         client: SignNow API client instance
+        name: Optional name for the new entity (used only for template/template_group)
+        ctx: FastMCP context for progress reporting (used for template flows)
 
     Returns:
-        SendInviteResponse with invite ID and entity type
+        SendInviteResponse with invite details and optional created entity info
     """
+    created_entity_id: str | None = None
+    created_entity_type: str | None = None
+    created_entity_name: str | None = None
+    preloaded_group: Any = None
+# define entity type > template or tg > doc docgroup invite
+    if entity_type in ("template", "template_group"):
+        # Step 1: create document/group from template
+        if ctx:
+            await ctx.report_progress(progress=1, total=3)
 
-    # Determine entity type if not provided
-    document_group = None  # Store document group if found during auto-detection
+        from .create_from_template import _create_from_template
 
-    if not entity_type:
-        # Try to determine entity type by attempting to get document group first (higher priority)
-        try:
-            document_group = client.get_document_group(token, entity_id)
-            entity_type = "document_group"
-        except SignNowAPIError as exc:
-            if exc.status_code != 404:
-                raise
-            # 404 on group: try document path.
-            try:
-                client.get_document(token, entity_id)
-                entity_type = "document"
-            except SignNowAPIError as exc2:
-                if exc2.status_code != 404:
-                    raise
-                raise ValueError(f"Entity with ID {entity_id} not found as either document group or document") from None
+        created = _create_from_template(entity_id, entity_type, name, token, client)
 
+        if ctx:
+            await ctx.report_progress(progress=2, total=3)
+
+        created_entity_id = created.entity_id
+        created_entity_type = created.entity_type
+        created_entity_name = created.name
+        entity_id = created.entity_id
+        entity_type = created.entity_type  # now "document" or "document_group"
+
+    elif entity_type is None:
+        # Auto-detect using 4-probe waterfall
+        entity_type, preloaded_group = _detect_send_invite_entity_type(entity_id, token, client)
+
+        if entity_type in ("template", "template_group"):
+            # Recurse with the detected type to follow the template creation path
+            return await _send_invite(entity_id, entity_type, orders, token, client, name, ctx)
+
+    # Dispatch to document_group or document invite path
     if entity_type == "document_group":
-        # Send document group field invite
-        # Get the document group if we don't have it yet
-        if not document_group:
-            document_group = client.get_document_group(token, entity_id)
-
-        return _send_document_group_field_invite(client, token, entity_id, orders, document_group)
+        group = preloaded_group or client.get_document_group(token, entity_id)
+        invite_response = _send_document_group_field_invite(client, token, entity_id, orders, group)
     else:
-        # Send document field invite
-        return _send_document_field_invite(client, token, entity_id, orders)
+        invite_response = _send_document_field_invite(client, token, entity_id, orders)
 
+    if ctx and created_entity_id:
+        await ctx.report_progress(progress=3, total=3)
 
-async def _send_invite_from_template(
-    entity_id: str, entity_type: Literal["template", "template_group"] | None, name: str | None, orders: list[InviteOrder], token: str, client: SignNowAPIClient, ctx: Context
-) -> SendInviteFromTemplateResponse:
-    """Private function to create document/group from template and send invite immediately.
-
-    Args:
-        entity_id: ID of the template or template group
-        entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
-        name: Optional name for the new document or document group
-        orders: List of orders with recipients for the invite
-        token: Access token for SignNow API
-        client: SignNow API client instance
-        ctx: FastMCP context for progress reporting
-
-    Returns:
-        SendInviteFromTemplateResponse with created entity info and invite details
-    """
-    # Report initial progress
-    await ctx.report_progress(progress=1, total=3)
-
-    # Import and use the create from template function directly
-    from .create_from_template import _create_from_template
-
-    # Use the imported function to create from template
-    created_entity = _create_from_template(entity_id, entity_type, name, token, client)
-
-    # Report progress after template creation
-    await ctx.report_progress(progress=2, total=3)
-
-    # Then send invite
-    invite_response = _send_invite(created_entity.entity_id, created_entity.entity_type or "document", orders, token, client)
-
-    # Report final progress after invite sending
-    await ctx.report_progress(progress=3, total=3)
-
-    return SendInviteFromTemplateResponse(
-        created_entity_id=created_entity.entity_id,
-        created_entity_type=created_entity.entity_type,
-        created_entity_name=created_entity.name,
+    return SendInviteResponse(
         invite_id=invite_response.invite_id,
         invite_entity=invite_response.invite_entity,
+        created_entity_id=created_entity_id,
+        created_entity_type=created_entity_type,
+        created_entity_name=created_entity_name,
     )
