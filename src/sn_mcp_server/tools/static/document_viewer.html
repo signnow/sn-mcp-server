@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; height: 100vh; display: flex;
+           flex-direction: column; background: #f8f9fa; }
+    #loading { flex: 1; display: flex; justify-content: center; align-items: center;
+               color: #6b7280; font-size: 14px; }
+    #error { flex: 1; display: flex; justify-content: center; align-items: center;
+             color: #dc2626; font-size: 14px; padding: 20px; text-align: center; }
+    #header { padding: 8px 16px; background: #fff; border-bottom: 1px solid #e5e7eb;
+              font-size: 13px; color: #374151; align-items: center; gap: 8px; }
+    #header .name { font-weight: 600; }
+    #header .link { color: #4f46e5; text-decoration: none; font-size: 12px; margin-left: auto; }
+    #header .link:hover { text-decoration: underline; }
+    #viewer { flex: 1; border: none; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="header" style="display:none">
+    <span class="name" id="doc-name"></span>
+    <a class="link" id="open-link" href="#" target="_blank" rel="noopener">Open in SignNow ↗</a>
+  </div>
+  <div id="loading">Loading document preview&#8230;</div>
+  <div id="error" style="display:none"></div>
+  <iframe id="viewer" style="display:none" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+
+  <script>
+    /**
+     * MCP Apps View — JSON-RPC 2.0 over postMessage protocol.
+     *
+     * Architecture: Host ↔ outer sandbox proxy ↔ THIS iframe (inner)
+     * We communicate with window.parent (outer sandbox), which relays to the host.
+     *
+     * Lifecycle:
+     *   1. We send  ui/initialize request
+     *   2. Host responds with capabilities
+     *   3. We send  ui/notifications/initialized
+     *   4. Host fires oninitialized → sends ui/notifications/tool-input
+     *   5. Host sends ui/notifications/tool-result  ← we render the document here
+     *
+     * Reload recovery:
+     *   ChatGPT sometimes doesn't replay tool-result after page reload.
+     *   MCP Apps docs recommend localStorage/sessionStorage for state persistence.
+     *   Each ChatGPT tool call runs in a unique sandbox origin (connector_HASH),
+     *   so sessionStorage is per-document and never collides.
+     */
+
+    var _documentRendered = false;
+    var _nextId = 1;
+    var _pending = {};
+
+    function _send(msg) {
+      window.parent.postMessage(msg, '*');
+    }
+
+    function _request(method, params) {
+      var id = _nextId++;
+      return new Promise(function(resolve, reject) {
+        _pending[id] = { resolve: resolve, reject: reject };
+        _send({ jsonrpc: '2.0', id: id, method: method, params: params || {} });
+      });
+    }
+
+    function _requestSize(width, height) {
+      var params = {};
+      if (width != null)  params.width  = width;
+      if (height != null) params.height = height;
+      _send({ jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: params });
+    }
+
+    function _showDocument(params) {
+      var sc = params.structuredContent || {};
+      var link = sc.view_link;
+      var name = sc.document_name || 'Document';
+
+      if (!link && Array.isArray(params.content)) {
+        for (var i = 0; i < params.content.length; i++) {
+          var block = params.content[i];
+          if (block.type === 'text' && block.text) {
+            try {
+              var parsed = JSON.parse(block.text);
+              if (parsed.view_link) { link = parsed.view_link; name = parsed.document_name || name; }
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (!link) return;
+
+      _documentRendered = true;
+
+      /* Persist for reload recovery (per MCP Apps recommendation). */
+      try { sessionStorage.setItem('sn_view', JSON.stringify({ link: link, name: name })); }
+      catch (_) {}
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'none';
+
+      var header = document.getElementById('header');
+      header.style.display = 'flex';
+      document.getElementById('doc-name').textContent = name;
+      document.getElementById('open-link').href = link;
+
+      var viewer = document.getElementById('viewer');
+      viewer.src = link;
+      viewer.style.display = 'block';
+    }
+
+    /* ── Message handler ── */
+    window.addEventListener('message', function(event) {
+      var data = event.data;
+      if (!data || typeof data !== 'object' || data.jsonrpc !== '2.0') return;
+
+      /* Response to one of our requests */
+      if (data.id !== undefined && _pending[data.id]) {
+        var handler = _pending[data.id];
+        delete _pending[data.id];
+        if (data.error) handler.reject(new Error(data.error.message || 'MCP error'));
+        else handler.resolve(data.result);
+        return;
+      }
+
+      /* Incoming notifications from host */
+      if (data.method === 'ui/notifications/tool-result') {
+        _showDocument(data.params || {});
+      }
+    });
+
+    /* ── Initialization handshake ── */
+    var _initDone = false;
+
+    function _sendInitialized() {
+      if (_initDone) return;
+      _initDone = true;
+      _send({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} });
+      _requestSize(null, 800);
+    }
+
+    _request('ui/initialize', {
+      protocolVersion: '2026-01-26',
+      appInfo: { name: 'signnow-document-viewer', version: '1.0.0' },
+      appCapabilities: {}
+    }).then(function() {
+      _sendInitialized();
+    }).catch(function() {
+      _sendInitialized();
+    });
+
+    /* Fallback: send initialized even if ui/initialize never responds. */
+    setTimeout(_sendInitialized, 2000);
+
+    /* ── Reload recovery via sessionStorage ──
+       If host doesn't deliver tool-result within 3 s, restore from cache. */
+    setTimeout(function() {
+      if (_documentRendered) return;
+      try {
+        var raw = sessionStorage.getItem('sn_view');
+        if (!raw) return;
+        var cached = JSON.parse(raw);
+        if (cached.link) {
+          _showDocument({ structuredContent: { view_link: cached.link, document_name: cached.name } });
+        }
+      } catch (_) {}
+    }, 3000);
+
+    /* Final fallback: show error after 15 s if nothing worked. */
+    setTimeout(function() {
+      if (document.getElementById('viewer').style.display === 'none') {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'flex';
+        document.getElementById('error').textContent =
+          'Could not load document preview. Use the view link returned in the tool result.';
+      }
+    }, 15000);
+  </script>
+</body>
+</html>

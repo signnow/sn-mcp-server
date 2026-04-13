@@ -15,6 +15,7 @@ from ..token_provider import TokenProvider
 from .create_from_template import _create_from_template
 from .document import _get_document, _update_document_fields, _upload_document
 from .document_download_link import _get_document_download_link
+from .document_view import _VIEWER_HTML, VIEWER_RESOURCE_URI, _view_document
 from .embedded_editor import (
     _create_embedded_editor,
     _create_embedded_editor_from_template,
@@ -52,6 +53,7 @@ from .models import (
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
     UploadDocumentResponse,
+    ViewDocumentResponse,
 )
 from .reminder import _send_invite_reminder
 from .send_invite import _send_invite, _send_invite_from_template
@@ -1204,5 +1206,71 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
         return await _send_invite_reminder(client, token, entity_id, entity_type, email, subject, message, ctx=ctx)
+
+    @mcp.tool(
+        name="view_document",
+        description=(
+            "Generate a read-only embedded view link for a document or document group. "
+            "To find an entity by name, first call list_documents or list_templates "
+            "to search for it, then pass the returned entity_id here. "
+            "In MCP Apps-compatible hosts (MCP Inspector, VS Code, Goose, LibreChat) "
+            "the document renders inline — no tab switch needed. "
+            "In other hosts, the returned view_link is presented as a clickable URL."
+        ),
+        meta={"ui": {"resourceUri": VIEWER_RESOURCE_URI}},
+        annotations=ToolAnnotations(
+            title="View document",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "view", "preview"],
+    )
+    def view_document(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group to view")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description="Type of entity: 'document' or 'document_group'. Skip for auto-detection (tries document_group first)."),
+        ] = None,
+        link_expiration_minutes: Annotated[
+            int | None,
+            Field(
+                default=None,
+                ge=43200,
+                le=518400,
+                description="Link lifetime in minutes (43200–518400). Defaults to 43200 (30 days) when omitted.",
+            ),
+        ] = None,
+    ) -> ViewDocumentResponse:
+        """Generate a read-only embedded view link for a document or document group.
+
+        Calls POST /v2/documents/{id}/embedded-view or POST /v2/document-groups/{id}/embedded-view.
+        No SignNow login required to open the link. Auto-detects entity type when omitted.
+
+        Tip: use list_documents first to discover document IDs by name or criteria.
+        Tip: if entity_type is known, pass it explicitly to avoid an extra auto-detection GET.
+
+        Args:
+            entity_id: Document ID or document group ID.
+            entity_type: Optional discriminator ('document' or 'document_group').
+            link_expiration_minutes: Optional link lifetime in minutes (43200–518400).
+
+        Returns:
+            ViewDocumentResponse with view_link, document_name, entity_id, entity_type.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _view_document(entity_id, entity_type, link_expiration_minutes, token, client)
+
+    @mcp.resource(
+        VIEWER_RESOURCE_URI,
+        name="document_viewer_app",
+        description="MCP Apps inline viewer for SignNow documents. Returns an HTML page that renders an embedded document view inside a sandboxed iframe.",
+        mime_type="text/html;profile=mcp-app",
+    )
+    def get_document_viewer_ui() -> str:
+        """Return the MCP Apps HTML viewer for inline document rendering."""
+        return _VIEWER_HTML
 
     return
