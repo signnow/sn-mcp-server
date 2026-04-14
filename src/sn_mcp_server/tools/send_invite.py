@@ -193,7 +193,7 @@ async def _send_invite(
     else:
         invite_response = _send_document_field_invite(client, token, entity_id, orders)
 
-    if ctx:
+    if ctx and created_entity_id:
         await ctx.report_progress(progress=3, total=3)
 
     return SendInviteResponse(
