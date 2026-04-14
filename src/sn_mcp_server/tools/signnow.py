@@ -29,9 +29,11 @@ from .embedded_sending import (
     _create_embedded_sending_from_template,
 )
 from .invite_status import _get_invite_status
+from .list_contacts import _list_contacts
 from .list_documents import _list_document_groups
 from .list_templates import _list_all_templates
 from .models import (
+    ContactListResponse,
     CreateEmbeddedEditorFromTemplateResponse,
     CreateEmbeddedEditorResponse,
     CreateEmbeddedInviteFromTemplateResponse,
@@ -1272,5 +1274,65 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     def get_document_viewer_ui() -> str:
         """Return the MCP Apps HTML viewer for inline document rendering."""
         return _VIEWER_HTML
+
+    async def _list_contacts_impl(query: str | None = None, per_page: int = 15) -> ContactListResponse:
+        token, client = _get_token_and_client(token_provider)
+        return await _list_contacts(token, client, query=query, per_page=per_page)
+
+    @mcp.tool(
+        name="list_contacts",
+        description="Search CRM contacts by name, email, or phone. Use this tool before send_invite to resolve a recipient's email address by their name." + TOOL_FALLBACK_SUFFIX,
+        annotations=ToolAnnotations(
+            title="List CRM contacts",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["contacts", "crm", "list"],
+    )
+    async def list_contacts(
+        ctx: Context,
+        query: Annotated[
+            str | None,
+            Field(description="Filter contacts by name, email, or phone (partial match). Omit to return the first per_page contacts."),
+        ] = None,
+        per_page: Annotated[
+            int,
+            Field(ge=1, le=100, description="Maximum number of contacts to return (1–100, default 15)"),
+        ] = 15,
+    ) -> ContactListResponse:
+        """Search CRM contacts by name, email, or phone.
+
+        Returns a curated list of contacts with id, email, first_name, last_name, and company.
+        When ``query`` is provided, performs a partial (LIKE) match against email, first name,
+        last name, full name, and phone simultaneously.
+        When no contacts match, an empty list is returned — this is not an error.
+
+        Args:
+            query: Partial name, email, or phone string to filter contacts. Omit to return the first per_page contacts.
+            per_page: Maximum number of contacts to return (1–100, default 15).
+        """
+        return await _list_contacts_impl(query=query, per_page=per_page)
+
+    @mcp.resource(
+        "signnow://contacts{?query,per_page}",
+        name="list_contacts_resource",
+        description="Search CRM contacts by name, email, or phone. Use this resource before send_invite to resolve a recipient's email address by their name." + RESOURCE_PREFERRED_SUFFIX,
+        tags=["contacts", "crm", "list"],
+        mime_type="application/json",
+    )
+    async def list_contacts_resource(
+        ctx: Context,
+        query: Annotated[
+            str | None,
+            Field(description="Filter contacts by name, email, or phone (partial match). Omit to return the first per_page contacts."),
+        ] = None,
+        per_page: Annotated[
+            int,
+            Field(ge=1, le=100, description="Maximum number of contacts to return (1–100, default 15)"),
+        ] = 15,
+    ) -> ContactListResponse:
+        return await _list_contacts_impl(query=query, per_page=per_page)
 
     return
