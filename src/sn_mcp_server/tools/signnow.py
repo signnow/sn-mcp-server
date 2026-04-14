@@ -1213,7 +1213,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_contacts",
-        description="Search CRM contacts by name or email. Use this tool before send_invite to resolve a recipient's email address by their name." + TOOL_FALLBACK_SUFFIX,
+        description="Search CRM contacts by name, email, or phone. Use this tool before send_invite to resolve a recipient's email address by their name." + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="List CRM contacts",
             readOnlyHint=True,
@@ -1227,22 +1227,22 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         query: Annotated[
             str | None,
-            Field(description="Filter contacts by name or email (partial match). Omit to return the first per_page contacts."),
+            Field(description="Filter contacts by name, email, or phone (partial match). Omit to return the first per_page contacts."),
         ] = None,
         per_page: Annotated[
             int,
             Field(ge=1, le=100, description="Maximum number of contacts to return (1–100, default 15)"),
         ] = 15,
     ) -> ContactListResponse:
-        """Search CRM contacts by name or email.
+        """Search CRM contacts by name, email, or phone.
 
         Returns a curated list of contacts with id, email, first_name, last_name, and company.
         When ``query`` is provided, performs a partial (LIKE) match against email, first name,
-        last name, and full name simultaneously.
+        last name, full name, and phone simultaneously.
         When no contacts match, an empty list is returned — this is not an error.
 
         Args:
-            query: Partial name or email string to filter contacts. Omit to return the first per_page contacts.
+            query: Partial name, email, or phone string to filter contacts. Omit to return the first per_page contacts.
             per_page: Maximum number of contacts to return (1–100, default 15).
         """
         return await _list_contacts_impl(query=query, per_page=per_page)
@@ -1250,7 +1250,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.resource(
         "signnow://contacts{?query,per_page}",
         name="list_contacts_resource",
-        description="Search CRM contacts by name or email. Use this resource before send_invite to resolve a recipient's email address by their name." + RESOURCE_PREFERRED_SUFFIX,
+        description="Search CRM contacts by name, email, or phone. Use this resource before send_invite to resolve a recipient's email address by their name." + RESOURCE_PREFERRED_SUFFIX,
         tags=["contacts", "crm", "list"],
         mime_type="application/json",
     )
@@ -1258,7 +1258,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         query: Annotated[
             str | None,
-            Field(description="Filter contacts by name or email (partial match). Omit to return the first per_page contacts."),
+            Field(description="Filter contacts by name, email, or phone (partial match). Omit to return the first per_page contacts."),
         ] = None,
         per_page: Annotated[
             int,

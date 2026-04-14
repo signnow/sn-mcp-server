@@ -399,7 +399,7 @@ You can list tools, call them with JSON args, and inspect responses.
 Each tool is described concisely; use an MCP client (e.g., Inspector) to view exact JSON schemas.
 
 * **`list_all_templates`** — List templates & template groups with simplified metadata. Supports `limit`/`offset` pagination (default: 50 items per page).
-* **`list_contacts`** — Search CRM contacts by name or email. Returns id, email, first/last name, and company. Use before `send_invite` to resolve a recipient's email address by their name. Supports `per_page` (default 15, max 100).
+* **`list_contacts`** — Search CRM contacts by name, email, or phone. Returns id, email, first/last name, and company. Use before `send_invite` to resolve a recipient's email address by their name. Supports `per_page` (default 15, max 100).
 * **`list_documents`** — Browse your documents, document groups and statuses. Supports `limit`/`offset` pagination (default: 50 items per page).
 * **`create_from_template`** — Make a document or a group from a template/group.
 * **`send_invite`** — Email invites (documents or groups), ordered recipients supported.

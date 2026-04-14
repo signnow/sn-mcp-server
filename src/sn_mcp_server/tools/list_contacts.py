@@ -16,15 +16,15 @@ async def _list_contacts(
     """Retrieve CRM contacts and curate the response for agent consumption.
 
     Calls GET /v2/crm/contacts. When ``query`` is provided, the API performs a
-    LIKE match against email, first_name, last_name, and full_name simultaneously
-    using the ``_OR`` filter combinator.
+    LIKE match against email, first_name, last_name, full_name, and phone
+    simultaneously using the ``_OR`` filter combinator.
 
     Returns an empty list when no contacts match — this is not an error.
 
     Args:
         token: Access token for SignNow API.
         client: SignNow API client instance.
-        query: Optional partial string to filter contacts by name or email.
+        query: Optional partial string to filter contacts by name, email, or phone.
         per_page: Maximum number of contacts to return (1–100, default 15).
 
     Returns:

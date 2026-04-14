@@ -231,7 +231,8 @@ class OtherClientMixin:
 
         Calls GET /v2/crm/contacts. When ``query`` is provided, serializes
         a JSON ``filters`` parameter using the ``_OR`` combinator so the API
-        matches on email, first_name, last_name, or full_name (LIKE, % wildcards).
+        performs a LIKE match against email, first_name, last_name, full_name,
+        and phone simultaneously.
 
         Filter JSON shape (from API docs)::
 
@@ -245,7 +246,7 @@ class OtherClientMixin:
 
         Args:
             token: Access token for authentication.
-            query: Optional search string to filter contacts by name or email.
+            query: Optional search string to filter contacts by name, email, or phone.
             per_page: Number of contacts to return per page (1–100, default 15).
 
         Returns:
