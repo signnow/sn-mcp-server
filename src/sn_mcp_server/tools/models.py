@@ -969,6 +969,15 @@ class SkillSummary(BaseModel):
     description: str = Field(description="One-line description from skill front-matter")
 
 
+class ViewDocumentResponse(BaseModel):
+    """Response from the view_document tool."""
+
+    view_link: str = Field(..., description="Embedded view link — opens the document in a read-only viewer without requiring SignNow login")
+    document_name: str = Field(..., description="Name of the document or document group")
+    entity_id: str = Field(..., description="Document or document group ID")
+    entity_type: str = Field(..., description="Entity type: 'document' or 'document_group'")
+
+
 class SkillResponse(BaseModel):
     """Response from the signnow_skills tool.
 

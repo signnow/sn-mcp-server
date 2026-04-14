@@ -14,6 +14,8 @@ from .models import (
     CreateDocumentEmbeddedInviteRequest,
     CreateDocumentEmbeddedInviteResponse,
     CreateDocumentEmbeddedSendingRequest,
+    CreateDocumentEmbeddedViewRequest,
+    CreateDocumentEmbeddedViewResponse,
     CreateDocumentFieldInviteRequest,
     CreateDocumentFieldInviteResponse,
     CreateDocumentFreeformInviteRequest,
@@ -130,7 +132,7 @@ class DocumentClientMixin:
         except httpx.TimeoutException as e:
             raise SignNowAPITimeoutError("SignNow API timeout") from e
         except httpx.HTTPStatusError as e:
-            raise self._handle_http_error(e)
+            raise self._handle_http_error(e) from e
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in prefill_text_fields request: {e}") from e
 
@@ -492,4 +494,37 @@ class DocumentClientMixin:
             headers=headers,
             json_data=request_data.model_dump(),
             validate_model=SendDocumentCopyByEmailResponse,
+        )
+
+    def create_document_embedded_view(
+        self,
+        token: str,
+        document_id: str,
+        request_data: CreateDocumentEmbeddedViewRequest,
+    ) -> CreateDocumentEmbeddedViewResponse:
+        """Create an embedded view link for a document.
+
+        Generates a link that opens the document in read-only mode in a browser or iframe.
+        No SignNow login required to view. The link can be used multiple times until it expires.
+
+        POST /v2/documents/{document_id}/embedded-view
+
+        Args:
+            token: Access token for authentication
+            document_id: ID of the document to view
+            request_data: View link configuration (expiration, redirect)
+
+        Returns:
+            CreateDocumentEmbeddedViewResponse with the generated view link
+
+        Raises:
+            SignNowAPIError: On 400/403/404/422 API errors
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._post(
+            f"/v2/documents/{document_id}/embedded-view",
+            headers=headers,
+            json_data=request_data.model_dump(exclude_none=True),
+            validate_model=CreateDocumentEmbeddedViewResponse,
         )

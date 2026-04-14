@@ -105,6 +105,9 @@ __all__ = [
     # Document copy by email models
     "SendDocumentCopyByEmailRequest",
     "SendDocumentCopyByEmailResponse",
+    # Document embedded view models
+    "CreateDocumentEmbeddedViewRequest",
+    "CreateDocumentEmbeddedViewResponse",
     # General Embedded Invite models (for document signing)
     "EmbeddedInviteAuthentication",
     "EmbeddedInviteDocument",
@@ -157,6 +160,9 @@ __all__ = [
     # Document group embedded models
     "CreateDocumentGroupEmbeddedEditorRequest",
     "CreateDocumentGroupEmbeddedSendingRequest",
+    "CreateDocumentGroupEmbeddedViewRequest",
+    "EmbeddedViewData",
+    "CreateDocumentGroupEmbeddedViewResponse",
     # CRM Contacts
     "CrmContactPhone",
     "CrmContactCompany",
