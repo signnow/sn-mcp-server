@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from signnow_client.exceptions import SignNowAPIError
+from signnow_client.exceptions import SignNowAPIAuthenticationError, SignNowAPINotFoundError
 from signnow_client.models.document_groups import (
     CreateDocumentGroupEmbeddedViewResponse,
     DocumentGroupV2Data,
@@ -208,9 +208,9 @@ class TestViewDocumentAutoDetect:
         client.get_document_group_v2.assert_called_once()
 
     def test_fallback_to_document_when_group_raises(self) -> None:
-        """Auto-detect: group API raises → falls back to document."""
+        """Auto-detect: group 404 → falls back to document."""
         client = MagicMock()
-        client.get_document_group_v2.side_effect = SignNowAPIError("Not Found", 404)
+        client.get_document_group_v2.side_effect = SignNowAPINotFoundError("group not found")
         client.get_document.return_value = _doc_resp("Fallback Doc")
         client.create_document_embedded_view.return_value = _doc_view_resp()
 
@@ -222,7 +222,7 @@ class TestViewDocumentAutoDetect:
     def test_fallback_document_name_not_refetched(self) -> None:
         """Auto-detect: fallback doc name set during detection — get_document called once."""
         client = MagicMock()
-        client.get_document_group_v2.side_effect = SignNowAPIError("Not Found", 404)
+        client.get_document_group_v2.side_effect = SignNowAPINotFoundError("group not found")
         client.get_document.return_value = _doc_resp()
         client.create_document_embedded_view.return_value = _doc_view_resp()
 
@@ -231,19 +231,29 @@ class TestViewDocumentAutoDetect:
         client.get_document.assert_called_once()
 
     def test_raises_value_error_when_both_not_found(self) -> None:
-        """Auto-detect: both group and document raise → ValueError with entity_id in message."""
+        """Auto-detect: both group and document 404 → ValueError with entity_id in message."""
         client = MagicMock()
-        client.get_document_group_v2.side_effect = SignNowAPIError("Not Found", 404)
-        client.get_document.side_effect = SignNowAPIError("Not Found", 404)
+        client.get_document_group_v2.side_effect = SignNowAPINotFoundError("group not found")
+        client.get_document.side_effect = SignNowAPINotFoundError("doc not found")
 
         with pytest.raises(ValueError, match="unknown-id"):
             _view_document("unknown-id", None, None, TOKEN, client)
 
-    def test_value_error_message_mentions_not_found(self) -> None:
-        """ValueError message contains 'not found' context."""
+    def test_non_404_error_on_group_probe_propagates(self) -> None:
+        """Auto-detect: non-404 API error on group probe → propagates, does NOT fall back."""
         client = MagicMock()
-        client.get_document_group_v2.side_effect = Exception("timeout")
-        client.get_document.side_effect = Exception("timeout")
+        client.get_document_group_v2.side_effect = SignNowAPIAuthenticationError("Unauthorized", 401)
 
-        with pytest.raises(ValueError, match="not found"):
-            _view_document("bad-id", None, None, TOKEN, client)
+        with pytest.raises(SignNowAPIAuthenticationError):
+            _view_document(DOC_ID, None, None, TOKEN, client)
+
+        client.get_document.assert_not_called()
+
+    def test_non_404_error_on_doc_probe_propagates(self) -> None:
+        """Auto-detect: group 404, non-404 error on doc probe → doc error propagates, not ValueError."""
+        client = MagicMock()
+        client.get_document_group_v2.side_effect = SignNowAPINotFoundError("group not found")
+        client.get_document.side_effect = SignNowAPIAuthenticationError("Unauthorized", 401)
+
+        with pytest.raises(SignNowAPIAuthenticationError):
+            _view_document(DOC_ID, None, None, TOKEN, client)

@@ -14,7 +14,7 @@ import pytest
 import respx
 
 from signnow_client import SignNowAPIClient
-from signnow_client.exceptions import SignNowAPINotFoundError
+from signnow_client.exceptions import SignNowAPIAuthenticationError, SignNowAPINotFoundError
 from sn_mcp_server.tools.document_view import _view_document
 from sn_mcp_server.tools.models import ViewDocumentResponse
 
@@ -221,6 +221,29 @@ class TestViewDocumentAutoDetect:
                 client=sn_client,
                 token=token,
                 entity_id="unknown-id",
+                entity_type=None,
+                link_expiration_minutes=None,
+            )
+
+    def test_non_404_on_group_probe_propagates(
+        self,
+        sn_client: SignNowAPIClient,
+        mock_api: respx.MockRouter,
+        token: str,
+    ) -> None:
+        """entity_type=None → group returns 403 → SignNowAPIAuthenticationError propagates, no doc fallback."""
+        # ARRANGE — 403 from group endpoint, doc endpoint should never be called
+        mock_api.get(f"/v2/document-groups/{DOC_ID}").respond(
+            403,
+            json={"errors": [{"code": "403", "message": "Forbidden"}]},
+        )
+
+        # ACT & ASSERT
+        with pytest.raises(SignNowAPIAuthenticationError):
+            _view_document(
+                client=sn_client,
+                token=token,
+                entity_id=DOC_ID,
                 entity_type=None,
                 link_expiration_minutes=None,
             )

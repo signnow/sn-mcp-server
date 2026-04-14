@@ -11,6 +11,7 @@ import pathlib
 from typing import Literal
 
 from signnow_client import SignNowAPIClient
+from signnow_client.exceptions import SignNowAPINotFoundError
 from signnow_client.models import (
     CreateDocumentEmbeddedViewRequest,
     CreateDocumentGroupEmbeddedViewRequest,
@@ -56,17 +57,19 @@ def _view_document(
     document_name: str | None = None
 
     if entity_type is None:
-        # Auto-detect: document_group first (per AGENTS.md), document as fallback
+        # Auto-detect: document_group first (per AGENTS.md), document as fallback.
+        # Only SignNowAPINotFoundError (404) triggers fallback — auth/rate-limit/
+        # server errors propagate so the caller sees the real failure.
         try:
             group = client.get_document_group_v2(token, entity_id)
             entity_type = "document_group"
             document_name = group.data.name
-        except Exception:
+        except SignNowAPINotFoundError:
             try:
                 doc = client.get_document(token, entity_id)
                 entity_type = "document"
                 document_name = doc.document_name
-            except Exception:
+            except SignNowAPINotFoundError:
                 raise ValueError(f"Entity with ID '{entity_id}' not found as either document group or document") from None
 
     # Fetch entity name when explicit entity_type was provided (name not yet resolved)
