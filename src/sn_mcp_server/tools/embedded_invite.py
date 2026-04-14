@@ -11,7 +11,7 @@ from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 
-from .create_from_template import _create_from_template
+from .create_from_template import _resolve_entity
 from .models import (
     CreateEmbeddedInviteResponse,
     EmbeddedInviteOrder,
@@ -158,24 +158,12 @@ async def _create_embedded_invite(
     Returns:
         CreateEmbeddedInviteResponse with invite details and optional created entity info
     """
-    created_entity_id: str | None = None
-    created_entity_type: str | None = None
-    created_entity_name: str | None = None
-
     if entity_type is None:
         entity_type = _detect_entity_type(entity_id, token, client)
 
-    if entity_type in ("template", "template_group"):
-        if ctx:
-            await ctx.report_progress(progress=1, total=3)
-        created = _create_from_template(entity_id, entity_type, name, token, client)
-        created_entity_id = created.entity_id
-        created_entity_type = created.entity_type
-        created_entity_name = created.name
-        entity_id = created.entity_id
-        entity_type = created.entity_type  # now "document" or "document_group"
-        if ctx:
-            await ctx.report_progress(progress=2, total=3)
+    created = await _resolve_entity(entity_id, entity_type, name, token, client, ctx)
+    entity_id = created.entity_id
+    entity_type = created.entity_type
 
     # Validate orders
     if not orders:
@@ -187,14 +175,14 @@ async def _create_embedded_invite(
     else:
         invite_response = _create_document_embedded_invite(client, token, entity_id, orders)
 
-    if ctx and created_entity_id:
+    if ctx and created.created_entity_id:
         await ctx.report_progress(progress=3, total=3)
 
     return CreateEmbeddedInviteResponse(
         invite_id=invite_response.invite_id,
         invite_entity=invite_response.invite_entity,
         recipient_links=invite_response.recipient_links,
-        created_entity_id=created_entity_id,
-        created_entity_type=created_entity_type,
-        created_entity_name=created_entity_name,
+        created_entity_id=created.created_entity_id,
+        created_entity_type=created.created_entity_type,
+        created_entity_name=created.created_entity_name,
     )

@@ -865,3 +865,12 @@ class SkillResponse(BaseModel):
         default=None,
         description="Skill content in Markdown, front-matter removed (fetch mode only)",
     )
+
+class EntityCreatedFromTemplate(BaseModel):
+    """Entity resolved to a dispatchable type after optional template materialisation."""
+
+    entity_id: str
+    entity_type: Literal["document", "document_group"]
+    created_entity_id: str | None = None
+    created_entity_type: str | None = None
+    created_entity_name: str | None = None
