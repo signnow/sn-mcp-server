@@ -989,3 +989,28 @@ class SkillResponse(BaseModel):
         default=None,
         description="Skill content in Markdown, front-matter removed (fetch mode only)",
     )
+
+
+# ----------------------------
+# Contacts tool models
+# ----------------------------
+
+
+class ContactItem(BaseModel):
+    """Curated contact information for agent consumption."""
+
+    id: str = Field(..., description="Contact ID")
+    email: str = Field(..., description="Contact email address")
+    first_name: str | None = Field(None, description="First name")
+    last_name: str | None = Field(None, description="Last name")
+    company: str | None = Field(None, description="Company name (flattened from nested company object)")
+
+
+class ContactListResponse(BaseModel):
+    """Response from the list_contacts tool."""
+
+    contacts: list[ContactItem] = Field(
+        default_factory=list,
+        description="Matching contacts (empty list when no contacts match — not an error)",
+    )
+    count: int = Field(..., description="Number of contacts returned in this response")
