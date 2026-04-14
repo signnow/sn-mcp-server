@@ -141,7 +141,7 @@ def _detect_send_invite_entity_type(
     entity_id: str,
     token: str,
     client: SignNowAPIClient,
-) -> tuple[Literal["document", "document_group", "template", "template_group"], Any]:
+) -> Literal["document", "document_group", "template", "template_group"]:
     """Detect the entity type for the given ID using a 4-probe waterfall.
 
     Probe order (stops at first match, re-raises non-detection errors):
@@ -156,21 +156,18 @@ def _detect_send_invite_entity_type(
         client: SignNow API client instance
 
     Returns:
-        Tuple of (entity_type, preloaded_group) where preloaded_group is the
-        GetDocumentGroupResponse when type is "document_group", None otherwise.
+        entity_type: Detected entity type as a string literal
     """
-    # Probe 1: document group
     try:
-        group = client.get_document_group(token, entity_id)
-        return ("document_group", group)
+        client.get_document_group(token, entity_id)
+        return "document_group"
     except SignNowAPIError as exc:
         if exc.status_code != 404:
             raise
 
-    # Probe 2: template group (SignNow returns 400/65582 or 404 when not found)
     try:
         client.get_document_group_template(token, entity_id)
-        return ("template_group", None)
+        return "template_group"
     except SignNowAPIHTTPError as exc:
         if exc.status_code != 404 and not _is_not_found_error(exc):
             raise
@@ -178,16 +175,14 @@ def _detect_send_invite_entity_type(
         if exc.status_code != 404:
             raise
 
-    # Probe 3: document
     try:
         client.get_document(token, entity_id)
-        return ("document", None)
+        return "document"
     except SignNowAPIError as exc:
         if exc.status_code != 404:
             raise
 
-    # Probe 4: last resort — assume template; creation will surface the error if wrong
-    return ("template", None)
+    return "template"
 
 
 async def _send_invite(
@@ -219,10 +214,12 @@ async def _send_invite(
     created_entity_id: str | None = None
     created_entity_type: str | None = None
     created_entity_name: str | None = None
-    preloaded_group: Any = None
-# define entity type > template or tg > doc docgroup invite
+
+    # note: entity_type is reused during method execution & could be changed from one type to another (e.g. template > document)
+    if entity_type is None:
+        entity_type = _detect_send_invite_entity_type(entity_id, token, client)
+    
     if entity_type in ("template", "template_group"):
-        # Step 1: create document/group from template
         if ctx:
             await ctx.report_progress(progress=1, total=3)
 
@@ -237,24 +234,15 @@ async def _send_invite(
         created_entity_type = created.entity_type
         created_entity_name = created.name
         entity_id = created.entity_id
-        entity_type = created.entity_type  # now "document" or "document_group"
+        entity_type = created.entity_type  # here entity_type becomes "document" or "document_group"
 
-    elif entity_type is None:
-        # Auto-detect using 4-probe waterfall
-        entity_type, preloaded_group = _detect_send_invite_entity_type(entity_id, token, client)
-
-        if entity_type in ("template", "template_group"):
-            # Recurse with the detected type to follow the template creation path
-            return await _send_invite(entity_id, entity_type, orders, token, client, name, ctx)
-
-    # Dispatch to document_group or document invite path
     if entity_type == "document_group":
-        group = preloaded_group or client.get_document_group(token, entity_id)
+        group = client.get_document_group(token, entity_id)
         invite_response = _send_document_group_field_invite(client, token, entity_id, orders, group)
     else:
         invite_response = _send_document_field_invite(client, token, entity_id, orders)
 
-    if ctx and created_entity_id:
+    if ctx:
         await ctx.report_progress(progress=3, total=3)
 
     return SendInviteResponse(

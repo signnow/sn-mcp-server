@@ -548,7 +548,6 @@ class SendInviteResponse(BaseModel):
     invite_id: str = Field(..., description="ID of the created invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
 
-    # Nullable fields — populated only when entity_type was template/template_group
     created_entity_id: str | None = Field(
         None, description="ID of the entity created from template (None when entity was document/document_group)"
     )
