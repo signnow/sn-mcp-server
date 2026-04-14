@@ -17,25 +17,19 @@ from .document import _get_document, _update_document_fields, _upload_document
 from .document_download_link import _get_document_download_link
 from .embedded_editor import (
     _create_embedded_editor,
-    _create_embedded_editor_from_template,
 )
 from .embedded_invite import (
     _create_embedded_invite,
-    _create_embedded_invite_from_template,
 )
 from .embedded_sending import (
     _create_embedded_sending,
-    _create_embedded_sending_from_template,
 )
 from .invite_status import _get_invite_status
 from .list_documents import _list_document_groups
 from .list_templates import _list_all_templates
 from .models import (
-    CreateEmbeddedEditorFromTemplateResponse,
     CreateEmbeddedEditorResponse,
-    CreateEmbeddedInviteFromTemplateResponse,
     CreateEmbeddedInviteResponse,
-    CreateEmbeddedSendingFromTemplateResponse,
     CreateEmbeddedSendingResponse,
     CreateFromTemplateResponse,
     DocumentDownloadLinkResponse,
@@ -362,9 +356,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="create_embedded_invite",
         description=(
-            "Create embedded invite for signing a document or document group. "
-            "This tool is ONLY for documents and document groups. "
-            "If you have template or template_group, use the alternative tool: create_embedded_invite_from_template"
+            "Create embedded invite for signing a document, document group, template, or template group. "
+            "For templates and template groups, automatically creates a document/group first, then creates the embedded invite."
         ),
         annotations=ToolAnnotations(
             title="Create embedded signing invite",
@@ -373,11 +366,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             idempotentHint=False,
             openWorldHint=True,
         ),
-        tags=["send_invite", "document", "document_group", "sign", "embedded", "workflow"],
+        tags=["send_invite", "document", "document_group", "template", "template_group", "sign", "embedded", "workflow"],
     )
-    def create_embedded_invite(
+    async def create_embedded_invite(
         ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         orders: Annotated[
             list[EmbeddedInviteOrder],
             Field(
@@ -388,33 +381,41 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             ),
         ],
         entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
         ] = None,
+        name: Annotated[str | None, Field(description="Optional name for the new document or document group (used only when entity_type is template or template_group)")] = None,
     ) -> CreateEmbeddedInviteResponse:
-        """Create embedded invite for signing a document or document group.
+        """Create embedded invite for signing a document, document group, template, or template group.
 
-        This tool is ONLY for documents and document groups.
-        If you have template or template_group, use the alternative tool: create_embedded_invite_from_template
+        When entity_type is 'template' or 'template_group', this tool automatically:
+        1. Creates a document/group from the template (create_from_template)
+        2. Creates an embedded invite for the created entity
+
+        For direct document/document_group calls the invite is created immediately.
+        The entity type is auto-detected if not provided.
 
         Args:
-            entity_id: ID of the document or document group
+            entity_id: ID of the document, document group, template, or template group
             orders: List of orders with recipients.
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            entity_type: Type of entity (optional, auto-detected if not provided).
+            name: Optional name for the new document or document group (template flows only)
 
         Returns:
-            CreateEmbeddedInviteResponse with invite ID and entity type
+            CreateEmbeddedInviteResponse with invite details; created_entity_* fields populated for template flows
         """
         token, client = _get_token_and_client(token_provider)
 
-        return _create_embedded_invite(entity_id, entity_type, orders, token, client)
+        if not orders:
+            raise ValueError("orders must contain at least one recipient order")
+
+        return await _create_embedded_invite(entity_id, entity_type, orders, token, client, name, ctx)
 
     @mcp.tool(
         name="create_embedded_sending",
         description=(
-            "Create embedded sending for managing, editing, or sending invites for a document or document group. "
-            "This tool is ONLY for documents and document groups. "
-            "If you have template or template_group, use the alternative tool: create_embedded_sending_from_template"
+            "Create embedded sending for managing, editing, or sending invites for a document, document group, template, or template group. "
+            "For templates and template groups, automatically creates a document/group first, then creates the embedded sending."
         ),
         annotations=ToolAnnotations(
             title="Create embedded sending link",
@@ -423,46 +424,51 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             idempotentHint=False,
             openWorldHint=True,
         ),
-        tags=["edit", "document", "document_group", "send_invite", "embedded", "workflow"],
+        tags=["edit", "document", "document_group", "template", "template_group", "send_invite", "embedded", "workflow"],
     )
-    def create_embedded_sending(
+    async def create_embedded_sending(
         ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
         ] = None,
+        name: Annotated[str | None, Field(description="Optional name for the new document or document group (used only when entity_type is template or template_group)")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
         link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15–45). Default: 15 min.")] = None,
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage",
     ) -> CreateEmbeddedSendingResponse:
-        """Create embedded sending for managing, editing, or sending invites for a document or document group.
+        """Create embedded sending for managing, editing, or sending invites for a document, document group, template, or template group.
 
-        This tool is ONLY for documents and document groups.
-        If you have template or template_group, use the alternative tool: create_embedded_sending_from_template
+        When entity_type is 'template' or 'template_group', this tool automatically:
+        1. Creates a document/group from the template (create_from_template)
+        2. Creates an embedded sending for the created entity
+
+        For direct document/document_group calls the sending is created immediately.
+        The entity type is auto-detected if not provided.
 
         Args:
-            entity_id: ID of the document or document group
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            entity_id: ID of the document, document group, template, or template group
+            entity_type: Type of entity (optional, auto-detected if not provided).
+            name: Optional name for the new document or document group (template flows only)
             redirect_uri: Optional redirect URI for the sending link
             redirect_target: Optional redirect target for the sending link
             link_expiration_minutes: Link lifetime in minutes (15–45). Default: 15 min.
             type: Specifies the sending step: 'manage' (default), 'edit', 'send-invite'
 
         Returns:
-            CreateEmbeddedSendingResponse with entity type, and URL
+            CreateEmbeddedSendingResponse with sending details; created_entity_* fields populated for template flows
         """
         token, client = _get_token_and_client(token_provider)
 
-        return _create_embedded_sending(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, type, token, client)
+        return await _create_embedded_sending(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, type, token, client, name, ctx)
 
     @mcp.tool(
         name="create_embedded_editor",
         description=(
-            "Create embedded editor for editing a document or document group. "
-            "This tool is ONLY for documents and document groups. "
-            "If you have template or template_group, use the alternative tool: create_embedded_editor_from_template"
+            "Create embedded editor for editing a document, document group, template, or template group. "
+            "For templates and template groups, automatically creates a document/group first, then creates the embedded editor."
         ),
         annotations=ToolAnnotations(
             title="Create embedded editor link",
@@ -471,37 +477,43 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             idempotentHint=False,
             openWorldHint=True,
         ),
-        tags=["edit", "document", "document_group", "embedded"],
+        tags=["edit", "document", "document_group", "template", "template_group", "embedded", "workflow"],
     )
-    def create_embedded_editor(
+    async def create_embedded_editor(
         ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
         ] = None,
+        name: Annotated[str | None, Field(description="Optional name for the new document or document group (used only when entity_type is template or template_group)")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
         link_expiration_minutes: Annotated[int | None, Field(ge=15, le=43200, description="Link lifetime in minutes (15–43200). Default: 15 min.")] = None,
     ) -> CreateEmbeddedEditorResponse:
-        """Create embedded editor for editing a document or document group.
+        """Create embedded editor for editing a document, document group, template, or template group.
 
-        This tool is ONLY for documents and document groups.
-        If you have template or template_group, use the alternative tool: create_embedded_editor_from_template
+        When entity_type is 'template' or 'template_group', this tool automatically:
+        1. Creates a document/group from the template (create_from_template)
+        2. Creates an embedded editor for the created entity
+
+        For direct document/document_group calls the editor is created immediately.
+        The entity type is auto-detected if not provided.
 
         Args:
-            entity_id: ID of the document or document group
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            entity_id: ID of the document, document group, template, or template group
+            entity_type: Type of entity (optional, auto-detected if not provided).
+            name: Optional name for the new document or document group (template flows only)
             redirect_uri: Optional redirect URI for the editor link
             redirect_target: Optional redirect target for the editor link
             link_expiration_minutes: Link lifetime in minutes (15–43200). Default: 15 min.
 
         Returns:
-            CreateEmbeddedEditorResponse with editor ID and entity type
+            CreateEmbeddedEditorResponse with editor details; created_entity_* fields populated for template flows
         """
         token, client = _get_token_and_client(token_provider)
 
-        return _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, token, client)
+        return await _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, token, client, name, ctx)
 
     @mcp.tool(
         name="create_from_template",
@@ -537,172 +549,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         token, client = _get_token_and_client(token_provider)
 
         return _create_from_template(entity_id, entity_type, name, token, client)
-
-    @mcp.tool(
-        name="create_embedded_sending_from_template",
-        description=(
-            "Create document/group from template and create embedded sending immediately. "
-            "This tool is ONLY for templates and template groups. "
-            "If you have document or document_group, use the alternative tool: create_embedded_sending"
-        ),
-        annotations=ToolAnnotations(
-            title="Create from template and embed sending",
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
-        ),
-        tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
-    )
-    async def create_embedded_sending_from_template(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the template or template group")],
-        entity_type: Annotated[
-            Literal["template", "template_group"] | None,
-            Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-        name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
-        redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
-        redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=45, description="Link lifetime in minutes (15–45). Default: 15 min.")] = None,
-        type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None,
-    ) -> CreateEmbeddedSendingFromTemplateResponse:
-        """Create document or document group from template and create embedded sending immediately.
-
-        This tool is ONLY for templates and template groups.
-        If you have document or document_group, use the alternative tool: create_embedded_sending
-
-        This tool combines two operations:
-        1. Creates a document/group from template using create_from_template
-        2. Creates an embedded sending for the created entity using create_embedded_sending
-
-        Args:
-            entity_id: ID of the template or template group
-            entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
-            name: Optional name for the new document or document group
-            redirect_uri: Optional redirect URI after completion
-            redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-            link_expiration_minutes: Link lifetime in minutes (15–45). Default: 15 min.
-            type: Type of sending step: 'manage', 'edit', or 'send-invite'
-
-        Returns:
-            CreateEmbeddedSendingFromTemplateResponse with created entity info and embedded sending details
-        """
-        token, client = _get_token_and_client(token_provider)
-
-        return await _create_embedded_sending_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration_minutes, type, token, client, ctx)
-
-    @mcp.tool(
-        name="create_embedded_editor_from_template",
-        description=(
-            "Create document/group from template and create embedded editor immediately. "
-            "This tool is ONLY for templates and template groups. "
-            "If you have document or document_group, use the alternative tool: create_embedded_editor"
-        ),
-        annotations=ToolAnnotations(
-            title="Create from template and embed editor",
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
-        ),
-        tags=["template", "template_group", "document", "document_group", "embedded_editor", "embedded", "workflow"],
-    )
-    async def create_embedded_editor_from_template(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the template or template group")],
-        entity_type: Annotated[
-            Literal["template", "template_group"] | None,
-            Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-        name: Annotated[str | None, Field(description="Name for the new document or document group")] = None,
-        redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
-        redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration_minutes: Annotated[int | None, Field(ge=15, le=43200, description="Link lifetime in minutes (15–43200). Default: 15 min.")] = None,
-    ) -> CreateEmbeddedEditorFromTemplateResponse:
-        """Create document or document group from template and create embedded editor immediately.
-
-        This tool is ONLY for templates and template groups.
-        If you have document or document_group, use the alternative tool: create_embedded_editor
-
-        This tool combines two operations:
-        1. Creates a document/group from template using create_from_template
-        2. Creates an embedded editor for the created entity using create_embedded_editor
-
-        Args:
-            entity_id: ID of the template or template group
-            entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
-            name: Optional name for the new document or document group
-            redirect_uri: Optional redirect URI after completion
-            redirect_target: Optional redirect target: 'self', 'blank', or 'self' (default)
-            link_expiration_minutes: Link lifetime in minutes (15–43200). Default: 15 min.
-
-        Returns:
-            CreateEmbeddedEditorFromTemplateResponse with created entity info and embedded editor details
-        """
-        token, client = _get_token_and_client(token_provider)
-
-        # Initialize client and use the imported function from embedded_editor module
-        return await _create_embedded_editor_from_template(entity_id, entity_type, name, redirect_uri, redirect_target, link_expiration_minutes, token, client, ctx)
-
-    @mcp.tool(
-        name="create_embedded_invite_from_template",
-        description=(
-            "Create document/group from template and create embedded invite immediately. "
-            "This tool is ONLY for templates and template groups. "
-            "If you have document or document_group, use the alternative tool: create_embedded_invite"
-        ),
-        annotations=ToolAnnotations(
-            title="Create from template and embed invite",
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=True,
-        ),
-        tags=["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
-    )
-    async def create_embedded_invite_from_template(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the template or template group")],
-        orders: Annotated[
-            list[EmbeddedInviteOrder],
-            Field(
-                description="List of orders with recipients for the embedded invite.",
-                examples=[
-                    [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}],
-                ],
-            ),
-        ],
-        entity_type: Annotated[
-            Literal["template", "template_group"] | None,
-            Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-        name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
-    ) -> CreateEmbeddedInviteFromTemplateResponse:
-        """Create document or document group from template and create embedded invite immediately.
-
-        This tool is ONLY for templates and template groups.
-        If you have document or document_group, use the alternative tool: create_embedded_invite
-
-        This tool combines two operations:
-        1. Creates a document/group from template using create_from_template
-        2. Creates an embedded invite for the created entity using create_embedded_invite
-
-        Args:
-            entity_id: ID of the template or template group
-            orders: List of orders with recipients for the embedded invite.
-            entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
-            name: Optional name for the new document or document group
-
-        Returns:
-            CreateEmbeddedInviteFromTemplateResponse with created entity info and embedded invite details
-        """
-        token, client = _get_token_and_client(token_provider)
-
-        if not orders:
-            raise ValueError("orders must contain at least one recipient order")
-
-        return await _create_embedded_invite_from_template(entity_id, entity_type, name, orders, token, client, ctx)
 
     def _get_invite_status_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> InviteStatus:
         token, client = _get_token_and_client(token_provider)
