@@ -4,9 +4,10 @@ Utility functions for SignNow MCP server tools.
 This module contains shared utility functions used across multiple tool modules.
 """
 
-from typing import Protocol, Union
+from typing import Literal, Protocol, Union
 
-from signnow_client.exceptions import SignNowAPIHTTPError
+from signnow_client import SignNowAPIClient
+from signnow_client.exceptions import SignNowAPIError, SignNowAPIHTTPError
 from signnow_client.models.folders_lite import RoleLite, _normalize_roles
 
 
@@ -61,3 +62,51 @@ def extract_role_names(roles: list[RoleType] | None) -> list[str]:
     """
     normalized = _normalize_roles(roles)
     return normalized if normalized is not None else []
+
+
+def _detect_entity_type(
+    entity_id: str,
+    token: str,
+    client: SignNowAPIClient,
+) -> Literal["document_group", "template_group", "document", "template"]:
+    """Detect the entity type for the given ID using a 4-probe waterfall.
+
+    Probe order (stops at first match, re-raises non-detection errors):
+      1. get_document_group       → "document_group"
+      2. get_document_group_template → "template_group"
+      3. get_document             → "document"
+      4. (no probe)               → "template" (last resort)
+
+    Args:
+        entity_id: ID to classify
+        token: Access token for SignNow API
+        client: SignNow API client instance
+
+    Returns:
+        entity_type: Detected entity type as a string literal
+    """
+    try:
+        client.get_document_group(token, entity_id)
+        return "document_group"
+    except SignNowAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    try:
+        client.get_document_group_template(token, entity_id)
+        return "template_group"
+    except SignNowAPIHTTPError as exc:
+        if exc.status_code != 404 and not _is_not_found_error(exc):
+            raise
+    except SignNowAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    try:
+        client.get_document(token, entity_id)
+        return "document"
+    except SignNowAPIError as exc:
+        if exc.status_code != 404:
+            raise
+
+    return "template"

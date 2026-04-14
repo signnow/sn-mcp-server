@@ -10,10 +10,9 @@ from typing import Any, Literal
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
-from signnow_client.exceptions import SignNowAPIError, SignNowAPIHTTPError
 
 from .models import InviteOrder, SendInviteResponse
-from .utils import _is_not_found_error
+from .utils import _detect_entity_type
 
 
 def _send_document_group_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: Any) -> SendInviteResponse:
@@ -137,54 +136,6 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
     return SendInviteResponse(invite_id=response.status, invite_entity="document")  # Document field invite returns status, not id
 
 
-def _detect_send_invite_entity_type(
-    entity_id: str,
-    token: str,
-    client: SignNowAPIClient,
-) -> Literal["document", "document_group", "template", "template_group"]:
-    """Detect the entity type for the given ID using a 4-probe waterfall.
-
-    Probe order (stops at first match, re-raises non-detection errors):
-      1. get_document_group   → "document_group" (returns loaded group as side-effect)
-      2. get_document_group_template → "template_group"
-      3. get_document         → "document"
-      4. (no probe)           → "template" (last resort)
-
-    Args:
-        entity_id: ID to classify
-        token: Access token for SignNow API
-        client: SignNow API client instance
-
-    Returns:
-        entity_type: Detected entity type as a string literal
-    """
-    try:
-        client.get_document_group(token, entity_id)
-        return "document_group"
-    except SignNowAPIError as exc:
-        if exc.status_code != 404:
-            raise
-
-    try:
-        client.get_document_group_template(token, entity_id)
-        return "template_group"
-    except SignNowAPIHTTPError as exc:
-        if exc.status_code != 404 and not _is_not_found_error(exc):
-            raise
-    except SignNowAPIError as exc:
-        if exc.status_code != 404:
-            raise
-
-    try:
-        client.get_document(token, entity_id)
-        return "document"
-    except SignNowAPIError as exc:
-        if exc.status_code != 404:
-            raise
-
-    return "template"
-
-
 async def _send_invite(
     entity_id: str,
     entity_type: Literal["document", "document_group", "template", "template_group"] | None,
@@ -217,7 +168,7 @@ async def _send_invite(
 
     # note: entity_type is reused during method execution & could be changed from one type to another (e.g. template > document)
     if entity_type is None:
-        entity_type = _detect_send_invite_entity_type(entity_id, token, client)
+        entity_type = _detect_entity_type(entity_id, token, client)
     
     if entity_type in ("template", "template_group"):
         if ctx:
