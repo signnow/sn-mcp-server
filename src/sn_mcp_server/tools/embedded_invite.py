@@ -11,11 +11,12 @@ from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 
+from .create_from_template import _create_from_template
 from .models import (
-    CreateEmbeddedInviteFromTemplateResponse,
     CreateEmbeddedInviteResponse,
     EmbeddedInviteOrder,
 )
+from .utils import _detect_entity_type
 
 
 def _create_document_group_embedded_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: Any) -> CreateEmbeddedInviteResponse:
@@ -131,112 +132,69 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
     return CreateEmbeddedInviteResponse(invite_id=response.data.id, invite_entity="document", recipient_links=recipient_links)
 
 
-def _create_embedded_invite(
-    entity_id: str, entity_type: Literal["document", "document_group"] | None, orders: list[EmbeddedInviteOrder], token: str, client: SignNowAPIClient
+async def _create_embedded_invite(
+    entity_id: str,
+    entity_type: Literal["document", "document_group", "template", "template_group"] | None,
+    orders: list[EmbeddedInviteOrder],
+    token: str,
+    client: SignNowAPIClient,
+    name: str | None = None,
+    ctx: Context | None = None,
 ) -> CreateEmbeddedInviteResponse:
-    """Private function to create embedded invite for signing a document or document group.
+    """Create embedded invite for signing a document, document group, template, or template group.
+
+    When entity_type is 'template' or 'template_group', creates a document/group
+    from the template first, then creates the embedded invite on the created entity.
 
     Args:
-        entity_id: ID of the document or document group
-        entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+        entity_id: ID of the document, document group, template, or template group
+        entity_type: Entity type (optional, auto-detected if None)
         orders: List of orders with recipients
         token: Access token for SignNow API
         client: SignNow API client instance
+        name: Optional name for the new entity (used only for template/template_group)
+        ctx: FastMCP context for progress reporting (used for template flows)
 
     Returns:
-        CreateEmbeddedInviteResponse with invite ID and entity type
+        CreateEmbeddedInviteResponse with invite details and optional created entity info
     """
-    # Determine entity type if not provided
-    document_group = None  # Store document group if found during auto-detection
+    created_entity_id: str | None = None
+    created_entity_type: str | None = None
+    created_entity_name: str | None = None
 
-    if not entity_type:
-        # Try to determine entity type by attempting to get document group first (higher priority)
-        try:
-            document_group = client.get_document_group(token, entity_id)
-            entity_type = "document_group"
-        except Exception:
-            # If document group not found, try document
-            try:
-                client.get_document(token, entity_id)
-                entity_type = "document"
-            except Exception:
-                raise ValueError(f"Entity with ID {entity_id} not found as either document group or document") from None
+    if entity_type is None:
+        entity_type = _detect_entity_type(entity_id, token, client)
+
+    if entity_type in ("template", "template_group"):
+        if ctx:
+            await ctx.report_progress(progress=1, total=3)
+        created = _create_from_template(entity_id, entity_type, name, token, client)
+        created_entity_id = created.entity_id
+        created_entity_type = created.entity_type
+        created_entity_name = created.name
+        entity_id = created.entity_id
+        entity_type = created.entity_type  # now "document" or "document_group"
+        if ctx:
+            await ctx.report_progress(progress=2, total=3)
 
     # Validate orders
     if not orders:
         raise ValueError("At least one order with recipients is required")
 
     if entity_type == "document_group":
-        # Create document group embedded invite
-        # Get the document group if we don't have it yet
-        if not document_group:
-            document_group = client.get_document_group(token, entity_id)
-
-        return _create_document_group_embedded_invite(client, token, entity_id, orders, document_group)
+        document_group = client.get_document_group(token, entity_id)
+        invite_response = _create_document_group_embedded_invite(client, token, entity_id, orders, document_group)
     else:
-        # Create document embedded invite
-        return _create_document_embedded_invite(client, token, entity_id, orders)
+        invite_response = _create_document_embedded_invite(client, token, entity_id, orders)
 
-
-async def _create_embedded_invite_from_template(
-    entity_id: str,
-    entity_type: Literal["template", "template_group"] | None,
-    name: str | None,
-    orders: list[EmbeddedInviteOrder],
-    token: str,
-    client: SignNowAPIClient,
-    ctx: Context,
-) -> CreateEmbeddedInviteFromTemplateResponse:
-    """Private function to create document/group from template and create embedded invite immediately.
-
-    Args:
-        entity_id: ID of the template or template group
-        entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
-        name: Optional name for the new document or document group
-        orders: List of orders with recipients for the embedded invite
-        token: Access token for SignNow API
-        client: SignNow API client instance
-        ctx: FastMCP context for progress reporting
-
-    Returns:
-        CreateEmbeddedInviteFromTemplateResponse with created entity info and embedded invite details
-    """
-    # Report initial progress
-    await ctx.report_progress(progress=1, total=3)
-
-    # Import and use the create from template function directly
-    from .create_from_template import _create_from_template
-
-    # Use the imported function to create from template
-    created_entity = _create_from_template(entity_id, entity_type, name, token, client)
-
-    # Report progress after template creation
-    await ctx.report_progress(progress=2, total=3)
-
-    if created_entity.entity_type == "document_group":
-        # Create document group embedded invite
-        document_group = client.get_document_group(token, created_entity.entity_id)
-        invite_response = _create_document_group_embedded_invite(client, token, created_entity.entity_id, orders, document_group)
-        # Report final progress after embedded invite creation
+    if ctx and created_entity_id:
         await ctx.report_progress(progress=3, total=3)
-        return CreateEmbeddedInviteFromTemplateResponse(
-            created_entity_id=created_entity.entity_id,
-            created_entity_type=created_entity.entity_type,
-            created_entity_name=created_entity.name,
-            invite_id=invite_response.invite_id,
-            invite_entity=invite_response.invite_entity,
-            recipient_links=invite_response.recipient_links,
-        )
-    else:
-        # Create document embedded invite
-        invite_response = _create_document_embedded_invite(client, token, created_entity.entity_id, orders)
-        # Report final progress after embedded invite creation
-        await ctx.report_progress(progress=3, total=3)
-        return CreateEmbeddedInviteFromTemplateResponse(
-            created_entity_id=created_entity.entity_id,
-            created_entity_type=created_entity.entity_type,
-            created_entity_name=created_entity.name,
-            invite_id=invite_response.invite_id,
-            invite_entity=invite_response.invite_entity,
-            recipient_links=invite_response.recipient_links,
-        )
+
+    return CreateEmbeddedInviteResponse(
+        invite_id=invite_response.invite_id,
+        invite_entity=invite_response.invite_entity,
+        recipient_links=invite_response.recipient_links,
+        created_entity_id=created_entity_id,
+        created_entity_type=created_entity_type,
+        created_entity_name=created_entity_name,
+    )
