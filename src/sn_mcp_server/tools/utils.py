@@ -89,7 +89,7 @@ def _detect_entity_type(
         client.get_document_group(token, entity_id)
         return "document_group"
     except SignNowAPIError as exc:
-        if exc.status_code != 404:
+        if exc.status_code != 404 and not _is_not_found_error(exc):
             raise
 
     try:
@@ -102,11 +102,6 @@ def _detect_entity_type(
         if exc.status_code != 404:
             raise
 
-    try:
-        client.get_document(token, entity_id)
-        return "document"
-    except SignNowAPIError as exc:
-        if exc.status_code != 404:
-            raise
+    document = client.get_document(token, entity_id)
 
-    return "template"
+    return "template" if document.template else "document"

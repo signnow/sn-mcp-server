@@ -607,9 +607,9 @@ class CreateEmbeddedInviteResponse(BaseModel):
     fields are populated. For direct document/document_group calls they are None.
     """
 
-    invite_id: str = Field(..., description="ID of the created embedded invite")
+    document_group_invite_id: str | None = Field(..., description="ID of the created document group embedded invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
-    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role and link for recipients with delivery_type='link'")
+    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role, invite id and link for recipients with delivery_type='link'")
 
     created_entity_id: str | None = Field(
         None, description="ID of the entity created from template (None when entity was document/document_group)"

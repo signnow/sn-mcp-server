@@ -15,6 +15,7 @@ from .create_from_template import _resolve_entity
 from .models import (
     CreateEmbeddedInviteResponse,
     EmbeddedInviteOrder,
+    EmbeddedInviteRecipient,
 )
 from .utils import _detect_entity_type
 
@@ -73,63 +74,49 @@ def _create_document_group_embedded_invite(client: SignNowAPIClient, token: str,
                 link_response = client.generate_embedded_invite_link(token, entity_id, response.data.id, link_request)
                 recipient_links.append({"role": recipient.role, "link": link_response.data.link})
 
-    return CreateEmbeddedInviteResponse(invite_id=response.data.id, invite_entity="document_group", recipient_links=recipient_links)
+    return CreateEmbeddedInviteResponse(document_group_invite_id=response.data.id, invite_entity="document_group", recipient_links=recipient_links)
 
 
-def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any]) -> CreateEmbeddedInviteResponse:
+def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[EmbeddedInviteOrder]) -> CreateEmbeddedInviteResponse:
     """Private function to create document embedded invite."""
     from signnow_client import (
         CreateDocumentEmbeddedInviteRequest,
         DocumentEmbeddedInvite,
+        GenerateDocumentEmbeddedInviteLinkRequest,
     )
 
-    # Convert orders to document embedded invite
+    flat_recipients: list[tuple[int, EmbeddedInviteRecipient]] = [
+        (order_info.order, recipient)
+        for order_info in orders
+        for recipient in order_info.recipients
+    ]
+
     invites = []
-    for order_info in orders:
-        signers = []
-        for recipient in order_info.recipients:
-            # Create DocumentEmbeddedInvite for each recipient
-            invite_data = {
-                "email": recipient.email,
-                "auth_method": recipient.auth_method,
-                "first_name": recipient.first_name,
-                "last_name": recipient.last_name,
-                "language": "en",  # Default language
-                "required_preset_signature_name": None,
-                "redirect_uri": recipient.redirect_uri,
-                "decline_redirect_uri": recipient.decline_redirect_uri,
-                "close_redirect_uri": recipient.close_redirect_uri,
-                "delivery_type": recipient.delivery_type,
-                "subject": recipient.subject,
-                "message": recipient.message,
-                "documents": [{"id": entity_id, "role": recipient.role, "action": recipient.action}],
-            }
-
-            # Only add redirect_target if redirect_uri is provided and not empty
-            if recipient.redirect_uri and recipient.redirect_uri.strip():
-                invite_data["redirect_target"] = recipient.redirect_target
-
-            doc_invite = DocumentEmbeddedInvite(**invite_data)
-            signers.append(doc_invite)
-
-        invites.append({"order": str(order_info.order), "signers": signers})
-
+    for order, recipient in flat_recipients:
+        invite = recipient.model_dump()
+        invite["order"] = order
+        invite["language"] = "en"  # Default language
+        invite["required_preset_signature_name"] = None
+        invites.append(DocumentEmbeddedInvite(**invite))
+    
     request_data = CreateDocumentEmbeddedInviteRequest(invites=invites)
-
     response = client.create_document_embedded_invite(token, entity_id, request_data)
 
-    # Generate links for recipients with delivery_type='link'
+    invite_by_email_order = {(i.email, i.order): i for i in response.data}
+
     recipient_links = []
-    for order_info in orders:
-        for recipient in order_info.recipients:
-            if recipient.delivery_type == "link":
-                from signnow_client import GenerateDocumentEmbeddedInviteLinkRequest
+    for order, recipient in flat_recipients:
+        # link generation only succeeds for invites in 'pending' status, with multiple signing orders, only order-1 invites are pending immediately
+        if recipient.delivery_type == "link" and order == 1: 
+            invite = invite_by_email_order.get((recipient.email, order))
+            if invite is None:
+                msg = f"No invite returned for email '{recipient.email}' on document '{entity_id}'"
+                raise ValueError(msg)
+            link_request = GenerateDocumentEmbeddedInviteLinkRequest(auth_method=recipient.auth_method)
+            link_response = client.generate_document_embedded_invite_link(token, entity_id, invite.id, link_request)
+            recipient_links.append({"role": recipient.role, "link": link_response.data["link"], "document_invite_id": invite.id})
 
-                link_request = GenerateDocumentEmbeddedInviteLinkRequest(email=recipient.email, auth_method=recipient.auth_method)
-                link_response = client.generate_document_embedded_invite_link(token, entity_id, response.data.id, link_request)
-                recipient_links.append({"role": recipient.role, "link": link_response.data.link})
-
-    return CreateEmbeddedInviteResponse(invite_id=response.data.id, invite_entity="document", recipient_links=recipient_links)
+    return CreateEmbeddedInviteResponse(document_group_invite_id=None, invite_entity="document", recipient_links=recipient_links)
 
 
 async def _create_embedded_invite(
@@ -165,10 +152,6 @@ async def _create_embedded_invite(
     entity_id = created.entity_id
     entity_type = created.entity_type
 
-    # Validate orders
-    if not orders:
-        raise ValueError("At least one order with recipients is required")
-
     if entity_type == "document_group":
         document_group = client.get_document_group(token, entity_id)
         invite_response = _create_document_group_embedded_invite(client, token, entity_id, orders, document_group)
@@ -179,7 +162,7 @@ async def _create_embedded_invite(
         await ctx.report_progress(progress=3, total=3)
 
     return CreateEmbeddedInviteResponse(
-        invite_id=invite_response.invite_id,
+        document_group_invite_id=invite_response.document_group_invite_id,
         invite_entity=invite_response.invite_entity,
         recipient_links=invite_response.recipient_links,
         created_entity_id=created.created_entity_id,

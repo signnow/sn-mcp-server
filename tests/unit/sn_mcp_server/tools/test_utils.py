@@ -26,7 +26,7 @@ class TestDetectEntityType:
 
     def test_template_group_fallback(self, mock_client: MagicMock) -> None:
         """Returns 'template_group' when group 404s but template group succeeds."""
-        mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
+        mock_client.get_document_group.side_effect = SignNowAPIError(message="", status_code=400, response_data={"errors": [{"code": 65582, "message": ""}]})
         mock_client.get_document_group_template.return_value = MagicMock()
 
         result = _detect_entity_type("tg1", "tok", mock_client)
@@ -35,20 +35,20 @@ class TestDetectEntityType:
         mock_client.get_document.assert_not_called()
 
     def test_document_fallback(self, mock_client: MagicMock) -> None:
-        """Returns 'document' when group and template-group both 404 but document succeeds."""
+        """Returns 'document' when group and template-group both 404 and document.template is falsy."""
         mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
         mock_client.get_document_group_template.side_effect = SignNowAPINotFoundError()
-        mock_client.get_document.return_value = MagicMock()
+        mock_client.get_document.return_value = MagicMock(template=False)
 
         result = _detect_entity_type("doc1", "tok", mock_client)
 
         assert result == "document"
 
-    def test_template_last_resort(self, mock_client: MagicMock) -> None:
-        """Returns 'template' when all three probes raise 404."""
+    def test_template_detected_via_document(self, mock_client: MagicMock) -> None:
+        """Returns 'template' when group and template-group both 404 and document.template is truthy."""
         mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
         mock_client.get_document_group_template.side_effect = SignNowAPINotFoundError()
-        mock_client.get_document.side_effect = SignNowAPINotFoundError()
+        mock_client.get_document.return_value = MagicMock(template=True)
 
         result = _detect_entity_type("tmpl1", "tok", mock_client)
 
