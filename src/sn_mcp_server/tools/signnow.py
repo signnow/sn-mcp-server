@@ -311,7 +311,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         description=(
             "Send invite to sign a document or document group. "
             "This tool is ONLY for documents and document groups. "
-            "If you have template or template_group, use the alternative tool: send_invite_from_template"
+            "If you have template or template_group, use the alternative tool: send_invite_from_template. "
+            "Before calling this tool, offer the user a preview via view_document unless they have already confirmed they want to send."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -543,7 +544,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         description=(
             "Create document/group from template and send invite immediately. "
             "This tool is ONLY for templates and template groups. "
-            "If you have document or document_group, use the alternative tool: send_invite"
+            "If you have document or document_group, use the alternative tool: send_invite. "
+            "Before calling this tool, offer the user a preview via view_document unless they have already confirmed they want to send."
         ),
         annotations=ToolAnnotations(
             title="Create from template and send invite",
