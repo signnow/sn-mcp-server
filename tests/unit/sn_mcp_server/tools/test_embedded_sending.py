@@ -122,7 +122,7 @@ class TestCreateEmbeddedSending:
         """entity_type=None falls back to document when group and template_group both 404."""
         mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
         mock_client.get_document_group_template.side_effect = SignNowAPINotFoundError()
-        mock_client.get_document.return_value = MagicMock()
+        mock_client.get_document.return_value = MagicMock(template=False)
         mock_client.create_document_embedded_sending.return_value = MagicMock(
             data=MagicMock(url="https://app.signnow.com/send/doc_fb")
         )

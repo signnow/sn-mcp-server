@@ -166,7 +166,7 @@ class TestSendInvite:
         """Test auto-detection falls back to document when group lookup fails."""
         mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
         mock_client.get_document_group_template.side_effect = SignNowAPINotFoundError()
-        mock_client.get_document.return_value = MagicMock()  # Document found
+        mock_client.get_document.return_value = MagicMock(template=False)
         mock_client.get_user_info.return_value = MagicMock(primary_email="owner@test.com")
         mock_client.create_document_field_invite.return_value = MagicMock(status="doc_fallback")
 
@@ -174,18 +174,12 @@ class TestSendInvite:
 
         assert result.invite_entity == "document"
 
-    async def test_raises_value_error_when_entity_not_found(self, mock_client: MagicMock) -> None:
-        """Test ValueError raised when entity not found as group, template group, or document."""
-        from signnow_client.exceptions import SignNowAPIHTTPError
-
+    async def test_raises_when_entity_not_found(self, mock_client: MagicMock) -> None:
+        """Test SignNowAPINotFoundError propagates when all detection probes return 404."""
         mock_client.get_document_group.side_effect = SignNowAPINotFoundError()
         mock_client.get_document_group_template.side_effect = SignNowAPINotFoundError()
         mock_client.get_document.side_effect = SignNowAPINotFoundError()
-        # Falls back to "template"; simulate template-not-found error from SignNow
-        mock_client.create_document_from_template.side_effect = SignNowAPIHTTPError(
-            "not found", 400, {"errors": [{"code": 65582, "message": "Document not found"}]}
-        )
 
-        with pytest.raises(ValueError, match="entity_gone"):
+        with pytest.raises(SignNowAPINotFoundError):
             await _send_invite("entity_gone", None, [_make_order()], "tok", mock_client)
 
