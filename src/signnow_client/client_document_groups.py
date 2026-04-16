@@ -16,6 +16,8 @@ from .models import (
     CancelFreeformInviteRequest,
     CreateDocumentGroupEmbeddedEditorRequest,
     CreateDocumentGroupEmbeddedSendingRequest,
+    CreateDocumentGroupEmbeddedViewRequest,
+    CreateDocumentGroupEmbeddedViewResponse,
     CreateDocumentGroupFromTemplateRequest,
     CreateDocumentGroupFromTemplateResponse,
     CreateDocumentGroupRequest,
@@ -428,7 +430,7 @@ class DocumentGroupClientMixin:
 
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
-        response = self._post(f"/v2/document-groups/{doc_group_id}/document-group-template", headers=headers, json_data=request_data.model_dump(exclude_none=True))
+        self._post(f"/v2/document-groups/{doc_group_id}/document-group-template", headers=headers, json_data=request_data.model_dump(exclude_none=True))
 
         # This endpoint returns 202 (Accepted) status
         return True
@@ -505,7 +507,7 @@ class DocumentGroupClientMixin:
         except httpx.TimeoutException as e:
             raise SignNowAPITimeoutError("SignNow API timeout") from e
         except httpx.HTTPStatusError as e:
-            raise self._handle_http_error(e)
+            raise self._handle_http_error(e) from e
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in edit_document_group_template_recipients request: {e}") from e
 
@@ -531,4 +533,37 @@ class DocumentGroupClientMixin:
             headers=headers,
             json_data=request_data.model_dump(exclude_none=True),
             validate_model=CreateDocumentGroupFromTemplateResponse,
+        )
+
+    def create_document_group_embedded_view(
+        self,
+        token: str,
+        document_group_id: str,
+        request_data: CreateDocumentGroupEmbeddedViewRequest,
+    ) -> CreateDocumentGroupEmbeddedViewResponse:
+        """Create an embedded view link for a document group.
+
+        Generates a link that opens the document group in read-only mode.
+        No SignNow login required. Link reusable until expiration.
+
+        POST /v2/document-groups/{document_group_id}/embedded-view
+
+        Args:
+            token: Access token for authentication
+            document_group_id: ID of the document group to view
+            request_data: View link configuration (expiration, redirect)
+
+        Returns:
+            CreateDocumentGroupEmbeddedViewResponse with the generated view link
+
+        Raises:
+            SignNowAPIError: On 400/403/404/422 API errors
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._post(
+            f"/v2/document-groups/{document_group_id}/embedded-view",
+            headers=headers,
+            json_data=request_data.model_dump(exclude_none=True),
+            validate_model=CreateDocumentGroupEmbeddedViewResponse,
         )

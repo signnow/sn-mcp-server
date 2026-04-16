@@ -462,6 +462,7 @@ class DocumentFieldInviteReminder(BaseModel):
     remind_repeat: int | None = Field(None, description="A recipient gets a reminder email each x days after the invite is sent", ge=1, le=7)
 
 
+# Unused — document path uses flat fields on DocumentFieldInviteRecipient; scheduled for cleanup
 class DocumentFieldInviteAuthentication(BaseModel):
     """Authentication settings for document field invite recipient."""
 
@@ -976,7 +977,7 @@ class SendDocumentCopyByEmailRequest(BaseModel):
     message: str | None = Field(None, description="Optional message body")
     subject: str | None = Field(None, description="Optional email subject")
 
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Exclude null fields — SignNow treats absent fields as defaults."""
         data = super().model_dump(**kwargs)
         return {k: v for k, v in data.items() if v is not None}
@@ -986,3 +987,47 @@ class SendDocumentCopyByEmailResponse(BaseModel):
     """Response from POST /document/{id}/email2."""
 
     status: str = Field(..., description="'success' on success")
+
+
+class CreateDocumentEmbeddedViewRequest(BaseModel):
+    """Request model for creating a document embedded view link.
+
+    POST /v2/documents/{document_id}/embedded-view
+    """
+
+    link_expiration: int | None = Field(
+        None,
+        ge=43200,
+        le=518400,
+        description="Link expiration in minutes (43200–518400, default: 43200 = 30 days)",
+    )
+    redirect_uri: str | None = Field(
+        None,
+        description="URL opened after clicking Close button. Default: 'You've viewed a document' page.",
+    )
+    redirect_target: str | None = Field(
+        None,
+        description="Redirect target: 'blank' (new tab) or 'self' (same tab). Only used if redirect_uri is set.",
+    )
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
+        """Override to exclude redirect_target when redirect_uri is absent."""
+        data = super().model_dump(**kwargs)
+        if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
+            del data["redirect_target"]
+        return data
+
+
+class CreateDocumentEmbeddedViewResponse(BaseModel):
+    """Response from POST /v2/documents/{document_id}/embedded-view.
+
+    Note: Document endpoint wraps link in ``data`` object, same as the
+    document-group endpoint.
+    """
+
+    class Data(BaseModel):
+        """Embedded view link wrapper."""
+
+        link: str = Field(..., description="Embedded view link for the document")
+
+    data: Data = Field(..., description="Embedded view data")

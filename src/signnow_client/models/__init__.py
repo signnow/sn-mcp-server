@@ -4,6 +4,7 @@ SignNow API Data Models
 Pydantic models for SignNow API responses and requests.
 """
 
+from .contacts import *
 from .document_groups import *
 from .other_models import *
 from .templates_and_documents import *
@@ -104,6 +105,9 @@ __all__ = [
     # Document copy by email models
     "SendDocumentCopyByEmailRequest",
     "SendDocumentCopyByEmailResponse",
+    # Document embedded view models
+    "CreateDocumentEmbeddedViewRequest",
+    "CreateDocumentEmbeddedViewResponse",
     # General Embedded Invite models (for document signing)
     "EmbeddedInviteAuthentication",
     "EmbeddedInviteDocument",
@@ -156,6 +160,14 @@ __all__ = [
     # Document group embedded models
     "CreateDocumentGroupEmbeddedEditorRequest",
     "CreateDocumentGroupEmbeddedSendingRequest",
+    "CreateDocumentGroupEmbeddedViewRequest",
+    "EmbeddedViewData",
+    "CreateDocumentGroupEmbeddedViewResponse",
+    # CRM Contacts
+    "CrmContactPhone",
+    "CrmContactCompany",
+    "CrmContact",
+    "CrmContactsResponse",
     # Other Models
     "OrganizationSetting",
     "DocumentDownloadLinkResponse",

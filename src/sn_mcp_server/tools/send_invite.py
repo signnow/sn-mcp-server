@@ -5,15 +5,64 @@ This module contains functions for sending invites to sign documents and documen
 from the SignNow API.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
+from signnow_client.exceptions import SignNowAPIError
+from signnow_client.models.document_groups import GetDocumentGroupResponse
+from signnow_client.models.templates_and_documents import FieldInviteAuthentication
+from .models import InviteOrder, SendInviteResponse, SignerAuthentication
 from sn_mcp_server.tools.create_from_template import _resolve_entity
-
 from .models import InviteOrder, SendInviteResponse
 from .utils import _detect_entity_type
+
+
+def _build_document_auth_kwargs(authentication: SignerAuthentication | None) -> dict[str, Any]:
+    """Build authentication kwargs for DocumentFieldInviteRecipient.
+
+    Pure transformation — no validation, no network calls.
+    SignerAuthentication's @model_validator guarantees required credentials are
+    present before this function is called. Returns an empty dict when
+    authentication is None so the caller can unconditionally call .update().
+    """
+    if authentication is None:
+        return {}
+    kwargs: dict[str, Any] = {"authentication_type": authentication.type}
+    if authentication.type == "password":
+        kwargs["password"] = authentication.password
+    elif authentication.type == "phone":
+        kwargs["phone"] = authentication.phone
+        # Always set method — even when None — so it overrides the DocumentFieldInviteRecipient
+        # field default of 'sms'. A None value is then dropped by model_dump(exclude_none=True),
+        # meaning the key is omitted from the API request when not explicitly specified.
+        kwargs["method"] = authentication.method
+        if authentication.sms_message:
+            kwargs["authentication_sms_message"] = authentication.sms_message
+    return kwargs
+
+
+def _build_field_invite_authentication(authentication: SignerAuthentication | None) -> FieldInviteAuthentication | None:
+    """Convert tool-layer SignerAuthentication to signnow_client FieldInviteAuthentication.
+
+    Pure transformation — no validation, no network calls.
+    SignerAuthentication's @model_validator guarantees required credentials are
+    present before this function is called. Returns None when authentication is
+    None so the caller can guard with 'if field_auth is not None'.
+    """
+    if authentication is None:
+        return None
+    if authentication.type == "password":
+        return FieldInviteAuthentication(type="password", value=authentication.password)
+    # type == "phone": set both value and phone for maximum SignNow API compatibility
+    return FieldInviteAuthentication(
+        type="phone",
+        value=authentication.phone,
+        phone=authentication.phone,
+        method=authentication.method,
+        message=authentication.sms_message,
+    )
 
 
 def _send_document_group_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: Any) -> SendInviteResponse:
@@ -71,6 +120,10 @@ def _send_document_group_field_invite(client: SignNowAPIClient, token: str, enti
                     if recipient.redirect_uri and recipient.redirect_uri.strip():
                         action_data["redirect_target"] = recipient.redirect_target
 
+                    field_auth = _build_field_invite_authentication(recipient.authentication)
+                    if field_auth is not None:
+                        action_data["authentication"] = field_auth
+
                     action = FieldInviteAction(**action_data)
                     actions.append(action)
 
@@ -125,6 +178,7 @@ def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id:
             # When recipient.expiration_days is None, the model receives None which is
             # excluded from the serialised payload, so SignNow uses the account default.
             recipient_data["expiration_days"] = recipient.expiration_days
+            recipient_data.update(_build_document_auth_kwargs(recipient.authentication))
 
             doc_recipient = DocumentFieldInviteRecipient(**recipient_data)
             recipients.append(doc_recipient)

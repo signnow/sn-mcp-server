@@ -8,11 +8,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from signnow_client.models.document_groups import DocumentGroupV2FieldInvite
 from signnow_client.models.folders_lite import DocumentGroupInviteLite, FieldInviteLite
 from signnow_client.models.templates_and_documents import DocumentFieldInviteStatus
+
+from ..config import _mask_secret_value
 
 # ----------------------------
 # Status constants
@@ -496,6 +498,81 @@ class InviteReminderSettings(BaseModel):
     )
 
 
+class SignerAuthentication(BaseModel):
+    """Optional signer identity verification settings.
+
+    Use ONLY when the user explicitly requests authentication for a signer.
+    Do NOT proactively suggest or apply this. Omitting it sends the invite
+    with no authentication (the default SignNow behaviour).
+    """
+
+    type: Literal["password", "phone"] = Field(
+        ...,
+        description=("Authentication method: 'password' — signer must enter a pre-set secret phrase; 'phone' — signer receives a one-time code via SMS or phone call."),
+    )
+    password: str | None = Field(
+        None,
+        description="Secret phrase the signer must enter. Required when type='password'.",
+    )
+    phone: str | None = Field(
+        None,
+        description="Signer's phone number (E.164 recommended). Required when type='phone'.",
+    )
+    method: Literal["sms", "phone_call"] | None = Field(
+        default=None,
+        description=(
+            "Delivery method for the one-time code. Used only when type='phone'. "
+            "Defaults to 'sms' on the SignNow backend when not specified. "
+            "Omit for password auth — this field has no effect in that context."
+        ),
+    )
+    sms_message: str | None = Field(
+        None,
+        description=("Custom SMS message body (max 140 chars). Use '{password}' placeholder where the code should be inserted. Used only when type='phone' and method='sms'."),
+        max_length=140,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_irrelevant_credential(cls, data: Any) -> Any:  # noqa: ANN401
+        """Remove the irrelevant credential from the raw input dict before Pydantic captures
+        it for ValidationError.input_value.
+
+        Prevents password from appearing in error output when type='phone' (and vice versa).
+        Runs before field assignment, so the raw dict captured by Pydantic for error
+        reporting never contains both type='phone' and a password simultaneously.
+        """
+        if isinstance(data, dict):
+            auth_type = data.get("type")
+            if auth_type == "phone":
+                data = {k: v for k, v in data.items() if k != "password"}
+            elif auth_type == "password":
+                data = {k: v for k, v in data.items() if k not in ("phone", "method", "sms_message")}
+        return data
+
+    @model_validator(mode="after")
+    def _validate_required_credentials(self) -> SignerAuthentication:
+        """Enforce that the credential matching the selected type is present and non-blank.
+
+        Also normalizes stored values by stripping leading/trailing whitespace so
+        the model guarantees the persisted value is trimmed before reaching the API.
+        """
+        if self.type == "password":
+            if not (self.password or "").strip():
+                raise ValueError("password is required when authentication type is 'password'")
+            self.password = self.password.strip()  # type: ignore[union-attr]
+        if self.type == "phone":
+            if not (self.phone or "").strip():
+                raise ValueError("phone is required when authentication type is 'phone'")
+            self.phone = self.phone.strip()  # type: ignore[union-attr]
+        return self
+
+    def __repr__(self) -> str:
+        """Mask password in repr to prevent secret leakage in logs and error messages."""
+        masked_password = _mask_secret_value(self.password) if self.password else None
+        return f"SignerAuthentication(type={self.type!r}, password={masked_password!r}, phone={self.phone!r}, method={self.method!r})"
+
+
 class InviteRecipient(BaseModel):
     """Recipient information for invite."""
 
@@ -521,6 +598,15 @@ class InviteRecipient(BaseModel):
         ),
         ge=3,
         le=180,
+    )
+    authentication: SignerAuthentication | None = Field(
+        None,
+        description=(
+            "Optional signer identity verification. "
+            "ONLY set this when the user explicitly asks for authentication. "
+            "Leave as None (the default) to send invites without any verification — "
+            "this is the standard behaviour and must not be changed unless asked."
+        ),
     )
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
@@ -845,6 +931,15 @@ class SkillSummary(BaseModel):
     description: str = Field(description="One-line description from skill front-matter")
 
 
+class ViewDocumentResponse(BaseModel):
+    """Response from the view_document tool."""
+
+    view_link: str = Field(..., description="Embedded view link — opens the document in a read-only viewer without requiring SignNow login")
+    document_name: str = Field(..., description="Name of the document or document group")
+    entity_id: str = Field(..., description="Document or document group ID")
+    entity_type: str = Field(..., description="Entity type: 'document' or 'document_group'")
+
+
 class SkillResponse(BaseModel):
     """Response from the signnow_skills tool.
 
@@ -865,6 +960,56 @@ class SkillResponse(BaseModel):
         default=None,
         description="Skill content in Markdown, front-matter removed (fetch mode only)",
     )
+
+
+# ----------------------------
+# Contacts tool models
+# ----------------------------
+
+
+class ContactItem(BaseModel):
+    """Curated contact information for agent consumption."""
+
+    id: str = Field(..., description="Contact ID")
+    email: str = Field(..., description="Contact email address")
+    first_name: str | None = Field(None, description="First name")
+    last_name: str | None = Field(None, description="Last name")
+    company: str | None = Field(None, description="Company name (flattened from nested company object)")
+
+
+class ContactListResponse(BaseModel):
+    """Response from the list_contacts tool."""
+
+    contacts: list[ContactItem] = Field(
+        default_factory=list,
+        description="Matching contacts (empty list when no contacts match — not an error)",
+    )
+    count: int = Field(..., description="Number of contacts returned in this response")
+
+
+# ----------------------------
+# Contacts tool models
+# ----------------------------
+
+
+class ContactItem(BaseModel):
+    """Curated contact information for agent consumption."""
+
+    id: str = Field(..., description="Contact ID")
+    email: str = Field(..., description="Contact email address")
+    first_name: str | None = Field(None, description="First name")
+    last_name: str | None = Field(None, description="Last name")
+    company: str | None = Field(None, description="Company name (flattened from nested company object)")
+
+
+class ContactListResponse(BaseModel):
+    """Response from the list_contacts tool."""
+
+    contacts: list[ContactItem] = Field(
+        default_factory=list,
+        description="Matching contacts (empty list when no contacts match — not an error)",
+    )
+    count: int = Field(..., description="Number of contacts returned in this response")
 
 class EntityCreatedFromTemplate(BaseModel):
     """Entity resolved to a dispatchable type after optional template materialisation."""
