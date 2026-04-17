@@ -329,3 +329,27 @@ class TestSignnow101Staleness:
         registered = self._registered_tool_names()
         missing = referenced - registered
         assert not missing, f"Tool(s) in signnow101.md mapping table are not registered: {sorted(missing)}. Update signnow101.md or register the missing tools."
+
+
+class TestSignnow101Content:
+    """Content assertions for the signnow101 skill — verifies SN-30533 sections exist."""
+
+    _SKILLS_DIR: Path = Path(__file__).parents[4] / "src" / "sn_mcp_server" / "skills"
+
+    def _body(self) -> str:
+        result = _get_skill(self._SKILLS_DIR, "signnow101")
+        assert result.body is not None
+        return result.body
+
+    def test_signnow101_contains_sending_for_signing_section(self) -> None:
+        """Body must contain the '## 4. Sending for Signing' section heading."""
+        assert "## 4. Sending for Signing" in self._body()
+
+    def test_signnow101_contains_signing_link_etiquette(self) -> None:
+        """Body must contain the 'Signing Link Etiquette' subsection heading."""
+        assert "Signing Link Etiquette" in self._body()
+
+    def test_signnow101_contains_never_auto_send_rule(self) -> None:
+        """Body must contain a 'NEVER auto-send' prohibition near the signing link section."""
+        body = self._body()
+        assert re.search(r"NEVER.*auto.?send|auto.?send.*NEVER", body, re.IGNORECASE | re.DOTALL), "Expected 'NEVER auto-send' rule in signnow101.md but not found"

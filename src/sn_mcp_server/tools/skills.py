@@ -137,7 +137,11 @@ def bind(mcp: FastMCP, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="signnow_skills",
-        description=("Query the bundled SignNow skill library. Omit skill_name to list all skills with descriptions. Provide skill_name to read the full skill body."),
+        description=(
+            "Query the bundled SignNow skill library. Omit skill_name to list all skills with descriptions. "
+            "Provide skill_name to read the full skill body. "
+            "Load signnow101 before performing any SignNow action — it contains required workflow rules including when to preview before sending."
+        ),
         annotations=ToolAnnotations(
             title="Query SignNow skill library",
             readOnlyHint=True,

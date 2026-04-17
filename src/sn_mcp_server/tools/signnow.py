@@ -71,7 +71,7 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
     Raises:
         ValueError: If no access token is available
     """
-    headers = get_http_headers()
+    headers = get_http_headers(include={"authorization"})
     token = token_provider.get_access_token(headers)
 
     if not token:
@@ -326,6 +326,17 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
+        preview_was_shown: Annotated[
+            bool | None,
+            Field(
+                description=(
+                    "This flag signals that the user has viewed the document preview. "
+                    "Prompt the user to view the document before submitting. "
+                    "If the user says yes, call view_document first, show the result, then call send_invite again with preview_was_shown=True. "
+                    "If the user says no, call send_invite with preview_was_shown=False."
+                )
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["document", "document_group", "template", "template_group"] | None,
             Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
@@ -344,6 +355,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the document, document group, template, or template group
             orders: List of orders with recipients.
+            preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
             entity_type: Type of entity (optional, auto-detected if not provided).
             name: Optional name for the new document or document group (template flows only)
 
