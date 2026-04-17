@@ -334,13 +334,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
-        preview: Annotated[
-            Literal["view_first", "send_directly"] | None,
+        preview_was_shown: Annotated[
+            bool | None,
             Field(
                 description=(
-                    "Ask the user: 'Would you like to view the document before I send the invite?' "
-                    "Set 'view_first' if yes — call view_document first, show the result, then call send_invite again with preview='view_first'. "
-                    "Set 'send_directly' if no. Do not omit this parameter."
+                    "This flag signals that the user has viewed the document preview. "
+                    "Prompt the user to view the document before submitting. "
+                    "If the user says yes, call view_document first, show the result, then call send_invite again with preview_was_shown=True. "
+                    "If the user says no, call send_invite with preview_was_shown=False."
                 )
             ),
         ] = None,
@@ -357,13 +358,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the document or document group
             orders: List of orders with recipients.
-            preview: Ask the user first — 'view_first' or 'send_directly'.
+            preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
             entity_type: Type of entity: 'document' or 'document_group' (optional).
 
         Returns:
-            SendInviteResponse with invite ID and entity type, or a question string if preview not set.
+            SendInviteResponse with invite ID and entity type, or a question string if preview_was_shown not set.
         """
-        if preview is None:
+        if preview_was_shown is None:
             return (
                 "Before sending the invite, please confirm: "
                 "Would you like to view the document first? "
@@ -584,13 +585,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
-        preview: Annotated[
-            Literal["view_first", "send_directly"] | None,
+        preview_was_shown: Annotated[
+            bool | None,
             Field(
                 description=(
-                    "Ask the user: 'Would you like to view the document before I send the invite?' "
-                    "Set 'view_first' if yes — call view_document first, show the result, then call send_invite_from_template again with preview='view_first'. "
-                    "Set 'send_directly' if no. Do not omit this parameter."
+                    "This flag signals that the user has viewed the document preview. "
+                    "Prompt the user to view the document before submitting. "
+                    "If the user says yes, call view_document first, show the result, then call send_invite_from_template again with preview_was_shown=True. "
+                    "If the user says no, call send_invite_from_template with preview_was_shown=False."
                 )
             ),
         ] = None,
@@ -612,15 +614,15 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the template or template group
             orders: List of orders with recipients for the invite.
-            preview: Ask the user first — 'view_first' or 'send_directly'.
+            preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
             entity_type: Type of entity: 'template' or 'template_group' (optional).
             name: Optional name for the new document or document group
 
         Returns:
             SendInviteFromTemplateResponse with created entity info and invite details,
-            or a question string if preview not set.
+            or a question string if preview_was_shown not set.
         """
-        if preview is None:
+        if preview_was_shown is None:
             return (
                 "Before sending the invite, please confirm: "
                 "Would you like to view the document first? "
