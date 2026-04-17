@@ -345,18 +345,6 @@ class TestSignnow101Content:
         """Body must contain the '## 4. Sending for Signing' section heading."""
         assert "## 4. Sending for Signing" in self._body()
 
-    def test_signnow101_contains_preview_before_sending(self) -> None:
-        """Body must contain the 'Preview Before Sending' subsection heading."""
-        assert "Preview Before Sending" in self._body()
-
-    def test_signnow101_contains_view_document_reference_in_sending(self) -> None:
-        """'view_document' must appear in the body after the 'Sending for Signing' heading."""
-        body = self._body()
-        sending_section_start = body.find("## 4. Sending for Signing")
-        assert sending_section_start != -1, "Section '## 4. Sending for Signing' not found"
-        sending_section_body = body[sending_section_start:]
-        assert "`view_document`" in sending_section_body, "'view_document' tool not referenced in the Sending for Signing section"
-
     def test_signnow101_contains_signing_link_etiquette(self) -> None:
         """Body must contain the 'Signing Link Etiquette' subsection heading."""
         assert "Signing Link Etiquette" in self._body()
