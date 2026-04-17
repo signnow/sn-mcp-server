@@ -841,6 +841,16 @@ class CreateFromTemplateResponse(BaseModel):
     name: str = Field(..., description="Name of the created entity")
 
 
+class EntityCreatedFromTemplate(BaseModel):
+    """Dispatch-ready entity returned by _resolve_entity."""
+
+    entity_id: str = Field(..., description="ID of the entity to dispatch (may be newly created)")
+    entity_type: str = Field(..., description="Type of entity: 'document', 'document_group', 'template', or 'template_group'")
+    created_entity_id: str | None = Field(None, description="ID of the newly created entity (populated when a template was materialised)")
+    created_entity_type: str | None = Field(None, description="Type of the newly created entity (populated when a template was materialised)")
+    created_entity_name: str | None = Field(None, description="Name of the newly created entity (populated when a template was materialised)")
+
+
 class UploadDocumentResponse(BaseModel):
     """Response model for uploading document."""
 

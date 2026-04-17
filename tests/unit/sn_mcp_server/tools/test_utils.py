@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from signnow_client.exceptions import SignNowAPIError, SignNowAPINotFoundError
+from signnow_client.exceptions import SignNowAPIError, SignNowAPIHTTPError, SignNowAPINotFoundError
 from sn_mcp_server.tools.utils import _detect_entity_type
 
 
@@ -26,7 +26,7 @@ class TestDetectEntityType:
 
     def test_template_group_fallback(self, mock_client: MagicMock) -> None:
         """Returns 'template_group' when group 404s but template group succeeds."""
-        mock_client.get_document_group.side_effect = SignNowAPIError(message="", status_code=400, response_data={"errors": [{"code": 65582, "message": ""}]})
+        mock_client.get_document_group.side_effect = SignNowAPIHTTPError(message="", status_code=400, response_data={"errors": [{"code": 65582, "message": ""}]})
         mock_client.get_document_group_template.return_value = MagicMock()
 
         result = _detect_entity_type("tg1", "tok", mock_client)
