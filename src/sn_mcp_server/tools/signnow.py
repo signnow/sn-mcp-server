@@ -334,6 +334,17 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
+        preview_was_shown: Annotated[
+            bool | None,
+            Field(
+                description=(
+                    "This flag signals that the user has viewed the document preview. "
+                    "Prompt the user to view the document before submitting. "
+                    "If the user says yes, call view_document first, show the result, then call send_invite again with preview_was_shown=True. "
+                    "If the user says no, call send_invite with preview_was_shown=False."
+                )
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -347,11 +358,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the document or document group
             orders: List of orders with recipients.
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
+            entity_type: Type of entity: 'document' or 'document_group' (optional).
 
         Returns:
-            SendInviteResponse with invite ID and entity type
+            SendInviteResponse with invite ID and entity type.
         """
+
         token, client = _get_token_and_client(token_provider)
 
         if not orders:
@@ -566,6 +579,17 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
+        preview_was_shown: Annotated[
+            bool | None,
+            Field(
+                description=(
+                    "This flag signals that the user has viewed the document preview. "
+                    "Prompt the user to view the document before submitting. "
+                    "If the user says yes, call view_document first, show the result, then call send_invite_from_template again with preview_was_shown=True. "
+                    "If the user says no, call send_invite_from_template with preview_was_shown=False."
+                )
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
@@ -584,12 +608,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the template or template group
             orders: List of orders with recipients for the invite.
-            entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
+            entity_type: Type of entity: 'template' or 'template_group' (optional).
             name: Optional name for the new document or document group
 
         Returns:
-            SendInviteFromTemplateResponse with created entity info and invite details
+            SendInviteFromTemplateResponse with created entity info and invite details.
         """
+
         token, client = _get_token_and_client(token_provider)
 
         if not orders:

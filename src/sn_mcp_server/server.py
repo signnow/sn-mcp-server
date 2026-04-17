@@ -10,7 +10,9 @@ def create_server(cfg: Settings | None = None) -> FastMCP[Any]:
     """Create and configure FastMCP server instance"""
     cfg = cfg or load_settings()
 
-    mcp: FastMCP[Any] = FastMCP("sn-mcp-server")
+    mcp: FastMCP[Any] = FastMCP(
+        "sn-mcp-server"
+    )
     register_tools(mcp, cfg)
     # load_plugins(mcp, cfg)
     return mcp
