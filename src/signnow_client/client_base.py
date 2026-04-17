@@ -112,8 +112,8 @@ class SignNowAPIClientBase:
             response = self.http.post(url, headers=headers, data=data, json=json_data)
             response.raise_for_status()
 
-            # 204 No Content — nothing to parse
-            if response.status_code == 204:
+            # 204 No Content or empty body (e.g. 202 Accepted) — nothing to parse
+            if response.status_code == 204 or not response.content.strip():
                 return None
 
             data = response.json()

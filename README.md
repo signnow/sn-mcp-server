@@ -402,6 +402,7 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`list_contacts`** — Search CRM contacts by name, email, or phone. Returns id, email, first/last name, and company. Use before `send_invite` to resolve a recipient's email address by their name. Supports `per_page` (default 15, max 100).
 * **`list_documents`** — Browse your documents, document groups and statuses. Supports `limit`/`offset` pagination (default: 50 items per page).
 * **`create_from_template`** — Make a document or a group from a template/group.
+* **`create_template`** — Convert a document or document group into a reusable template for signing.
 * **`send_invite`** — Email invites (documents or groups), ordered recipients supported.
 * **`create_embedded_invite`** — Embedded signing session without email delivery.
 * **`create_embedded_sending`** — Embedded “sending/management” experience.

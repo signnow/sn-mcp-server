@@ -102,7 +102,7 @@ class DocumentField(BaseModel):
     type: str = Field(..., description="Field type")
     role_id: str = Field(..., description="Role ID associated with this field")
     value: str = Field(..., description="Field value")
-    name: str = Field(..., description="Field name")
+    name: str | None = Field(None, description="Field name (may be absent for unnamed fields)")
 
 
 class DocumentGroupDocument(BaseModel):
@@ -877,6 +877,22 @@ class CreateFromTemplateResponse(BaseModel):
     entity_id: str = Field(..., description="ID of the created document or document group")
     entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
     name: str = Field(..., description="Name of the created entity")
+
+
+class CreateTemplateResult(BaseModel):
+    """Response for the create_template tool."""
+
+    template_id: str | None = Field(
+        None,
+        description=(
+            "ID of the created template. "
+            "None for the document_group path — SignNow processes document group "
+            "templates asynchronously (202 Accepted). "
+            "Use list_all_templates after a short delay to find the template group."
+        ),
+    )
+    template_name: str = Field(..., description="Requested name for the template.")
+    entity_type: Literal["document", "document_group"] = Field(..., description="Entity type that was converted.")
 
 
 class UploadDocumentResponse(BaseModel):
