@@ -78,7 +78,7 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
     Raises:
         ValueError: If no access token is available
     """
-    headers = get_http_headers()
+    headers = get_http_headers(include={"authorization"})
     token = token_provider.get_access_token(headers)
 
     if not token:
