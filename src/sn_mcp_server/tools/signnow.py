@@ -334,11 +334,21 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
+        preview: Annotated[
+            Literal["view_first", "send_directly"] | None,
+            Field(
+                description=(
+                    "Ask the user: 'Would you like to view the document before I send the invite?' "
+                    "Set 'view_first' if yes — call view_document first, show the result, then call send_invite again with preview='view_first'. "
+                    "Set 'send_directly' if no. Do not omit this parameter."
+                )
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
-    ) -> SendInviteResponse:
+    ) -> SendInviteResponse | str:
         """Send invite to sign a document or document group.
 
         This tool is ONLY for documents and document groups.
@@ -347,11 +357,19 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the document or document group
             orders: List of orders with recipients.
-            entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            preview: Ask the user first — 'view_first' or 'send_directly'.
+            entity_type: Type of entity: 'document' or 'document_group' (optional).
 
         Returns:
-            SendInviteResponse with invite ID and entity type
+            SendInviteResponse with invite ID and entity type, or a question string if preview not set.
         """
+        if preview is None:
+            return (
+                "Before sending the invite, please confirm: "
+                "Would you like to view the document first? "
+                "Reply 'yes' to preview it, or 'no' to send the invite directly."
+            )
+
         token, client = _get_token_and_client(token_provider)
 
         if not orders:
@@ -566,12 +584,22 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ],
             ),
         ],
+        preview: Annotated[
+            Literal["view_first", "send_directly"] | None,
+            Field(
+                description=(
+                    "Ask the user: 'Would you like to view the document before I send the invite?' "
+                    "Set 'view_first' if yes — call view_document first, show the result, then call send_invite_from_template again with preview='view_first'. "
+                    "Set 'send_directly' if no. Do not omit this parameter."
+                )
+            ),
+        ] = None,
         entity_type: Annotated[
             Literal["template", "template_group"] | None,
             Field(description="Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
-    ) -> SendInviteFromTemplateResponse:
+    ) -> SendInviteFromTemplateResponse | str:
         """Create document or document group from template and send invite immediately.
 
         This tool is ONLY for templates and template groups.
@@ -584,12 +612,21 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Args:
             entity_id: ID of the template or template group
             orders: List of orders with recipients for the invite.
-            entity_type: Type of entity: 'template' or 'template_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
+            preview: Ask the user first — 'view_first' or 'send_directly'.
+            entity_type: Type of entity: 'template' or 'template_group' (optional).
             name: Optional name for the new document or document group
 
         Returns:
-            SendInviteFromTemplateResponse with created entity info and invite details
+            SendInviteFromTemplateResponse with created entity info and invite details,
+            or a question string if preview not set.
         """
+        if preview is None:
+            return (
+                "Before sending the invite, please confirm: "
+                "Would you like to view the document first? "
+                "Reply 'yes' to preview it, or 'no' to send the invite directly."
+            )
+
         token, client = _get_token_and_client(token_provider)
 
         if not orders:
