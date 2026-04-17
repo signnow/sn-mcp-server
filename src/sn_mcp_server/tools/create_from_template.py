@@ -146,7 +146,7 @@ def _create_from_template(entity_id: str, entity_type: Literal["template", "temp
     
 async def _resolve_entity(
     entity_id: str,
-    entity_type: Literal["document", "document_group", "template", "template_group"] | None,
+    entity_type: Literal["document", "document_group", "template", "template_group"],
     name: str | None,
     token: str,
     client: SignNowAPIClient,
@@ -160,7 +160,7 @@ async def _resolve_entity(
 
     Args:
         entity_id: ID of the document, document group, template, or template group
-        entity_type: Explicit type, or None (not auto-detected here — caller must resolve first)
+        entity_type: Explicit type (not auto-detected here — caller must resolve first)
         name: Optional name for the newly created entity (required for template_group)
         token: Access token for SignNow API
         client: SignNow API client instance

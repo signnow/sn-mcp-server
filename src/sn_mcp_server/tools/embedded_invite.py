@@ -119,6 +119,8 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
     return CreateEmbeddedInviteResponse(document_group_invite_id=None, invite_entity="document", recipient_links=recipient_links)
 
 
+# todo: need to review tool interface, maybe split the tool for signing creation and signin link creation, 
+# currently it will work for order=1 only and has inconsistent output for delivery_type=email
 async def _create_embedded_invite(
     entity_id: str,
     entity_type: Literal["document", "document_group", "template", "template_group"] | None,

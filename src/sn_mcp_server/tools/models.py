@@ -693,9 +693,9 @@ class CreateEmbeddedInviteResponse(BaseModel):
     fields are populated. For direct document/document_group calls they are None.
     """
 
-    document_group_invite_id: str | None = Field(..., description="ID of the created document group embedded invite")
+    document_group_invite_id: str | None = Field(None, description="ID of the created document group embedded invite; populated only when invite_entity is 'document_group', otherwise None")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
-    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role, invite id and link for recipients with delivery_type='link'")
+    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role, invite id (for document invite) and link for recipients with delivery_type='link'")
 
     created_entity_id: str | None = Field(
         None, description="ID of the entity created from template (None when entity was document/document_group)"
@@ -985,37 +985,3 @@ class ContactListResponse(BaseModel):
         description="Matching contacts (empty list when no contacts match — not an error)",
     )
     count: int = Field(..., description="Number of contacts returned in this response")
-
-
-# ----------------------------
-# Contacts tool models
-# ----------------------------
-
-
-class ContactItem(BaseModel):
-    """Curated contact information for agent consumption."""
-
-    id: str = Field(..., description="Contact ID")
-    email: str = Field(..., description="Contact email address")
-    first_name: str | None = Field(None, description="First name")
-    last_name: str | None = Field(None, description="Last name")
-    company: str | None = Field(None, description="Company name (flattened from nested company object)")
-
-
-class ContactListResponse(BaseModel):
-    """Response from the list_contacts tool."""
-
-    contacts: list[ContactItem] = Field(
-        default_factory=list,
-        description="Matching contacts (empty list when no contacts match — not an error)",
-    )
-    count: int = Field(..., description="Number of contacts returned in this response")
-
-class EntityCreatedFromTemplate(BaseModel):
-    """Entity resolved to a dispatchable type after optional template materialisation."""
-
-    entity_id: str
-    entity_type: Literal["document", "document_group"]
-    created_entity_id: str | None = None
-    created_entity_type: str | None = None
-    created_entity_name: str | None = None

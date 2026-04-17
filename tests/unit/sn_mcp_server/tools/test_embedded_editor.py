@@ -1,6 +1,5 @@
 """Unit tests for embedded_editor module."""
 
-from unittest import result
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

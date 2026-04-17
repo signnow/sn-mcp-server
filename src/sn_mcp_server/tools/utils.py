@@ -85,10 +85,11 @@ def _detect_entity_type(
     Returns:
         entity_type: Detected entity type as a string literal
     """
+    # todo: return entity as well to avoid redundant fetch in some flows
     try:
         client.get_document_group(token, entity_id)
         return "document_group"
-    except SignNowAPIError as exc:
+    except SignNowAPIHTTPError as exc:
         if exc.status_code != 404 and not _is_not_found_error(exc):
             raise
 
@@ -97,9 +98,6 @@ def _detect_entity_type(
         return "template_group"
     except SignNowAPIHTTPError as exc:
         if exc.status_code != 404 and not _is_not_found_error(exc):
-            raise
-    except SignNowAPIError as exc:
-        if exc.status_code != 404:
             raise
 
     document = client.get_document(token, entity_id)
