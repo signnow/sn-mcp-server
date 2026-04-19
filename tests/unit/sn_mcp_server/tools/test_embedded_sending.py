@@ -117,7 +117,7 @@ class TestCreateEmbeddedSending:
 
         assert result.sending_entity == "document_group"
         assert result.sending_url == "https://app.signnow.com/send/auto_grp"
-        
+
     async def test_auto_detects_document_when_group_not_found(self, mock_client: MagicMock) -> None:
         """entity_type=None falls back to document when group and template_group both 404."""
         mock_client.get_document_group.side_effect = SignNowAPINotFoundError()

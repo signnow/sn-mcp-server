@@ -7,7 +7,7 @@ This module contains shared utility functions used across multiple tool modules.
 from typing import Literal, Protocol, Union
 
 from signnow_client import SignNowAPIClient
-from signnow_client.exceptions import SignNowAPIError, SignNowAPIHTTPError
+from signnow_client.exceptions import SignNowAPIHTTPError
 from signnow_client.models.folders_lite import RoleLite, _normalize_roles
 
 

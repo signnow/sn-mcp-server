@@ -402,14 +402,10 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`list_contacts`** — Search CRM contacts by name, email, or phone. Returns id, email, first/last name, and company. Use before `send_invite` to resolve a recipient's email address by their name. Supports `per_page` (default 15, max 100).
 * **`list_documents`** — Browse your documents, document groups and statuses. Supports `limit`/`offset` pagination (default: 50 items per page).
 * **`create_from_template`** — Make a document or a group from a template/group.
-* **`send_invite`** — Email invites (documents or groups), ordered recipients supported.
-* **`create_embedded_invite`** — Embedded signing session without email delivery.
-* **`create_embedded_sending`** — Embedded “sending/management” experience.
-* **`create_embedded_editor`** — Embedded editor link to place/adjust fields.
-* **`send_invite_from_template`** — One-shot: create from template and invite.
-* **`create_embedded_sending_from_template`** — One-shot: template → embedded sending.
-* **`create_embedded_editor_from_template`** — One-shot: template → embedded editor.
-* **`create_embedded_invite_from_template`** — One-shot: template → embedded signing.
+* **`send_invite`** — Email invites (documents or groups), ordered recipients supported. For template/temaplte group it auto-creates document/document group first.
+* **`create_embedded_invite`** — Embedded signing session without email delivery for documents/groups/templates. For template/temaplte group it auto-creates document/document group first.
+* **`create_embedded_sending`** — Embedded “sending/management” experience for documents/groups/templates. For template/temaplte group it auto-creates document/document group first.
+* **`create_embedded_editor`** — Embedded editor link to place/adjust fields for documents/groups/templates. For template/temaplte group it auto-creates document/document group first.
 * **`get_invite_status`** — Current invite status/steps for document or group.
 * **`get_document_download_link`** — Direct download link (merged output for groups).
 * **`get_signing_link`** — Get signing link for a document or document group.

@@ -5,14 +5,14 @@ This module contains functions for sending invites to sign documents and documen
 from the SignNow API.
 """
 
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 from signnow_client.models.templates_and_documents import FieldInviteAuthentication
 from .models import InviteOrder, SendInviteResponse, SignerAuthentication
-from sn_mcp_server.tools.create_from_template import _resolve_entity
+from .create_from_template import _resolve_entity
 from .utils import _detect_entity_type
 
 
@@ -217,7 +217,7 @@ async def _send_invite(
     # note: entity_type is reused during method execution & could be changed from one type to another (e.g. template > document)
     if entity_type is None:
         entity_type = _detect_entity_type(entity_id, token, client)
-    
+
     created = await _resolve_entity(entity_id, entity_type, name, token, client, ctx)
     entity_id = created.entity_id
     entity_type = created.entity_type

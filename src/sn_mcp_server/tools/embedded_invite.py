@@ -98,7 +98,7 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
         invite["language"] = "en"  # Default language
         invite["required_preset_signature_name"] = None
         invites.append(DocumentEmbeddedInvite(**invite))
-    
+
     request_data = CreateDocumentEmbeddedInviteRequest(invites=invites)
     response = client.create_document_embedded_invite(token, entity_id, request_data)
 
@@ -107,7 +107,7 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
     recipient_links = []
     for order, recipient in flat_recipients:
         # link generation only succeeds for invites in 'pending' status, with multiple signing orders, only order-1 invites are pending immediately
-        if recipient.delivery_type == "link" and order == 1: 
+        if recipient.delivery_type == "link" and order == 1:
             invite = invite_by_email_order.get((recipient.email, order))
             if invite is None:
                 msg = f"No invite returned for email '{recipient.email}' on document '{entity_id}'"
@@ -119,7 +119,7 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
     return CreateEmbeddedInviteResponse(document_group_invite_id=None, invite_entity="document", recipient_links=recipient_links)
 
 
-# todo: need to review tool interface, maybe split the tool for signing creation and signin link creation, 
+# todo: need to review tool interface, maybe split the tool for signing creation and signin link creation,
 # currently it will work for order=1 only and has inconsistent output for delivery_type=email
 async def _create_embedded_invite(
     entity_id: str,

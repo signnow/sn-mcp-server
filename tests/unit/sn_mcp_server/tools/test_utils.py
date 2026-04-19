@@ -25,7 +25,7 @@ class TestDetectEntityType:
         mock_client.get_document.assert_not_called()
 
     def test_template_group_fallback(self, mock_client: MagicMock) -> None:
-        """Returns 'template_group' when group 404s but template group succeeds."""
+        """Returns 'template_group' when group not found but template group succeeds."""
         mock_client.get_document_group.side_effect = SignNowAPIHTTPError(message="", status_code=400, response_data={"errors": [{"code": 65582, "message": ""}]})
         mock_client.get_document_group_template.return_value = MagicMock()
 
