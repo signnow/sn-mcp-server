@@ -69,13 +69,12 @@ def _detect_entity_type(
     token: str,
     client: SignNowAPIClient,
 ) -> Literal["document_group", "template_group", "document", "template"]:
-    """Detect the entity type for the given ID using a 4-probe waterfall.
+    """Detect the entity type for the given ID using a waterfall.
 
     Probe order (stops at first match, re-raises non-detection errors):
       1. get_document_group       → "document_group"
       2. get_document_group_template → "template_group"
-      3. get_document             → "document"
-      4. (no probe)               → "template" (last resort)
+      3. get_document                → "template" if document.template else "document"
 
     Args:
         entity_id: ID to classify

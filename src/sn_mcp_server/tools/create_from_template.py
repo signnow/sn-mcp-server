@@ -91,6 +91,7 @@ def _find_template_group(entity_id: str, token: str, client: SignNowAPIClient) -
             return template_group
     return None
 
+
 def _create_from_template(entity_id: str, entity_type: Literal["template", "template_group"] | None, name: str | None, token: str, client: SignNowAPIClient) -> CreateFromTemplateResponse:
     """Private function to create a new document or document group from an existing template or template group.
 
@@ -143,7 +144,7 @@ def _create_from_template(entity_id: str, entity_type: Literal["template", "temp
     else:
         # Create document from template
         return _create_document_from_template(client, token, entity_id, name)
-    
+
 async def _resolve_entity(
     entity_id: str,
     entity_type: Literal["document", "document_group", "template", "template_group"],
