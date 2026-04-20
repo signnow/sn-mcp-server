@@ -14,7 +14,6 @@ import pytest
 import respx
 
 from signnow_client import SignNowAPIClient
-from signnow_client.exceptions import SignNowAPINotFoundError
 from sn_mcp_server.tools.create_template import create_template
 from sn_mcp_server.tools.models import CreateTemplateResult
 
@@ -52,7 +51,7 @@ class TestCreateTemplateDocumentPath:
         error_fixture = load_fixture("error__document_not_found")
         mock_api.post("/template").respond(404, json=error_fixture)
 
-        with pytest.raises((ValueError, SignNowAPINotFoundError)):
+        with pytest.raises(ValueError, match="Document not found: bad_doc_id"):
             create_template(sn_client, token, "bad_doc_id", "NDA", "document")
 
 

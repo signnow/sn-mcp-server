@@ -98,7 +98,7 @@ class TestCreateDocumentGroupTemplateFromGroupAPI:
         token: str,
     ) -> None:
         """POST /v2/document-groups/{id}/document-group-template with correct body → 202 → True."""
-        route = mock_api.post("/v2/document-groups/grp_src_1/document-group-template").respond(202, json={})
+        route = mock_api.post("/v2/document-groups/grp_src_1/document-group-template").respond(202, content=b"")
 
         result = client.create_document_group_template_from_group(
             token=token,
