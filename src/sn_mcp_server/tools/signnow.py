@@ -436,7 +436,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         description=(
             "Create embedded sending for managing, editing, or sending invites for a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded sending. "
-            "In MCP Apps-compatible hosts (MCP Inspector, VS Code, Goose, LibreChat) the sender UI renders inline — no tab switch needed."
+            "In MCP Apps-compatible clients the sender UI renders inline — no tab switch needed."
         ),
         meta={"ui": {"resourceUri": SENDER_RESOURCE_URI}},
         annotations=ToolAnnotations(
@@ -1069,7 +1069,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Generate a read-only embedded view link for a document or document group. "
             "To find an entity by name, first call list_documents or list_templates "
             "to search for it, then pass the returned entity_id here. "
-            "In MCP Apps-compatible hosts (MCP Inspector, VS Code, Goose, LibreChat) "
+            "In MCP Apps-compatible clients "
             "the document renders inline — no tab switch needed. "
             "In other hosts, the returned view_link is presented as a clickable URL."
         ),
