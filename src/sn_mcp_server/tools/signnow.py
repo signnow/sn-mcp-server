@@ -24,6 +24,8 @@ from .embedded_invite import (
     _create_embedded_invite,
 )
 from .embedded_sending import (
+    _SENDER_HTML,
+    SENDER_RESOURCE_URI,
     _create_embedded_sending,
 )
 from .invite_status import _get_invite_status
@@ -433,8 +435,10 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         name="create_embedded_sending",
         description=(
             "Create embedded sending for managing, editing, or sending invites for a document, document group, template, or template group. "
-            "For templates and template groups, automatically creates a document/group first, then creates the embedded sending."
+            "For templates and template groups, automatically creates a document/group first, then creates the embedded sending. "
+            "In MCP Apps-compatible hosts (MCP Inspector, VS Code, Goose, LibreChat) the sender UI renders inline — no tab switch needed."
         ),
+        meta={"ui": {"resourceUri": SENDER_RESOURCE_URI}},
         annotations=ToolAnnotations(
             title="Create embedded sending link",
             readOnlyHint=False,
@@ -1124,6 +1128,16 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     def get_document_viewer_ui() -> str:
         """Return the MCP Apps HTML viewer for inline document rendering."""
         return _VIEWER_HTML
+
+    @mcp.resource(
+        SENDER_RESOURCE_URI,
+        name="embedded_sender_app",
+        description="MCP Apps inline UI for SignNow Embedded Sender. Returns an HTML page that renders the embedded sender inside a sandboxed iframe.",
+        mime_type="text/html;profile=mcp-app",
+    )
+    def get_embedded_sender_ui() -> str:
+        """Return the MCP Apps HTML for inline embedded sender rendering."""
+        return _SENDER_HTML
 
     async def _list_contacts_impl(query: str | None = None, per_page: int = 15) -> ContactListResponse:
         token, client = _get_token_and_client(token_provider)
