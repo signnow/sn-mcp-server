@@ -13,6 +13,7 @@ from signnow_client import SignNowAPIClient
 
 from ..token_provider import TokenProvider
 from .create_from_template import _create_from_template
+from .create_template import create_template as _create_template
 from .document import _get_document, _update_document_fields, _upload_document
 from .document_download_link import _get_document_download_link
 from .document_view import _VIEWER_HTML, VIEWER_RESOURCE_URI, _view_document
@@ -35,6 +36,7 @@ from .models import (
     CreateEmbeddedInviteResponse,
     CreateEmbeddedSendingResponse,
     CreateFromTemplateResponse,
+    CreateTemplateResult,
     DocumentDownloadLinkResponse,
     DocumentGroup,
     EmbeddedInviteOrder,
@@ -530,6 +532,51 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         token, client = _get_token_and_client(token_provider)
 
         return await _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration_minutes, token, client, name, ctx)
+
+    @mcp.tool(
+        name="create_template",
+        description="Convert an existing document or document group into a reusable template",
+        annotations=ToolAnnotations(
+            title="Create template from document or document group",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["template", "document", "document_group", "create", "workflow"],
+    )
+    def create_template(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group to convert into a template")],
+        template_name: Annotated[str, Field(description="Name for the new template")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description="Type of entity: 'document' or 'document_group'. Omit to auto-detect (tries document_group first, then document). Pass explicitly to save one API call."),
+        ] = None,
+    ) -> CreateTemplateResult:
+        """Convert an existing document or document group into a reusable template.
+
+        Call this when no suitable template yet exists and the user wants to send their
+        document for signing. After creation, use the returned template_id with
+        send_invite_from_template or create_embedded_sending_from_template.
+
+        If entity_type is omitted, auto-detects: tries document_group first, then document.
+        Pass entity_type explicitly when you already know the type to save one API call.
+
+        For document groups, template creation is asynchronous — template_id will be None.
+        Use list_all_templates after a short delay to retrieve the ID.
+
+        Args:
+            entity_id: ID of the document or document group to templatize.
+            template_name: Name for the new template.
+            entity_type: Optional. 'document' | 'document_group' | None (auto-detect).
+
+        Returns:
+            CreateTemplateResult with template_id (None for async doc group path),
+            template_name, and entity_type.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _create_template(client, token, entity_id, template_name, entity_type)
 
     @mcp.tool(
         name="create_from_template",
