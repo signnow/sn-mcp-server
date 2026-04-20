@@ -625,10 +625,24 @@ class InviteOrder(BaseModel):
 
 
 class SendInviteResponse(BaseModel):
-    """Response model for sending invite."""
+    """Response model for sending invite.
+
+    When the invite is sent for a template-originated entity, the created_entity_*
+    fields are populated. For direct document/document_group calls they are None.
+    """
 
     invite_id: str = Field(..., description="ID of the created invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+
+    created_entity_id: str | None = Field(
+        None, description="ID of the entity created from template (None when entity was document/document_group)"
+    )
+    created_entity_type: str | None = Field(
+        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
+    )
+    created_entity_name: str | None = Field(
+        None, description="Name of the entity created from template (None when entity was document/document_group)"
+    )
 
 
 # Embedded invite models
@@ -673,11 +687,25 @@ class CreateEmbeddedInviteRequest(BaseModel):
 
 
 class CreateEmbeddedInviteResponse(BaseModel):
-    """Response model for creating embedded invite."""
+    """Response model for creating embedded invite.
 
-    invite_id: str = Field(..., description="ID of the created embedded invite")
+    When the invite is created for a template-originated entity, the created_entity_*
+    fields are populated. For direct document/document_group calls they are None.
+    """
+
+    document_group_invite_id: str | None = Field(None, description="ID of the created document group embedded invite; populated only when invite_entity is 'document_group', otherwise None")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
-    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role and link for recipients with delivery_type='link'")
+    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role, invite id (for document invite) and link for recipients with delivery_type='link'")
+
+    created_entity_id: str | None = Field(
+        None, description="ID of the entity created from template (None when entity was document/document_group)"
+    )
+    created_entity_type: str | None = Field(
+        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
+    )
+    created_entity_name: str | None = Field(
+        None, description="Name of the entity created from template (None when entity was document/document_group)"
+    )
 
 
 class CreateEmbeddedEditorRequest(BaseModel):
@@ -698,10 +726,24 @@ class CreateEmbeddedEditorRequest(BaseModel):
 
 
 class CreateEmbeddedEditorResponse(BaseModel):
-    """Response model for creating embedded editor."""
+    """Response model for creating embedded editor.
+
+    When the editor is created for a template-originated entity, the created_entity_*
+    fields are populated. For direct document/document_group calls they are None.
+    """
 
     editor_entity: str = Field(..., description="Type of editor entity: 'document' or 'document_group'")
     editor_url: str = Field(..., description="URL for the embedded editor")
+
+    created_entity_id: str | None = Field(
+        None, description="ID of the entity created from template (None when entity was document/document_group)"
+    )
+    created_entity_type: str | None = Field(
+        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
+    )
+    created_entity_name: str | None = Field(
+        None, description="Name of the entity created from template (None when entity was document/document_group)"
+    )
 
 
 class CreateEmbeddedSendingRequest(BaseModel):
@@ -723,104 +765,24 @@ class CreateEmbeddedSendingRequest(BaseModel):
 
 
 class CreateEmbeddedSendingResponse(BaseModel):
-    """Response model for creating embedded sending."""
+    """Response model for creating embedded sending.
+
+    When the sending is created for a template-originated entity, the created_entity_*
+    fields are populated. For direct document/document_group calls they are None.
+    """
 
     sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
     sending_url: str = Field(..., description="URL for the embedded sending")
 
-
-# Template to invite workflow models
-class SendInviteFromTemplateRequest(BaseModel):
-    """Request model for creating document/group from template and sending invite immediately."""
-
-    entity_id: str = Field(..., description="ID of the template or template group")
-    entity_type: str | None = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
-    name: str | None = Field(None, description="Optional name for the new document or document group")
-    folder_id: str | None = Field(None, description="Optional ID of the folder to store the document group")
-    orders: list[InviteOrder] = Field(default=[], description="List of orders with recipients for the invite")
-
-
-class SendInviteFromTemplateResponse(BaseModel):
-    """Response model for creating document/group from template and sending invite immediately."""
-
-    created_entity_id: str = Field(..., description="ID of the created document or document group")
-    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
-    created_entity_name: str = Field(..., description="Name of the created entity")
-    invite_id: str = Field(..., description="ID of the created invite")
-    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
-
-
-# Template to embedded sending workflow models
-class CreateEmbeddedSendingFromTemplateRequest(BaseModel):
-    """Request model for creating document/group from template and creating embedded sending immediately."""
-
-    entity_id: str = Field(..., description="ID of the template or template group")
-    entity_type: str | None = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
-    name: str | None = Field(None, description="Optional name for the new document or document group")
-    redirect_uri: str | None = Field(None, description="Optional redirect URI after completion")
-    redirect_target: str | None = Field(None, description="Optional redirect target: 'self', 'blank', or 'self' (default)")
-    link_expiration: int | None = Field(None, ge=14, le=45, description="Optional link expiration in days (14-45)")
-    type: str | None = Field(None, description="Type of sending step: 'manage', 'edit', or 'send-invite'")
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
-        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
-        data = super().model_dump(**kwargs)
-        if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
-            del data["redirect_target"]
-        return data
-
-
-class CreateEmbeddedSendingFromTemplateResponse(BaseModel):
-    """Response model for creating document/group from template and creating embedded sending immediately."""
-
-    created_entity_id: str = Field(..., description="ID of the created document or document group")
-    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
-    created_entity_name: str = Field(..., description="Name of the created entity")
-    sending_id: str = Field(..., description="ID of the created embedded sending")
-    sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
-    sending_url: str = Field(..., description="URL for the embedded sending")
-
-
-class CreateEmbeddedEditorFromTemplateResponse(BaseModel):
-    """Response model for creating document/group from template and creating embedded editor immediately."""
-
-    created_entity_id: str = Field(..., description="ID of the created document or document group")
-    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
-    created_entity_name: str = Field(..., description="Name of the created entity")
-    editor_id: str = Field(..., description="ID of the created embedded editor")
-    editor_entity: str = Field(..., description="Type of editor entity: 'document' or 'document_group'")
-    editor_url: str = Field(..., description="URL for the embedded editor")
-
-
-# Template to embedded invite workflow models
-class CreateEmbeddedInviteFromTemplateRequest(BaseModel):
-    """Request model for creating document/group from template and creating embedded invite immediately."""
-
-    entity_id: str = Field(..., description="ID of the template or template group")
-    entity_type: str | None = Field(None, description="Type of entity: 'template' or 'template_group' (optional)")
-    name: str | None = Field(None, description="Optional name for the new document or document group")
-    orders: list[EmbeddedInviteOrder] = Field(default=[], description="List of orders with recipients for the embedded invite")
-    redirect_uri: str | None = Field(None, description="Optional redirect URI after completion")
-    redirect_target: str | None = Field(None, description="Optional redirect target: 'self', 'blank', or 'self' (default)")
-    link_expiration: int | None = Field(None, ge=15, le=43200, description="Optional link expiration in minutes (15-43200)")
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
-        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
-        data = super().model_dump(**kwargs)
-        if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
-            del data["redirect_target"]
-        return data
-
-
-class CreateEmbeddedInviteFromTemplateResponse(BaseModel):
-    """Response model for creating document/group from template and creating embedded invite immediately."""
-
-    created_entity_id: str = Field(..., description="ID of the created document or document group")
-    created_entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
-    created_entity_name: str = Field(..., description="Name of the created entity")
-    invite_id: str = Field(..., description="ID of the created embedded invite")
-    invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
-    recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role and link for recipients with delivery_type='link'")
+    created_entity_id: str | None = Field(
+        None, description="ID of the entity created from template (None when entity was document/document_group)"
+    )
+    created_entity_type: str | None = Field(
+        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
+    )
+    created_entity_name: str | None = Field(
+        None, description="Name of the entity created from template (None when entity was document/document_group)"
+    )
 
 
 # Document group status models
@@ -877,6 +839,16 @@ class CreateFromTemplateResponse(BaseModel):
     entity_id: str = Field(..., description="ID of the created document or document group")
     entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
     name: str = Field(..., description="Name of the created entity")
+
+
+class EntityCreatedFromTemplate(BaseModel):
+    """Dispatch-ready entity returned by _resolve_entity."""
+
+    entity_id: str = Field(..., description="ID of the entity to dispatch (may be newly created)")
+    entity_type: str = Field(..., description="Type of entity: 'document', 'document_group', 'template', or 'template_group'")
+    created_entity_id: str | None = Field(None, description="ID of the newly created entity (populated when a template was materialised)")
+    created_entity_type: str | None = Field(None, description="Type of the newly created entity (populated when a template was materialised)")
+    created_entity_name: str | None = Field(None, description="Name of the newly created entity (populated when a template was materialised)")
 
 
 class CreateTemplateResult(BaseModel):

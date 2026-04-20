@@ -7,24 +7,12 @@ from existing templates and template groups.
 
 from typing import Literal
 
+from fastmcp import Context
 from signnow_client import DocumentGroupTemplate, SignNowAPIClient
 from signnow_client.exceptions import SignNowAPIHTTPError
 
-from .models import CreateFromTemplateResponse
-
-
-def _is_not_found_error(exc: SignNowAPIHTTPError) -> bool:
-    """Return True when a 400 error represents a 'not found' response from SignNow.
-
-    SignNow returns 400 with error code 65582 on not-found conditions, with varying
-    messages depending on the endpoint:
-      - /template/{id}/copy          → "Document not found"
-      - /documentgroup/template/{id} → "unable to find document group template"
-    """
-    if exc.status_code == 400:
-        errors = (exc.response_data or {}).get("errors", [])
-        return any(e.get("code") == 65582 or "not found" in e.get("message", "").lower() or "unable to find" in e.get("message", "").lower() for e in errors)
-    return False
+from .models import CreateFromTemplateResponse, EntityCreatedFromTemplate
+from .utils import _is_not_found_error
 
 
 def _create_document_from_template(client: SignNowAPIClient, token: str, entity_id: str, name: str | None) -> CreateFromTemplateResponse:
@@ -156,3 +144,46 @@ def _create_from_template(entity_id: str, entity_type: Literal["template", "temp
     else:
         # Create document from template
         return _create_document_from_template(client, token, entity_id, name)
+
+async def _resolve_entity(
+    entity_id: str,
+    entity_type: Literal["document", "document_group", "template", "template_group"],
+    name: str | None,
+    token: str,
+    client: SignNowAPIClient,
+    ctx: Context | None = None,
+) -> EntityCreatedFromTemplate:
+    """Detect entity type and materialise templates before API dispatch.
+
+    When entity_type is 'template' or 'template_group', creates a new entity from the
+    template and reports progress steps 1/3 and 2/3 via ctx. When entity_type is
+    'document' or 'document_group', returns immediately with no API calls.
+
+    Args:
+        entity_id: ID of the document, document group, template, or template group
+        entity_type: Explicit type (not auto-detected here — caller must resolve first)
+        name: Optional name for the newly created entity (required for template_group)
+        token: Access token for SignNow API
+        client: SignNow API client instance
+        ctx: FastMCP context for progress reporting (steps 1/3 and 2/3)
+
+    Returns:
+        EntityCreatedFromTemplate with dispatch-ready entity_id/type and optional
+        created_entity_* fields populated when a template was materialised
+    """
+    if entity_type in ("template", "template_group"):
+        if ctx:
+            await ctx.report_progress(progress=1, total=3)
+        created = _create_from_template(entity_id, entity_type, name, token, client)
+        if ctx:
+            await ctx.report_progress(progress=2, total=3)
+        return EntityCreatedFromTemplate(
+            entity_id=created.entity_id,
+            entity_type=created.entity_type,
+            created_entity_id=created.entity_id,
+            created_entity_type=created.entity_type,
+            created_entity_name=created.name,
+        )
+
+    return EntityCreatedFromTemplate(entity_id=entity_id, entity_type=entity_type)
+

@@ -321,7 +321,7 @@ class DocumentEmbeddedInvite(BaseModel):
     """Individual invite for document embedded signing."""
 
     email: str = Field(..., description="Email address of the recipient")
-    role_id: str = Field(..., description="Recipient's role ID")
+    role: str = Field(..., description="Recipient's role name")
     order: int = Field(..., description="The order of signing")
     language: str | None = Field(None, description="Language of signing session: 'en', 'es', 'fr'")
     auth_method: str = Field(..., description="Authentication method within integrated application")
