@@ -5,6 +5,7 @@ This module contains functions for creating embedded sending for documents and d
 from the SignNow API.
 """
 
+import pathlib
 from typing import Literal
 
 from fastmcp import Context
@@ -16,6 +17,13 @@ from .models import (
     CreateEmbeddedSendingResponse,
 )
 from .utils import _detect_entity_type
+
+SENDER_RESOURCE_URI: str = "ui://signnow/embedded-sender"
+"""MCP Apps resource URI for the inline embedded sender UI."""
+
+_STATIC_DIR = pathlib.Path(__file__).parent / "static"
+_SENDER_HTML: str = (_STATIC_DIR / "embedded_sender.html").read_text(encoding="utf-8")
+"""Pre-loaded HTML content for the embedded sender MCP App."""
 
 
 def _create_document_group_embedded_sending(
