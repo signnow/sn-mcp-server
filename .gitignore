@@ -10,3 +10,6 @@ server.json
 # Coverage
 .coverage
 htmlcov/
+
+# Local scratch directory
+tmp/

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "Read(//tmp/eval-smoke/**)",
+      "Bash(python *)",
+      "Bash(curl -sS -m 5 -o /dev/null -w \"status=%{http_code}  time=%{time_total}s\\\\n\" https://litellm-proxy.infrateam-dev.xyz/health)",
+      "Bash(curl -sS -m 5 -o /dev/null -w \"status=%{http_code}  time=%{time_total}s\\\\n\" https://litellm-proxy.infrateam-dev.xyz/)"
+    ]
+  }
+}
