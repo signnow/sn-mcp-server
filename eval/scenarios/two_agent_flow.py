@@ -1,13 +1,17 @@
-"""Full SignNow workflow scenario — the one E2E scenario shipped with this harness.
+"""Two-agent flow scenario — LLM simulator drives the agent through a goal.
 
-Happy path: send_invite on a pre-seeded document → get_invite_status →
-get_document_download_link. The scenario hands the agent a specific
-document id in the prompt and a clear objective; all SignNow HTTP traffic
-is intercepted by respx and replied to with pydantic-valid fixtures so
-tool calls actually succeed.
+Unlike :mod:`eval.scenarios.full_flow`, the "user" side of this conversation
+is played by a second Anthropic model with scripted goals and constraints
+rather than a fixed list of canned replies. This catches regressions that
+canned scripts can't: if the agent asks a clarifying question, a canned
+"Continue." would let it sail past; a goal-driven simulator will push back
+or answer coherently and keep steering toward completion.
 
-Mirrors ``mcp/eval/scenarios/full-session.ts`` from the TypeScript
-auto-cources harness, adapted to the SignNow tool surface.
+Shares the respx seed shape with ``full_flow`` (same fake SignNow API,
+same OAuth + document endpoints) but uses a different doc id so the two
+scenarios don't collide in aggregated reports.
+
+Mirrors the two-agent pattern from the TypeScript auto-cources harness.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from typing import Any
 import respx
 from httpx import Response
 
-from ..simulators import CannedUserStrategy
+from ..simulators import LLMUserStrategy
 from ..types import (
     Invariant,
     InvariantEnv,
@@ -27,29 +31,36 @@ from ..types import (
 )
 
 _FAKE_API_BASE = "https://api-eval.signnow.com"
-_DOC_ID = "doc_eval_001"
+_DOC_ID = "doc_eval_002"
 
 
-def build_full_flow_scenario() -> ScenarioDefinition:
+def build_two_agent_flow_scenario() -> ScenarioDefinition:
     return ScenarioDefinition(
-        name="full-flow",
-        summary=("One document, one recipient, one invite. Every phase of the core invite → status → download tool chain must be exercised."),
-        initial_prompt=(
-            "You are assisting a SignNow user. They want to send document "
-            f"'{_DOC_ID}' (it is a regular document, not a template or group) "
-            "to recipient@example.com for signature, then check that the "
-            "invite was delivered, and finally fetch a download link for the "
-            "signed copy. Use the SignNow MCP tools to carry this out. Always "
-            "pass entity_type='document' so auto-detection is skipped. Keep "
-            "your messages very short — one sentence between tool calls is "
-            "enough. Do not lecture; act via tools."
+        name="two-agent-flow",
+        summary=(
+            "Same invite → status → download chain as full-flow, but with an LLM simulator playing the user. Proves tool descriptions survive the extra ambiguity of a less-scripted conversation."
         ),
-        user=CannedUserStrategy([
-            "Yes, please proceed.",
-            "That looks right. Continue.",
-            "Thanks, that's everything.",
-        ]),
-        invariants=[invite_used_expected_doc_id],
+        initial_prompt=(
+            "Hi, I need your help with a SignNow document. I'll tell you what I need step by step. Please use the SignNow MCP tools and keep your replies short — one sentence between actions."
+        ),
+        user=LLMUserStrategy(
+            goal_steps=[
+                (
+                    f"Ask the assistant to send document '{_DOC_ID}' (it is a "
+                    "regular document, not a template or group) to "
+                    "client@example.com for signature. Insist on passing "
+                    "entity_type='document' so auto-detection is skipped."
+                ),
+                "Once the invite is sent, ask the assistant to confirm it was delivered (invite status).",
+                "Finally, ask for a download link for the signed copy.",
+            ],
+            constraints=[
+                "Do not accept a preview or dry-run step — you want the invite actually sent.",
+                f"The document id is '{_DOC_ID}'. If the assistant invents a different id, correct it.",
+                "Never ask for anything unrelated to the three goals above.",
+            ],
+        ),
+        invariants=[invite_used_expected_doc_id_two_agent],
         seed=_seed,
         read_env=_read_env,
     )
@@ -57,21 +68,14 @@ def build_full_flow_scenario() -> ScenarioDefinition:
 
 async def _seed() -> ScenarioFixture:
     """Set env, start respx, register routes for the happy path."""
-    # Env must be set before create_server() reads it.
     os.environ["SIGNNOW_API_BASE"] = _FAKE_API_BASE
     os.environ["SIGNNOW_USER_EMAIL"] = "eval@example.com"
     os.environ["SIGNNOW_PASSWORD"] = "eval-password"  # noqa: S105
     os.environ["SIGNNOW_API_BASIC_TOKEN"] = "eval-basic-token"  # noqa: S105
 
-    # respx patches httpx globally. We pin SignNow routes by absolute URL and
-    # finish with a catch-all `.pass_through()` so non-SignNow traffic (the
-    # LiteLLM proxy, direct Anthropic/OpenAI) reaches the real network. We
-    # deliberately DO NOT pass `base_url=_FAKE_API_BASE` to `respx.mock()` —
-    # that scopes the catch-all to the SignNow host too, breaking the drivers.
     router = respx.mock(assert_all_called=False)
     router.start()
 
-    # OAuth — TokenProvider calls get_tokens_by_password on every tool invocation.
     router.post(f"{_FAKE_API_BASE}/oauth2/token").mock(
         return_value=Response(
             200,
@@ -85,19 +89,13 @@ async def _seed() -> ScenarioFixture:
         )
     )
 
-    # Auto-detection probes — for defence in depth when the agent omits entity_type.
     router.get(f"{_FAKE_API_BASE}/documentgroup/{_DOC_ID}").mock(return_value=Response(404, json={"error": "not found"}))
     router.get(f"{_FAKE_API_BASE}/v2/document-groups/{_DOC_ID}").mock(return_value=Response(404, json={"error": "not found"}))
     router.get(f"{_FAKE_API_BASE}/documentgroup/template/{_DOC_ID}").mock(return_value=Response(404, json={"error": "not found"}))
 
-    # Document fetch — used by get_invite_status and by auto-detect fallback.
     router.get(f"{_FAKE_API_BASE}/document/{_DOC_ID}").mock(return_value=Response(200, json=_document_payload()))
-
-    # send_invite (document path) calls get_user_info then POSTs /document/{id}/invite.
     router.get(f"{_FAKE_API_BASE}/user").mock(return_value=Response(200, json=_user_info_payload()))
-    router.post(f"{_FAKE_API_BASE}/document/{_DOC_ID}/invite").mock(return_value=Response(200, json={"status": "sent", "id": "invite_eval_001"}))
-
-    # Download link.
+    router.post(f"{_FAKE_API_BASE}/document/{_DOC_ID}/invite").mock(return_value=Response(200, json={"status": "sent", "id": "invite_eval_002"}))
     router.post(f"{_FAKE_API_BASE}/document/{_DOC_ID}/download/link").mock(
         return_value=Response(
             200,
@@ -105,9 +103,6 @@ async def _seed() -> ScenarioFixture:
         )
     )
 
-    # Everything else (LiteLLM / direct Anthropic / direct OpenAI) falls
-    # through to the real network. Must come AFTER the explicit routes —
-    # respx matches routes in registration order.
     router.route().pass_through()
 
     return ScenarioFixture(
@@ -152,19 +147,19 @@ def _send_invite_used_expected_doc(trace: Any, env: InvariantEnv) -> str | None:
     return None
 
 
-invite_used_expected_doc_id = Invariant(
+invite_used_expected_doc_id_two_agent = Invariant(
     name="invite_used_expected_doc_id",
     rationale=(
-        "The scenario prompt names a specific document id. If the agent invents "
-        "its own id instead of reusing the one from the prompt, downstream tools "
-        "look clean but the user's actual request was never honoured."
+        "The simulator explicitly tells the agent which doc id to use and is "
+        "instructed to correct it if the agent substitutes another. If the "
+        "invite still goes out against a different id, the agent is ignoring "
+        "user corrections — a much worse bug than ignoring a static prompt."
     ),
     check=_send_invite_used_expected_doc,
 )
 
 
 def _user_info_payload() -> dict[str, Any]:
-    """Minimal valid GET /user response. Fields mirror the integration fixture."""
     return {
         "id": "user_eval_001",
         "first_name": "Eval",
@@ -188,15 +183,14 @@ def _user_info_payload() -> dict[str, Any]:
 
 
 def _document_payload() -> dict[str, Any]:
-    """Minimal valid GET /document/{id} response with one pending invite."""
     return {
         "id": _DOC_ID,
         "user_id": "user_eval_001",
-        "document_name": "Eval document",
+        "document_name": "Eval document 2",
         "page_count": "1",
         "created": "1700000000",
         "updated": "1700000100",
-        "original_filename": "eval.pdf",
+        "original_filename": "eval2.pdf",
         "origin_document_id": None,
         "owner": "eval@example.com",
         "template": False,
@@ -217,10 +211,10 @@ def _document_payload() -> dict[str, Any]:
         "roles": [],
         "field_invites": [
             {
-                "id": "fi_eval_001",
+                "id": "fi_eval_002",
                 "status": "pending",
                 "created": "1700000000",
-                "email": "recipient@example.com",
+                "email": "client@example.com",
                 "role": "Signer 1",
                 "reminder": "0",
                 "updated": "1700000100",

@@ -65,9 +65,11 @@ class OpenAiDriver:
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": ctx.scenario_prompt}]
         summary: list[dict[str, str]] = [{"role": "user", "summary": ctx.scenario_prompt[:80]}]
+        # Text-only dialog handed to the user simulator. Tool calls/results are
+        # stripped — the simulator doesn't need to see them to role-play a user.
+        dialog: list[dict[str, str]] = [{"role": "user", "content": ctx.scenario_prompt}]
         input_tokens = 0
         output_tokens = 0
-        learner_idx = 0
         stopped_by_turn_limit = True
 
         for _turn in range(ctx.max_turns):
@@ -106,17 +108,18 @@ class OpenAiDriver:
             messages.append(assistant_msg)
             if msg.content:
                 summary.append({"role": "assistant", "summary": str(msg.content)[:80]})
+                dialog.append({"role": "assistant", "content": str(msg.content)})
 
             tool_calls = msg.tool_calls or []
             if not tool_calls:
-                if learner_idx < len(ctx.simulated_learner_replies):
-                    reply = ctx.simulated_learner_replies[learner_idx]
-                    learner_idx += 1
-                    messages.append({"role": "user", "content": reply})
-                    summary.append({"role": "user", "summary": reply[:80]})
-                    continue
-                stopped_by_turn_limit = False
-                break
+                reply = await ctx.user.next_reply(dialog)
+                if reply is None:
+                    stopped_by_turn_limit = False
+                    break
+                messages.append({"role": "user", "content": reply})
+                summary.append({"role": "user", "summary": reply[:80]})
+                dialog.append({"role": "user", "content": reply})
+                continue
 
             for tc in tool_calls:
                 if tc.type != "function":
@@ -141,6 +144,7 @@ class OpenAiDriver:
 
         return DriverRunResult(
             messages=summary,
+            dialog=dialog,
             stats=DriverStats(
                 turns=min(
                     ctx.max_turns,

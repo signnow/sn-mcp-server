@@ -84,7 +84,7 @@ async def run_one(opts: RunOneOptions) -> RunOneResult:
                     max_turns=opts.max_turns,
                     max_tokens_per_response=opts.max_tokens_per_response,
                     budget_usd=opts.budget_usd,
-                    simulated_learner_replies=list(scenario.simulated_learner_replies),
+                    user=scenario.user,
                 )
             )
         except Exception as err:  # noqa: BLE001
@@ -121,6 +121,7 @@ async def run_one(opts: RunOneOptions) -> RunOneResult:
         messages=driver_result.messages if driver_result is not None else [],
         stats=stats,
         driver_error=driver_error,
+        dialog=driver_result.dialog if driver_result is not None else [],
     )
 
     results = evaluate(

@@ -73,8 +73,32 @@ class RunTrace:
     duration_ms: int
     tool_calls: list[ToolCallRecord]
     messages: list[dict[str, str]]
+    """Truncated-to-80-char summary used in the report table."""
+
     stats: DriverStats
     driver_error: str | None = None
+    dialog: list[dict[str, str]] = field(default_factory=list)
+    """Full text-only agent ↔ user turns — used by --transcripts, not by the report."""
+
+
+class UserStrategy(Protocol):
+    """Produces the next "user" utterance when the agent pauses without tool calls.
+
+    Two reference implementations ship (see ``eval/simulators.py``):
+
+    - :class:`~eval.simulators.CannedUserStrategy` — returns a hand-written list
+      of replies in order. Used by the classic regression scenarios.
+    - :class:`~eval.simulators.LLMUserStrategy` — routes each reply through a
+      second LLM that role-plays a user with a scripted goal. Used by two-agent
+      scenarios where canned replies are too brittle (agent may ask a
+      clarifying question that a fixed reply won't address).
+
+    ``history`` is the running user↔assistant dialog with tool calls stripped.
+    Items are ``{"role": "user"|"assistant", "content": str}``. Return the next
+    reply string, or ``None`` to signal "no more replies, let the agent stop".
+    """
+
+    async def next_reply(self, history: list[dict[str, str]]) -> str | None: ...
 
 
 @dataclass
@@ -99,8 +123,8 @@ class DriverContext:
     budget_usd: float
     """Abort when cumulative cost exceeds this — defence in depth."""
 
-    simulated_learner_replies: list[str]
-    """Simulated user utterances injected between tool-call batches."""
+    user: UserStrategy
+    """Strategy for producing replies when the agent stops without tool calls."""
 
 
 @dataclass
@@ -109,6 +133,9 @@ class DriverRunResult:
 
     messages: list[dict[str, str]]
     stats: DriverStats
+    dialog: list[dict[str, str]] = field(default_factory=list)
+    """Full-text agent ↔ user turns for --transcripts. Drivers without an LLM
+    loop (e.g. the mock driver) can leave this empty."""
 
 
 class EvalDriver(Protocol):
@@ -176,8 +203,8 @@ class ScenarioDefinition:
     initial_prompt: str
     """Initial prompt handed to the agent."""
 
-    simulated_learner_replies: list[str]
-    """Pre-scripted user replies injected in order between agent turns."""
+    user: UserStrategy
+    """Produces replies between agent turns. Canned list or LLM-driven simulator."""
 
     invariants: list[Invariant]
     """Invariants this scenario must satisfy. Merged with the default set in the runner."""

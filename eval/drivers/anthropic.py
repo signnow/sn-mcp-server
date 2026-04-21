@@ -70,9 +70,11 @@ class AnthropicDriver:
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": ctx.scenario_prompt}]
         summary: list[dict[str, str]] = [{"role": "user", "summary": ctx.scenario_prompt[:80]}]
+        # Text-only dialog handed to the user simulator. Tool calls/results are
+        # stripped — the simulator doesn't need to see them to role-play a user.
+        dialog: list[dict[str, str]] = [{"role": "user", "content": ctx.scenario_prompt}]
         input_tokens = 0
         output_tokens = 0
-        learner_idx = 0
         stopped_by_turn_limit = True
 
         for _turn in range(ctx.max_turns):
@@ -93,17 +95,18 @@ class AnthropicDriver:
             text = "\n".join(getattr(b, "text", "") for b in text_blocks)
             if text:
                 summary.append({"role": "assistant", "summary": text[:80]})
+                dialog.append({"role": "assistant", "content": text})
             messages.append({"role": "assistant", "content": [_block_to_dict(b) for b in response.content]})
 
             if not tool_uses:
-                if learner_idx < len(ctx.simulated_learner_replies):
-                    reply = ctx.simulated_learner_replies[learner_idx]
-                    learner_idx += 1
-                    messages.append({"role": "user", "content": reply})
-                    summary.append({"role": "user", "summary": reply[:80]})
-                    continue
-                stopped_by_turn_limit = False
-                break
+                reply = await ctx.user.next_reply(dialog)
+                if reply is None:
+                    stopped_by_turn_limit = False
+                    break
+                messages.append({"role": "user", "content": reply})
+                summary.append({"role": "user", "summary": reply[:80]})
+                dialog.append({"role": "user", "content": reply})
+                continue
 
             tool_results: list[dict[str, Any]] = []
             for use in tool_uses:
@@ -126,6 +129,7 @@ class AnthropicDriver:
 
         return DriverRunResult(
             messages=summary,
+            dialog=dialog,
             stats=DriverStats(
                 turns=min(
                     ctx.max_turns,

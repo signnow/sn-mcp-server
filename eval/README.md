@@ -33,6 +33,10 @@ python -m eval.cli --driver mock
 python -m eval.cli --driver anthropic
 python -m eval.cli --driver openai
 python -m eval.cli --driver all --trials 3
+
+# Pick a scenario (default: full-flow). "all" runs every registered scenario.
+python -m eval.cli --driver anthropic --scenario two-agent-flow
+python -m eval.cli --driver anthropic --scenario all
 ```
 
 The CLI loads `.env` from the repo root automatically (via
@@ -42,10 +46,18 @@ anything already exported in the shell wins over `.env`.
 
 Reports land in `eval-reports/` by default (override with `--out DIR`).
 
+Pass `--transcripts` to additionally write `<out>/transcripts/<scenario>-
+<driver>-trial<N>.md` per run: the full agent ↔ user dialog plus every
+tool call's args and result. This is the primary debugging surface for
+LLM-simulated scenarios — when `discovery_before_writes` flags, the
+transcript tells you *why* the agent skipped discovery.
+
 Model selection for real-LLM drivers is via env:
 
 - `EVAL_ANTHROPIC_MODEL` (default `claude-haiku-4-5`)
 - `EVAL_OPENAI_MODEL` (default `gpt-4o-mini`)
+- `EVAL_SIMULATOR_MODEL` (default `claude-haiku-4-5`) — model the
+  `LLMUserStrategy` uses to role-play the user in two-agent scenarios.
 
 ## Reading a report
 
@@ -72,13 +84,15 @@ eval/
   types.py            # dataclasses for the trace / invariant / scenario contracts
   invariants.py       # DEFAULT_INVARIANTS and the evaluate() helper
   report.py           # build_report / to_stable_json / to_markdown_summary
+  simulators.py       # CannedUserStrategy + LLMUserStrategy
   drivers/
     shared.py         # fetch_tools, call_tool, cost estimator
     mock.py           # deterministic canned sequence
     anthropic.py      # Anthropic Messages API tool-use loop
     openai.py         # OpenAI chat-completions tool loop
   scenarios/
-    full_flow.py      # full SignNow happy path (send_invite → status → download)
+    full_flow.py      # SignNow happy path, scripted user replies
+    two_agent_flow.py # same chain, user side driven by LLM simulator
 ```
 
 ## Adding a scenario
@@ -92,13 +106,39 @@ eval/
 3. `read_env()` reads the post-run state invariants care about — e.g.
    `router.calls` for HTTP-level assertions, or any extras stashed in
    `fixture.facts`.
-4. Add any scenario-specific invariants in the same file; they're merged
+4. Pick a **user strategy** for the `user=` field (see below): canned
+   replies for deterministic regression, LLM simulator for goal-driven
+   scenarios.
+5. Add any scenario-specific invariants in the same file; they're merged
    with `DEFAULT_INVARIANTS` by the runner.
-5. Register the scenario in `eval/cli.py` (or extend the CLI with a
-   scenario selector if more than a handful land).
+6. Register the builder in `_SCENARIO_BUILDERS` in `eval/cli.py` so
+   `--scenario=<name>` and `--scenario=all` can pick it up.
 
 Don't leak state across runs: each `seed()` must produce a fresh router
 and the teardown must stop it, or the next run will see stale routes.
+
+## User strategies: canned vs LLM simulator
+
+Scenarios specify how the "user" side of the conversation behaves when the
+agent stops without a tool call. Two strategies ship in
+`eval/simulators.py`:
+
+- **`CannedUserStrategy(replies=[...])`** — returns a fixed list in order,
+  then `None` (which tells the driver to stop). Deterministic, free,
+  and what `full_flow.py` uses. Right default when the conversation
+  pattern is stable and you want cheap regression runs.
+- **`LLMUserStrategy(goal_steps=[...], constraints=[...])`** — routes
+  each reply through a second Anthropic model that role-plays a user
+  with scripted goals. The simulator sees the running dialog (with roles
+  flipped so the agent-under-test is "the human" from its POV) and
+  replies "DONE" when every goal is satisfied. Used by
+  `two_agent_flow.py`. Right choice when the agent may ask clarifying
+  questions a canned reply can't coherently answer, or when you want to
+  test that the agent honours corrections the user issues mid-flow.
+
+The simulator has a hard `max_turns` cap (default 20) and obeys a soft
+USD budget via the driver's `--budget-usd`. Runs cost ~2× a canned
+scenario because every agent turn triggers a simulator turn.
 
 ## Adding a driver
 
