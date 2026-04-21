@@ -57,6 +57,14 @@ jobs:
         run: lint-imports --config pyproject.toml
 
       - name: Pytest with coverage
+        # auth.py loads SignNowConfig at import time; the model validator
+        # requires one of the two credential combos. Tests never hit the
+        # real API (respx mocks everything), but import must succeed —
+        # feed fake-but-valid values so the oneOf rule is satisfied.
+        env:
+          SIGNNOW_CLIENT_ID: ci-fake-client-id
+          SIGNNOW_CLIENT_SECRET: ci-fake-client-secret
+          SIGNNOW_API_BASIC_TOKEN: ci-fake-basic-token
         run: |
           python -m pytest tests/unit tests/integration tests/api \
             --cov --cov-report=xml --cov-report=term \
