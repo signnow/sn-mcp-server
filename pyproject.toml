@@ -56,7 +56,10 @@ dev = [
   "signnow-mcp-server[test]",
   "pre-commit>=3.7",
   "ruff>=0.7",
-  "mypy>=1.13",
+  # 1.18+ split `untyped-decorator` from `misc`; tools-layer override in
+  # [tool.mypy] disables both codes, so older mypy would silently drop
+  # the whole list and start flagging FastMCP decorators.
+  "mypy>=1.18",
   "import-linter>=2.0",
   "diff-cover>=9.0",
 ]
@@ -114,11 +117,14 @@ disable_error_code = ["misc"]
 
 # FastMCP 3.x ships @mcp.tool / @mcp.prompt / @mcp.resource as untyped decorators
 # (their overloads use Callable[..., Any] returns), so every registered handler
-# trips mypy's "Untyped decorator makes function ... untyped" [misc] check.
-# We can't fix FastMCP's typing from here; scope the silence to the tools layer.
+# trips mypy's "Untyped decorator makes function ... untyped" check. Older
+# mypy emitted this under [misc]; newer versions split it into
+# [untyped-decorator]. Silence both so the override works regardless of the
+# mypy version installed locally vs in CI. We can't fix FastMCP's typing
+# from here; scope the silence to the tools layer.
 [[tool.mypy.overrides]]
 module = ["sn_mcp_server.tools.*"]
-disable_error_code = ["misc"]
+disable_error_code = ["misc", "untyped-decorator"]
 
 [tool.hatch.version]
 source = "vcs"
