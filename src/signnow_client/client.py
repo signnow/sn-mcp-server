@@ -6,14 +6,13 @@ Main client class for interacting with the SignNow API.
 
 import httpx
 
-from .client_base import SignNowAPIClientBase
 from .client_document_groups import DocumentGroupClientMixin
 from .client_documents import DocumentClientMixin
 from .client_other import OtherClientMixin
 from .config import SignNowConfig
 
 
-class SignNowAPIClient(SignNowAPIClientBase, DocumentClientMixin, DocumentGroupClientMixin, OtherClientMixin):
+class SignNowAPIClient(DocumentClientMixin, DocumentGroupClientMixin, OtherClientMixin):
     """
     Client for interacting with SignNow API
 

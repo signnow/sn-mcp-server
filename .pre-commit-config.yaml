@@ -1,14 +1,64 @@
+# Agent self-check pipeline — local stage.
+#
+# Two stages, each bounded by what stays fast for its trigger:
+#
+#   pre-commit (`git commit`, <10s target)
+#     - ruff-format   — formatting on staged files
+#     - ruff          — lint on staged files
+#     - mypy          — static type check on src/ (~1s, full tree)
+#     - pytest-unit   — unit tests (~4s, pure logic, no network)
+#
+#   pre-push (`git push`, <30s target)
+#     - pytest-all    — unit + integration + api with coverage threshold
+#     - import-linter — architectural layer boundaries (full graph)
+#
+# CI mirrors pre-push and adds a diff-coverage gate. Keep them in sync:
+# if a check lands in pre-push, land it in CI too — the point of pre-push
+# is to catch in the same conversation what CI would catch minutes later.
+#
+# Bypass with `--no-verify` only in genuine emergencies. If a hook is
+# wrong, fix the hook — don't make `--no-verify` a habit.
+
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.9.10
     hooks:
-      - id: ruff
       - id: ruff-format
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
+      - id: ruff
+        args: [--fix]
+
+  - repo: local
     hooks:
       - id: mypy
+        name: mypy (static types, src/)
+        entry: python -m mypy src/
+        language: system
+        pass_filenames: false
+        types_or: [python, toml]
+        stages: [pre-commit]
+
+      - id: pytest-unit
+        name: pytest (unit layer, fast)
+        entry: python -m pytest tests/unit -q --no-header
+        language: system
+        pass_filenames: false
+        types_or: [python, toml]
+        stages: [pre-commit]
+
+      - id: pytest-all
+        name: pytest (unit + integration + api, with coverage)
+        entry: >-
+          python -m pytest tests/unit tests/integration tests/api
+          --cov --cov-report=term-missing --cov-fail-under=70
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: import-linter
+        name: import-linter (architectural boundaries)
+        entry: lint-imports --config pyproject.toml
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

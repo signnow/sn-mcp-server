@@ -135,7 +135,10 @@ def bind(mcp: FastMCP, cfg: Any) -> None:  # noqa: ANN401
     # cfg unused — no auth
     _ = cfg
 
-    @mcp.tool(
+    # FastMCP's type stub declares tags as set[str], but sets are not JSON-serializable
+    # and the test `test_bind_tags_is_a_list` enforces list. Pass a list to keep the
+    # wire-level payload serializable; the type: ignore covers the stub mismatch.
+    @mcp.tool(  # type: ignore[call-overload]
         name="signnow_skills",
         description=(
             "Query the bundled SignNow skill library. Omit skill_name to list all skills with descriptions. "

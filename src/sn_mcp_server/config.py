@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         """Handle empty string for oauth_issuer"""
         if v == "" or v is None:
             return AnyHttpUrl("http://localhost:8000")
-        return v
+        return AnyHttpUrl(v)
 
     @field_validator("access_ttl", mode="before")
     @classmethod
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
         """Handle empty string for access_ttl"""
         if v == "" or v is None:
             return 3600
-        return v
+        return int(v)
 
     @field_validator("refresh_ttl", mode="before")
     @classmethod
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
         """Handle empty string for refresh_ttl"""
         if v == "" or v is None:
             return 2592000
-        return v
+        return int(v)
 
     @field_validator("allowed_redirects")
     @classmethod

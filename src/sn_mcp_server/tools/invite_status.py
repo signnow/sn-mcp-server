@@ -5,14 +5,16 @@ This module contains functions for getting invite status for documents and docum
 from the SignNow API.
 """
 
-from typing import Any, Literal
+from typing import Literal
 
 from signnow_client import SignNowAPIClient
+from signnow_client.models import DocumentResponse
+from signnow_client.models.document_groups import GetDocumentGroupV2Response
 
 from .models import DocumentGroupStatusAction, DocumentGroupStatusStep, InviteStatus, InviteStatusValues
 
 
-def _get_document_group_status(client: SignNowAPIClient, token: str, document_group_data: Any, document_group_id: str) -> InviteStatus:
+def _get_document_group_status(client: SignNowAPIClient, token: str, document_group_data: GetDocumentGroupV2Response, document_group_id: str) -> InviteStatus:
     """
     Get document group status information.
 
@@ -55,7 +57,7 @@ def _get_document_group_status(client: SignNowAPIClient, token: str, document_gr
     return InviteStatus(invite_id=invite.id, status=invite.status, steps=steps)
 
 
-def _get_document_status(client: SignNowAPIClient, token: str, document_data: Any) -> InviteStatus:
+def _get_document_status(client: SignNowAPIClient, token: str, document_data: DocumentResponse) -> InviteStatus:
     """
     Get document status information.
 
@@ -118,32 +120,22 @@ def _get_invite_status(entity_id: str, entity_type: Literal["document", "documen
     Returns:
         InviteStatus with invite ID, status, and steps information
     """
-    # Determine entity type if not provided and get entity data
-    document_group = None
-    document = None
-
+    # Auto-detect entity type when not provided by probing document_group → document.
+    # The first probe's failure is the expected negative signal ("not a document group")
+    # that triggers the fallback; the second arm raises when both probes fail.
     if not entity_type:
-        # Try to determine entity type by attempting to get document group first (higher priority)
         try:
             document_group = client.get_document_group_v2(token, entity_id)
-            entity_type = "document_group"
-        except Exception:
-            # If document group not found, try document
-            try:
-                document = client.get_document(token, entity_id)
-                entity_type = "document"
-            except Exception:
-                raise ValueError(f"Entity with ID {entity_id} not found as either document group or document") from None
-    else:
-        # Entity type is provided, get the entity data
-        if entity_type == "document_group":
-            document_group = client.get_document_group_v2(token, entity_id)
-        else:
+            return _get_document_group_status(client, token, document_group, entity_id)
+        except Exception:  # noqa: S110
+            pass
+        try:
             document = client.get_document(token, entity_id)
+            return _get_document_status(client, token, document)
+        except Exception:
+            raise ValueError(f"Entity with ID {entity_id} not found as either document group or document") from None
 
+    # Entity type is provided — dispatch directly to the appropriate fetcher.
     if entity_type == "document_group":
-        # Get document group status using the already fetched data
-        return _get_document_group_status(client, token, document_group, entity_id)
-    else:
-        # Get document status using the already fetched data
-        return _get_document_status(client, token, document)
+        return _get_document_group_status(client, token, client.get_document_group_v2(token, entity_id), entity_id)
+    return _get_document_status(client, token, client.get_document(token, entity_id))

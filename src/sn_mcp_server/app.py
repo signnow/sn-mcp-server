@@ -58,8 +58,12 @@ def create_http_app() -> Starlette:
     app = Starlette(routes=routes, lifespan=mcp_app.lifespan)
 
     # CORS for browser clients (inspector) - BEFORE BearerJWTMiddleware
+    # Starlette's add_middleware expects a _MiddlewareFactory (Callable[..., ASGIApp]),
+    # but mypy reads our subclass as `type[_CORSMiddlewareWithExposeInPreflight]` and
+    # complains about the __init__ vs __call__ shape. It's the standard Starlette
+    # middleware-class pattern — the factory call works at runtime.
     app.add_middleware(
-        _CORSMiddlewareWithExposeInPreflight,
+        _CORSMiddlewareWithExposeInPreflight,  # type: ignore[arg-type]
         allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],

@@ -4,7 +4,8 @@ Utility functions for SignNow MCP server tools.
 This module contains shared utility functions used across multiple tool modules.
 """
 
-from typing import Literal, Protocol, Union
+from collections.abc import Sequence
+from typing import Literal, Protocol
 
 from signnow_client import SignNowAPIClient
 from signnow_client.exceptions import SignNowAPIHTTPError
@@ -17,7 +18,7 @@ class HasName(Protocol):
     name: str | None
 
 
-RoleType = Union[RoleLite, str, dict[str, str], HasName]
+RoleType = RoleLite | str | dict[str, str] | HasName
 
 
 def _is_not_found_error(exc: SignNowAPIHTTPError) -> bool:
@@ -34,7 +35,7 @@ def _is_not_found_error(exc: SignNowAPIHTTPError) -> bool:
     return False
 
 
-def extract_role_names(roles: list[RoleType] | None) -> list[str]:
+def extract_role_names(roles: Sequence[RoleType] | None) -> list[str]:
     """Extract role names from various role representations.
 
     This function uses _normalize_roles from folders_lite and converts None to empty list

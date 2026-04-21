@@ -9,7 +9,6 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from .folders_lite import _parse_int_value
-from .templates_and_documents import DocumentThumbnail
 
 
 class DocumentRoleName(BaseModel):

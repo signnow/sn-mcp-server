@@ -137,17 +137,17 @@ def _upload_document(
     if not parsed.netloc:
         raise ValueError(f"URL must include a hostname: {file_url!r}")
     url_filename = pathlib.PurePosixPath(parsed.path).name
-    effective_filename = filename if filename else (url_filename if url_filename else None)
-    if effective_filename:
-        ext = pathlib.Path(effective_filename).suffix.lower()
+    url_effective_filename: str | None = filename if filename else (url_filename if url_filename else None)
+    if url_effective_filename:
+        ext = pathlib.Path(url_effective_filename).suffix.lower()
         if ext and ext not in ALLOWED_EXTENSIONS:
             raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
     request = CreateDocumentFromUrlRequest(url=file_url, check_fields=True)
     url_response = client.create_document_from_url(token=token, request_data=request)
-    # NOTE (H-2): CreateDocumentFromUrlRequest has no 'name' field — effective_filename
+    # NOTE (H-2): CreateDocumentFromUrlRequest has no 'name' field — url_effective_filename
     # is locally inferred and not transmitted to SignNow. The actual document name in
     # SignNow may differ (set by SignNow from URL path or Content-Disposition header).
-    return UploadDocumentResponse(document_id=url_response.id, filename=effective_filename, source="url")
+    return UploadDocumentResponse(document_id=url_response.id, filename=url_effective_filename, source="url")
 
 
 def _get_full_document(client: SignNowAPIClient, token: str, document_id: str, document_data: DocumentResponse) -> DocumentGroupDocument:
@@ -206,35 +206,29 @@ def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: G
         DocumentGroup with complete information including all documents with field values
     """
 
-    # Use provided group data
-    group_data = group_data.data
+    data = group_data.data
 
-    # Get full document information for each document in the group
     full_documents = []
     all_field_invites = []
-    for doc in group_data.documents:
-        # Collect field_invites from each document
+    for doc in data.documents:
         if doc.field_invites:
             all_field_invites.extend(doc.field_invites)
-        # Get document data first
         document_data = client.get_document(token, doc.id)
         full_doc = _get_full_document(client=client, token=token, document_id=doc.id, document_data=document_data)
         full_documents.append(full_doc)
 
-    # Create invite from group data and field_invites
     now = int(time.time())
     invite = SimplifiedInvite.from_document_group_v2(
-        invite_id=group_data.invite_id,
-        raw_status=group_data.state,
+        invite_id=data.invite_id,
+        raw_status=data.state,
         field_invites=all_field_invites if all_field_invites else None,
         now=now,
     )
 
-    # Create DocumentGroup with full document information
     return DocumentGroup(
-        last_updated=group_data.created,  # Use created timestamp as last_updated
-        entity_id=group_data.id,
-        group_name=group_data.name,
+        last_updated=data.created,
+        entity_id=data.id,
+        group_name=data.name,
         entity_type="document_group",
         invite=invite,
         documents=full_documents,
@@ -296,49 +290,33 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
         ValueError: If entity not found as either document or document group
     """
 
-    # Determine entity type if not provided and get entity data
-    document_data = None
-    template_group_data = None
-    group_data = None
-
+    # Auto-detect entity type when not provided by probing document → document_group → template_group.
+    # Each fallback swallows the prior probe's error because "not found as this type" is the
+    # expected negative signal that drives the cascade; the final arm raises if all probes fail.
     if not entity_type:
-        # Try to determine entity type by attempting to get document first
         try:
-            # Try to get document - if successful, it's a document
             document_data = client.get_document(token, entity_id)
-            entity_type = "document"
-        except Exception:
-            # If document not found, try document group
-            try:
-                # Try to get document group - if successful, it's a document group
-                group_data = client.get_document_group_v2(token, entity_id)
-                entity_type = "document_group"
-            except Exception:
-                # If document group not found, try template group
-                try:
-                    # Try to get template group - if successful, it's a template group
-                    template_group_data = client.get_document_group_template(token, entity_id)
-                    entity_type = "template_group"
-                except Exception:
-                    raise ValueError(f"Entity with ID {entity_id} not found as either document, template, template group or document group") from None
-    else:
-        # Entity type is provided, get the entity data
-        if entity_type == "document_group":
+            return _get_single_document_as_group(client, token, entity_id, document_data)
+        except Exception:  # noqa: S110
+            pass
+        try:
             group_data = client.get_document_group_v2(token, entity_id)
-        elif entity_type == "template":
-            document_data = client.get_document(token, entity_id)
-        elif entity_type == "template_group":
+            return _get_full_document_group(client, token, group_data)
+        except Exception:  # noqa: S110
+            pass
+        try:
             template_group_data = client.get_document_group_template(token, entity_id)
-        else:  # entity_type == "document"
-            document_data = client.get_document(token, entity_id)
+            return _get_full_template_group(client, token, template_group_data)
+        except Exception:
+            raise ValueError(f"Entity with ID {entity_id} not found as either document, template, template group or document group") from None
 
-    # Get the appropriate data based on determined or provided entity type
+    # Entity type is provided — dispatch directly to the appropriate fetcher.
     if entity_type == "document_group":
-        return _get_full_document_group(client, token, group_data)
-    elif entity_type == "template_group":
-        return _get_full_template_group(client, token, template_group_data)
-    else:  # entity_type == "document" or "template"
-        return _get_single_document_as_group(client, token, entity_id, document_data)
+        return _get_full_document_group(client, token, client.get_document_group_v2(token, entity_id))
+    if entity_type == "template_group":
+        return _get_full_template_group(client, token, client.get_document_group_template(token, entity_id))
+    # entity_type == "document" or "template"
+    return _get_single_document_as_group(client, token, entity_id, client.get_document(token, entity_id))
 
 
 def _get_single_document_as_group(client: SignNowAPIClient, token: str, document_id: str, document_data: DocumentResponse) -> DocumentGroup:

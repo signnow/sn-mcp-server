@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AliasChoices,
@@ -13,7 +13,6 @@ from pydantic import (
 )
 
 from .templates_and_documents import DocumentThumbnail
-
 
 # ----------------------------
 # helpers
@@ -32,7 +31,7 @@ def _parse_int_value(value: Any) -> int | None:
 IntFromAny = Annotated[int | None, BeforeValidator(_parse_int_value)]
 
 
-def _normalize_folder_type_value(value: Any) -> Any:
+def _normalize_folder_type_value(value: Any) -> str:
     """Normalize folder type value from API.
 
     The SignNow API sometimes returns inconsistent type values:
@@ -41,7 +40,7 @@ def _normalize_folder_type_value(value: Any) -> Any:
     """
     if value == "document_group":
         return "document-group"
-    return value
+    return str(value)
 
 
 def _normalize_to_unknown(_: object) -> str:
@@ -300,13 +299,11 @@ class UnknownFolderDocLite(SNBaseModel):
 
 
 FolderDocLite = Annotated[
-    Union[
-        Annotated[DocumentItemLite, Tag("document")],
-        Annotated[TemplateItemLite, Tag("template")],
-        Annotated[DocumentGroupItemLite, Tag("document-group")],
-        Annotated[DocumentGroupTemplateItemLite, Tag("dgt")],
-        Annotated[UnknownFolderDocLite, Tag("unknown")],
-    ],
+    Annotated[DocumentItemLite, Tag("document")]
+    | Annotated[TemplateItemLite, Tag("template")]
+    | Annotated[DocumentGroupItemLite, Tag("document-group")]
+    | Annotated[DocumentGroupTemplateItemLite, Tag("dgt")]
+    | Annotated[UnknownFolderDocLite, Tag("unknown")],
     Field(discriminator=Discriminator(_folder_doc_type_from_payload)),
 ]
 

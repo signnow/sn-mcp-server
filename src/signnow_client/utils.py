@@ -37,8 +37,8 @@ def decode_basic_auth(basic_token: str) -> tuple[str, str]:
         decoded = base64.b64decode(basic_token.encode()).decode()
         client_id, client_secret = decoded.split(":", 1)
         return client_id, client_secret
-    except Exception:
-        raise ValueError("Invalid Basic Auth token format")
+    except Exception as e:
+        raise ValueError("Invalid Basic Auth token format") from e
 
 
 def validate_token_response(response_data: dict[str, Any]) -> bool:

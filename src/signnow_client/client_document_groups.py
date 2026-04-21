@@ -6,6 +6,7 @@ Methods for working with document groups and document group templates.
 
 import httpx
 
+from .client_base import SignNowAPIClientBase
 from .exceptions import (
     SignNowAPIError,
     SignNowAPITimeoutError,
@@ -48,7 +49,7 @@ from .models import (
 )
 
 
-class DocumentGroupClientMixin:
+class DocumentGroupClientMixin(SignNowAPIClientBase):
     """Mixin class for document group and template group related methods"""
 
     def get_document_template_groups(self, token: str, limit: int = 50, offset: int = 0) -> DocumentGroupTemplatesResponse:

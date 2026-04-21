@@ -10,6 +10,7 @@ from typing import Any, Literal
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
+from signnow_client.models.document_groups import GetDocumentGroupResponse
 
 from .create_from_template import _resolve_entity
 from .models import (
@@ -20,7 +21,7 @@ from .models import (
 from .utils import _detect_entity_type
 
 
-def _create_document_group_embedded_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: Any) -> CreateEmbeddedInviteResponse:
+def _create_document_group_embedded_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: GetDocumentGroupResponse) -> CreateEmbeddedInviteResponse:
     """Private function to create document group embedded invite."""
     from signnow_client import (
         CreateEmbeddedInviteRequest as SignNowEmbeddedInviteRequest,
@@ -85,11 +86,7 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
         GenerateDocumentEmbeddedInviteLinkRequest,
     )
 
-    flat_recipients: list[tuple[int, EmbeddedInviteRecipient]] = [
-        (order_info.order, recipient)
-        for order_info in orders
-        for recipient in order_info.recipients
-    ]
+    flat_recipients: list[tuple[int, EmbeddedInviteRecipient]] = [(order_info.order, recipient) for order_info in orders for recipient in order_info.recipients]
 
     invites = []
     for order, recipient in flat_recipients:
@@ -108,13 +105,13 @@ def _create_document_embedded_invite(client: SignNowAPIClient, token: str, entit
     for order, recipient in flat_recipients:
         # link generation only succeeds for invites in 'pending' status, with multiple signing orders, only order-1 invites are pending immediately
         if recipient.delivery_type == "link" and order == 1:
-            invite = invite_by_email_order.get((recipient.email, order))
-            if invite is None:
+            created_invite = invite_by_email_order.get((recipient.email, order))
+            if created_invite is None:
                 msg = f"No invite returned for email '{recipient.email}' on document '{entity_id}'"
                 raise ValueError(msg)
             link_request = GenerateDocumentEmbeddedInviteLinkRequest(auth_method=recipient.auth_method)
-            link_response = client.generate_document_embedded_invite_link(token, entity_id, invite.id, link_request)
-            recipient_links.append({"role": recipient.role, "link": link_response.data["link"], "document_invite_id": invite.id})
+            link_response = client.generate_document_embedded_invite_link(token, entity_id, created_invite.id, link_request)
+            recipient_links.append({"role": recipient.role, "link": link_response.data["link"], "document_invite_id": created_invite.id})
 
     return CreateEmbeddedInviteResponse(document_group_invite_id=None, invite_entity="document", recipient_links=recipient_links)
 

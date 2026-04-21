@@ -6,6 +6,7 @@ Methods for working with individual documents and templates.
 
 import httpx
 
+from .client_base import SignNowAPIClientBase
 from .exceptions import SignNowAPIError, SignNowAPITimeoutError
 from .models import (
     CancelDocumentFieldInviteRequest,
@@ -43,7 +44,7 @@ from .models import (
 )
 
 
-class DocumentClientMixin:
+class DocumentClientMixin(SignNowAPIClientBase):
     """Mixin class for document and template related methods"""
 
     def upload_document(self, token: str, file_content: bytes, filename: str, check_fields: bool = True) -> UploadDocumentResponse:
@@ -154,9 +155,7 @@ class DocumentClientMixin:
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
 
-        params = {}
-
-        return self._get(f"/document/{document_id}", headers=headers, params=params, validate_model=DocumentResponse)
+        return self._get(f"/document/{document_id}", headers=headers, validate_model=DocumentResponse)
 
     def merge_documents(self, token: str, request_data: MergeDocumentsRequest) -> MergeDocumentsResponse:
         """

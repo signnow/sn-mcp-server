@@ -1,15 +1,17 @@
 import base64
 import secrets
 import time
-from urllib.parse import urlencode, urlparse
 from typing import Any
+from urllib.parse import urlencode, urlparse
 
 import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from starlette.status import HTTP_201_CREATED
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from signnow_client import SignNowAPIClient
 from signnow_client.config import load_signnow_config
@@ -37,7 +39,7 @@ def b64url(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 
 
-def _url(base: str | Any, *parts: str) -> str:
+def _url(base: str | AnyHttpUrl, *parts: str) -> str:
     """Join base URL with path parts, normalizing slashes."""
     base = str(base).rstrip("/")
     path = "/".join(p.strip("/") for p in parts if p)
@@ -65,7 +67,7 @@ signnow_client = SignNowAPIClient(signnow_config)
 
 def _verify_jwt(token: str) -> dict[str, Any] | None:
     try:
-        return jwt.decode(
+        claims: dict[str, Any] = jwt.decode(
             token,
             key=public_key,
             algorithms=["RS256"],
@@ -73,24 +75,23 @@ def _verify_jwt(token: str) -> dict[str, Any] | None:
             issuer=str(settings.oauth_issuer),
             options={"require": ["exp", "iat", "iss", "aud"]},
         )
+        return claims
     except jwt.PyJWTError:
         return None
 
 
 def _token_response(signnow_response: dict[str, Any]) -> JSONResponse:
     """Build OAuth token response from SignNow API response."""
-    return JSONResponse(
-        {
-            "token_type": signnow_response.get("token_type", "Bearer"),
-            "access_token": signnow_response.get("access_token"),
-            "expires_in": signnow_response.get("expires_in", settings.access_ttl),
-            "refresh_token": signnow_response.get("refresh_token"),
-            "scope": signnow_response.get("scope", "offline_access *"),
-        }
-    )
+    return JSONResponse({
+        "token_type": signnow_response.get("token_type", "Bearer"),
+        "access_token": signnow_response.get("access_token"),
+        "expires_in": signnow_response.get("expires_in", settings.access_ttl),
+        "refresh_token": signnow_response.get("refresh_token"),
+        "scope": signnow_response.get("scope", "offline_access *"),
+    })
 
 
-def _require_string(value: Any, param: str) -> tuple[str | None, JSONResponse | None]:
+def _require_string(value: Any, param: str) -> tuple[str | None, JSONResponse | None]:  # noqa: ANN401 — narrows untyped form-data value to str
     """Validate form param is non-empty string. Returns (value, error_response)."""
     if not value:
         return None, JSONResponse({"error": "invalid_request", "error_description": f"{param} required"}, status_code=400)
@@ -161,8 +162,12 @@ async def authorize(req: Request) -> RedirectResponse | JSONResponse:
         if not any(_matches(a) for a in allowed):
             return JSONResponse({"error": "invalid_request", "error_description": "redirect_uri not allowed"}, status_code=400)
 
+    # client_id comes from SignNowConfig and is validated as present whenever the
+    # authorization_code grant is selected; empty string is returned to trigger a
+    # server-side misconfiguration response rather than a silent bad redirect.
+    client_id = signnow_config.client_id or ""
     base_url = _url(signnow_config.app_base, "authorize")
-    params: dict[str, str] = {"response_type": "code", "client_id": signnow_config.client_id, "redirect_uri": redirect_uri}
+    params: dict[str, str] = {"response_type": "code", "client_id": client_id, "redirect_uri": redirect_uri}
     if state:
         params["state"] = state
     redirect_url = f"{base_url}?{urlencode(params)}"
@@ -208,17 +213,15 @@ async def introspect(req: Request) -> JSONResponse:
     active = claims is not None
     resp: dict[str, Any] = {"active": bool(active)}
     if active and claims:
-        resp.update(
-            {
-                "iss": claims["iss"],
-                "sub": claims["sub"],
-                "aud": claims["aud"],
-                "client_id": claims.get("client_id"),
-                "scope": claims.get("scope", ""),
-                "exp": claims["exp"],
-                "iat": claims["iat"],
-            }
-        )
+        resp.update({
+            "iss": claims["iss"],
+            "sub": claims["sub"],
+            "aud": claims["aud"],
+            "client_id": claims.get("client_id"),
+            "scope": claims.get("scope", ""),
+            "exp": claims["exp"],
+            "iat": claims["iat"],
+        })
     return JSONResponse(resp)
 
 
@@ -238,14 +241,12 @@ async def revoke(req: Request) -> PlainTextResponse | JSONResponse:
 
 # ============= PRM (Protected Resource Metadata) =============
 def prm_for_resource(resource_url: str) -> JSONResponse:
-    return JSONResponse(
-        {
-            "resource": resource_url,
-            "authorization_servers": [str(settings.oauth_issuer)],
-            "bearer_methods_supported": ["header"],
-            "scopes_supported": ["offline_access", "*"],
-        }
-    )
+    return JSONResponse({
+        "resource": resource_url,
+        "authorization_servers": [str(settings.oauth_issuer)],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": ["offline_access", "*"],
+    })
 
 
 async def prm_root(_: Request) -> JSONResponse:
@@ -270,7 +271,7 @@ async def register(req: Request) -> JSONResponse:
 
     client_id = secrets.token_urlsafe(24)
     client_secret = None
-    if token_method == "client_secret_post":
+    if token_method == "client_secret_post":  # noqa: S105 — OAuth 2.0 auth method identifier (RFC 7591), not a password
         client_secret = secrets.token_urlsafe(32)
 
     resp: dict[str, Any] = {
@@ -298,11 +299,11 @@ class TrailingSlashCompatMiddleware:
     Makes /mcp and /sse equivalent to /mcp/ and /sse/ without redirect.
     """
 
-    def __init__(self, app: Any, accept_exact: tuple[str, ...] = ("/mcp", "/sse")) -> None:
+    def __init__(self, app: ASGIApp, accept_exact: tuple[str, ...] = ("/mcp", "/sse")) -> None:
         self.app = app
         self.accept_exact = set(accept_exact)
 
-    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http":
             path = scope.get("path", "")
             # Rewrite only exact matches to avoid touching sub-routes
@@ -313,12 +314,12 @@ class TrailingSlashCompatMiddleware:
 
 
 class BearerJWTASGIMiddleware:
-    def __init__(self, app: Any, protect_prefixes: tuple[str, ...] = ("/mcp", "/sse", "/messages")) -> None:
+    def __init__(self, app: ASGIApp, protect_prefixes: tuple[str, ...] = ("/mcp", "/sse", "/messages")) -> None:
         self.app = app
         self._paths = tuple(protect_prefixes)
         self.token_provider = TokenProvider()
 
-    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -334,16 +335,14 @@ class BearerJWTASGIMiddleware:
             if not self.token_provider.has_config_credentials():
                 token = self.token_provider.get_access_token(dict(request.headers))
                 if not token:
-                    await send(
-                        {
-                            "type": "http.response.start",
-                            "status": 401,
-                            "headers": [
-                                (b"www-authenticate", f'Bearer resource_metadata="{_url(settings.oauth_issuer, ".well-known/oauth-protected-resource")}"'.encode()),
-                                (b"content-type", b"text/plain; charset=utf-8"),
-                            ],
-                        }
-                    )
+                    await send({
+                        "type": "http.response.start",
+                        "status": 401,
+                        "headers": [
+                            (b"www-authenticate", f'Bearer resource_metadata="{_url(settings.oauth_issuer, ".well-known/oauth-protected-resource")}"'.encode()),
+                            (b"content-type", b"text/plain; charset=utf-8"),
+                        ],
+                    })
                     await send({"type": "http.response.body", "body": b"Unauthorized"})
                     return
 

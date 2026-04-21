@@ -5,12 +5,11 @@ Base client class with common HTTP methods and error handling.
 """
 
 import json
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    pass
+from types import TracebackType
+from typing import Any, TypeVar, overload
 
 import httpx
+from pydantic import BaseModel
 
 from .config import SignNowConfig
 from .exceptions import (
@@ -23,11 +22,13 @@ from .exceptions import (
     SignNowAPITimeoutError,
 )
 
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
+
 
 class SignNowAPIClientBase:
     """Base client class with common HTTP methods and error handling"""
 
-    def __init__(self, cfg: SignNowConfig, client: httpx.Client | None = None):
+    def __init__(self, cfg: SignNowConfig, client: httpx.Client | None = None) -> None:
         """
         Initialize the SignNow API client
 
@@ -46,7 +47,12 @@ class SignNowAPIClientBase:
         """Context manager entry"""
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Context manager exit - close client"""
         self.close()
 
@@ -86,7 +92,11 @@ class SignNowAPIClientBase:
         else:
             return SignNowAPIHTTPError(error_message, status_code, response_data)
 
-    def _get(self, url: str, headers: dict[str, str] | None = None, params: dict[str, Any] | None = None, validate_model: Any = None) -> Any:
+    @overload
+    def _get(self, url: str, headers: dict[str, str] | None = ..., params: dict[str, Any] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...
+    @overload
+    def _get(self, url: str, headers: dict[str, str] | None = ..., params: dict[str, Any] | None = ..., validate_model: None = None) -> Any: ...  # noqa: ANN401
+    def _get(self, url: str, headers: dict[str, str] | None = None, params: dict[str, Any] | None = None, validate_model: type[BaseModel] | None = None) -> Any:  # noqa: ANN401
         """Internal GET method with unified error handling and optional model validation"""
         try:
             response = self.http.get(url, headers=headers, params=params)
@@ -100,13 +110,17 @@ class SignNowAPIClientBase:
         except httpx.TimeoutException as e:
             raise SignNowAPITimeoutError("SignNow API timeout") from e
         except httpx.HTTPStatusError as e:
-            raise self._handle_http_error(e)
+            raise self._handle_http_error(e) from e
         except json.JSONDecodeError as e:
             raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in GET request to {url}: {e}") from e
 
-    def _post(self, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, json_data: dict[str, Any] | None = None, validate_model: Any = None) -> Any:
+    @overload
+    def _post(self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...
+    @overload
+    def _post(self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., validate_model: None = None) -> Any: ...  # noqa: ANN401
+    def _post(self, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, json_data: dict[str, Any] | None = None, validate_model: type[BaseModel] | None = None) -> Any:  # noqa: ANN401
         """Internal POST method with unified error handling and optional model validation"""
         try:
             response = self.http.post(url, headers=headers, data=data, json=json_data)
@@ -125,13 +139,17 @@ class SignNowAPIClientBase:
         except httpx.TimeoutException as e:
             raise SignNowAPITimeoutError("SignNow API timeout") from e
         except httpx.HTTPStatusError as e:
-            raise self._handle_http_error(e)
+            raise self._handle_http_error(e) from e
         except json.JSONDecodeError as e:
             raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in POST request to {url}: {e}") from e
 
-    def _put(self, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, json_data: dict[str, Any] | None = None, validate_model: Any = None) -> Any:
+    @overload
+    def _put(self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...
+    @overload
+    def _put(self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., validate_model: None = None) -> Any: ...  # noqa: ANN401
+    def _put(self, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, json_data: dict[str, Any] | None = None, validate_model: type[BaseModel] | None = None) -> Any:  # noqa: ANN401
         """Internal PUT method with unified error handling and optional model validation"""
         try:
             response = self.http.put(url, headers=headers, data=data, json=json_data)
@@ -145,13 +163,24 @@ class SignNowAPIClientBase:
         except httpx.TimeoutException as e:
             raise SignNowAPITimeoutError("SignNow API timeout") from e
         except httpx.HTTPStatusError as e:
-            raise self._handle_http_error(e)
+            raise self._handle_http_error(e) from e
         except json.JSONDecodeError as e:
             raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in PUT request to {url}: {e}") from e
 
-    def _post_multipart(self, url: str, headers: dict[str, str] | None = None, files: dict[str, Any] | None = None, data: dict[str, Any] | None = None, validate_model: Any = None) -> Any:
+    @overload
+    def _post_multipart(self, url: str, headers: dict[str, str] | None = ..., files: dict[str, Any] | None = ..., data: dict[str, Any] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...
+    @overload
+    def _post_multipart(self, url: str, headers: dict[str, str] | None = ..., files: dict[str, Any] | None = ..., data: dict[str, Any] | None = ..., validate_model: None = None) -> Any: ...  # noqa: ANN401
+    def _post_multipart(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        files: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        validate_model: type[BaseModel] | None = None,
+    ) -> Any:  # noqa: ANN401
         """Internal POST method with multipart form data and unified error handling"""
         try:
             response = self.http.post(url, headers=headers, files=files, data=data)
@@ -165,7 +194,7 @@ class SignNowAPIClientBase:
         except httpx.TimeoutException as e:
             raise SignNowAPITimeoutError("SignNow API timeout") from e
         except httpx.HTTPStatusError as e:
-            raise self._handle_http_error(e)
+            raise self._handle_http_error(e) from e
         except json.JSONDecodeError as e:
             raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
         except Exception as e:

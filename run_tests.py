@@ -8,17 +8,18 @@ import sys
 from pathlib import Path
 
 
-def run_tests():
+def run_tests() -> int:
     """Run the test suite."""
     project_root = Path(__file__).parent
 
     # Install test dependencies if not already installed
     print("Installing test dependencies...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "-e", ".[test]"], cwd=project_root, check=True)
+    # S603: fixed argv, no shell, executable is sys.executable — controlled input.
+    subprocess.run([sys.executable, "-m", "pip", "install", "-e", ".[test]"], cwd=project_root, check=True)  # noqa: S603
 
     # Run tests
     print("Running tests...")
-    result = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-v"], cwd=project_root)
+    result = subprocess.run([sys.executable, "-m", "pytest", "tests/", "-v"], cwd=project_root)  # noqa: S603
 
     return result.returncode
 

@@ -1,9 +1,8 @@
 """Unit tests for send_invite module."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
-from fastmcp import Context
 from pydantic import ValidationError
 
 from signnow_client.exceptions import SignNowAPINotFoundError
@@ -207,7 +206,6 @@ class TestSendInvite:
 
         with pytest.raises(SignNowAPINotFoundError):
             await _send_invite("entity_gone", None, [_make_order()], "tok", mock_client)
-
 
 
 class TestSignerAuthentication:
