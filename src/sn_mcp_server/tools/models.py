@@ -634,15 +634,9 @@ class SendInviteResponse(BaseModel):
     invite_id: str = Field(..., description="ID of the created invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
 
-    created_entity_id: str | None = Field(
-        None, description="ID of the entity created from template (None when entity was document/document_group)"
-    )
-    created_entity_type: str | None = Field(
-        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
-    )
-    created_entity_name: str | None = Field(
-        None, description="Name of the entity created from template (None when entity was document/document_group)"
-    )
+    created_entity_id: str | None = Field(None, description="ID of the entity created from template (None when entity was document/document_group)")
+    created_entity_type: str | None = Field(None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)")
+    created_entity_name: str | None = Field(None, description="Name of the entity created from template (None when entity was document/document_group)")
 
 
 # Embedded invite models
@@ -697,15 +691,9 @@ class CreateEmbeddedInviteResponse(BaseModel):
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
     recipient_links: list[dict[str, str]] = Field(..., description="Array of objects with role, invite id (for document invite) and link for recipients with delivery_type='link'")
 
-    created_entity_id: str | None = Field(
-        None, description="ID of the entity created from template (None when entity was document/document_group)"
-    )
-    created_entity_type: str | None = Field(
-        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
-    )
-    created_entity_name: str | None = Field(
-        None, description="Name of the entity created from template (None when entity was document/document_group)"
-    )
+    created_entity_id: str | None = Field(None, description="ID of the entity created from template (None when entity was document/document_group)")
+    created_entity_type: str | None = Field(None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)")
+    created_entity_name: str | None = Field(None, description="Name of the entity created from template (None when entity was document/document_group)")
 
 
 class CreateEmbeddedEditorRequest(BaseModel):
@@ -735,15 +723,9 @@ class CreateEmbeddedEditorResponse(BaseModel):
     editor_entity: str = Field(..., description="Type of editor entity: 'document' or 'document_group'")
     editor_url: str = Field(..., description="URL for the embedded editor")
 
-    created_entity_id: str | None = Field(
-        None, description="ID of the entity created from template (None when entity was document/document_group)"
-    )
-    created_entity_type: str | None = Field(
-        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
-    )
-    created_entity_name: str | None = Field(
-        None, description="Name of the entity created from template (None when entity was document/document_group)"
-    )
+    created_entity_id: str | None = Field(None, description="ID of the entity created from template (None when entity was document/document_group)")
+    created_entity_type: str | None = Field(None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)")
+    created_entity_name: str | None = Field(None, description="Name of the entity created from template (None when entity was document/document_group)")
 
 
 class CreateEmbeddedSendingRequest(BaseModel):
@@ -774,15 +756,9 @@ class CreateEmbeddedSendingResponse(BaseModel):
     sending_entity: str = Field(..., description="Type of sending entity: 'document', 'document_group', or 'invite'")
     sending_url: str = Field(..., description="URL for the embedded sending")
 
-    created_entity_id: str | None = Field(
-        None, description="ID of the entity created from template (None when entity was document/document_group)"
-    )
-    created_entity_type: str | None = Field(
-        None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)"
-    )
-    created_entity_name: str | None = Field(
-        None, description="Name of the entity created from template (None when entity was document/document_group)"
-    )
+    created_entity_id: str | None = Field(None, description="ID of the entity created from template (None when entity was document/document_group)")
+    created_entity_type: str | None = Field(None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)")
+    created_entity_name: str | None = Field(None, description="Name of the entity created from template (None when entity was document/document_group)")
 
 
 # Document group status models
@@ -837,7 +813,7 @@ class CreateFromTemplateResponse(BaseModel):
     """Response model for creating document/group from template."""
 
     entity_id: str = Field(..., description="ID of the created document or document group")
-    entity_type: str = Field(..., description="Type of created entity: 'document' or 'document_group'")
+    entity_type: Literal["document", "document_group"] = Field(..., description="Type of created entity: 'document' or 'document_group'")
     name: str = Field(..., description="Name of the created entity")
 
 
@@ -845,9 +821,11 @@ class EntityCreatedFromTemplate(BaseModel):
     """Dispatch-ready entity returned by _resolve_entity."""
 
     entity_id: str = Field(..., description="ID of the entity to dispatch (may be newly created)")
-    entity_type: str = Field(..., description="Type of entity: 'document', 'document_group', 'template', or 'template_group'")
+    entity_type: Literal["document", "document_group", "template", "template_group"] = Field(..., description="Type of entity: 'document', 'document_group', 'template', or 'template_group'")
     created_entity_id: str | None = Field(None, description="ID of the newly created entity (populated when a template was materialised)")
-    created_entity_type: str | None = Field(None, description="Type of the newly created entity (populated when a template was materialised)")
+    created_entity_type: Literal["document", "document_group", "template", "template_group"] | None = Field(
+        None, description="Type of the newly created entity (populated when a template was materialised)"
+    )
     created_entity_name: str | None = Field(None, description="Name of the newly created entity (populated when a template was materialised)")
 
 

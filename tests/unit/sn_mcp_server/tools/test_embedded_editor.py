@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from signnow_client.exceptions import SignNowAPINotFoundError
 from sn_mcp_server.tools.embedded_editor import (
     _create_document_embedded_editor,
     _create_document_group_embedded_editor,
@@ -23,9 +22,7 @@ class TestCreateDocumentEmbeddedEditor:
 
     def test_happy_path_returns_editor_response(self, mock_client: MagicMock) -> None:
         """Successful call returns CreateEmbeddedEditorResponse with editor_entity=document."""
-        mock_client.create_document_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/doc1")
-        )
+        mock_client.create_document_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/doc1"))
 
         result = _create_document_embedded_editor(mock_client, "tok", "doc1", None, None, None)
 
@@ -36,9 +33,7 @@ class TestCreateDocumentEmbeddedEditor:
 
     def test_passes_redirect_uri_and_expiration(self, mock_client: MagicMock) -> None:
         """redirect_uri and link_expiration_minutes are forwarded to the API request."""
-        mock_client.create_document_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/doc2")
-        )
+        mock_client.create_document_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/doc2"))
 
         _create_document_embedded_editor(mock_client, "tok", "doc2", "https://example.com/done", None, 30)
 
@@ -58,9 +53,7 @@ class TestCreateDocumentGroupEmbeddedEditor:
 
     def test_happy_path_returns_editor_response(self, mock_client: MagicMock) -> None:
         """Successful call returns CreateEmbeddedEditorResponse with editor_entity=document_group."""
-        mock_client.create_document_group_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/grp1")
-        )
+        mock_client.create_document_group_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/grp1"))
 
         result = _create_document_group_embedded_editor(mock_client, "tok", "grp1", None, None, None)
 
@@ -71,9 +64,7 @@ class TestCreateDocumentGroupEmbeddedEditor:
 
     def test_passes_redirect_uri_and_expiration(self, mock_client: MagicMock) -> None:
         """redirect_uri and link_expiration_minutes are forwarded to the API request."""
-        mock_client.create_document_group_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/grp2")
-        )
+        mock_client.create_document_group_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/grp2"))
 
         _create_document_group_embedded_editor(mock_client, "tok", "grp2", "https://example.com/done", None, 60)
 
@@ -93,9 +84,7 @@ class TestCreateEmbeddedEditor:
 
     async def test_routes_to_document_group_when_explicit_type(self, mock_client: MagicMock) -> None:
         """Explicit entity_type=document_group dispatches to group path; created_entity_* are None."""
-        mock_client.create_document_group_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/grp")
-        )
+        mock_client.create_document_group_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/grp"))
 
         result = await _create_embedded_editor("grp1", "document_group", None, None, None, "tok", mock_client)
 
@@ -108,9 +97,7 @@ class TestCreateEmbeddedEditor:
 
     async def test_routes_to_document_when_explicit_type(self, mock_client: MagicMock) -> None:
         """Explicit entity_type=document dispatches to document path; created_entity_* are None."""
-        mock_client.create_document_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/doc")
-        )
+        mock_client.create_document_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/doc"))
 
         result = await _create_embedded_editor("doc1", "document", None, None, None, "tok", mock_client)
 
@@ -124,13 +111,9 @@ class TestCreateEmbeddedEditor:
     async def test_template_creates_then_edits(self, mock_client: MagicMock) -> None:
         """entity_type=template creates document first, then creates editor on new entity."""
         mock_client.create_document_from_template.return_value = MagicMock(id="new_doc", document_name="New Doc")
-        mock_client.create_document_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/new_doc")
-        )
+        mock_client.create_document_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/new_doc"))
 
-        result = await _create_embedded_editor(
-            "tmpl1", "template", None, None, None, "tok", mock_client, name="New Doc"
-        )
+        result = await _create_embedded_editor("tmpl1", "template", None, None, None, "tok", mock_client, name="New Doc")
 
         assert result.editor_url == "https://app.signnow.com/editor/new_doc"
         assert result.editor_entity == "document"
@@ -142,13 +125,9 @@ class TestCreateEmbeddedEditor:
         mock_client.get_document_template_groups.return_value = MagicMock(document_group_templates=[])
         mock_client.get_document_group_template.return_value = MagicMock(group_name="My Group")
         mock_client.create_document_group_from_template.return_value = MagicMock(data={"unique_id": "new_grp"})
-        mock_client.create_document_group_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/tg")
-        )
+        mock_client.create_document_group_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/tg"))
 
-        result = await _create_embedded_editor(
-            "tg1", "template_group", None, None, None, "tok", mock_client, name="My Group"
-        )
+        result = await _create_embedded_editor("tg1", "template_group", None, None, None, "tok", mock_client, name="My Group")
 
         assert result.editor_entity == "document_group"
         assert result.editor_url == "https://app.signnow.com/editor/tg"
@@ -160,9 +139,7 @@ class TestCreateEmbeddedEditor:
         """ctx.report_progress is called 3 times for template flows: 1/3, 2/3, 3/3."""
         ctx = AsyncMock()
         mock_client.create_document_from_template.return_value = MagicMock(id="new_doc2", document_name="Doc2")
-        mock_client.create_document_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/prog")
-        )
+        mock_client.create_document_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/prog"))
 
         await _create_embedded_editor("tmpl2", "template", None, None, None, "tok", mock_client, ctx=ctx)
 
@@ -174,9 +151,7 @@ class TestCreateEmbeddedEditor:
 
     async def test_no_progress_when_ctx_none(self, mock_client: MagicMock) -> None:
         """ctx=None on a direct document call raises no errors."""
-        mock_client.create_document_embedded_editor.return_value = MagicMock(
-            data=MagicMock(url="https://app.signnow.com/editor/noctx")
-        )
+        mock_client.create_document_embedded_editor.return_value = MagicMock(data=MagicMock(url="https://app.signnow.com/editor/noctx"))
 
         result = await _create_embedded_editor("doc1", "document", None, None, None, "tok", mock_client, ctx=None)
 

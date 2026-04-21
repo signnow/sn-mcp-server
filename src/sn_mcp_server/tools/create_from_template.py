@@ -8,6 +8,7 @@ from existing templates and template groups.
 from typing import Literal
 
 from fastmcp import Context
+
 from signnow_client import DocumentGroupTemplate, SignNowAPIClient
 from signnow_client.exceptions import SignNowAPIHTTPError
 
@@ -145,6 +146,7 @@ def _create_from_template(entity_id: str, entity_type: Literal["template", "temp
         # Create document from template
         return _create_document_from_template(client, token, entity_id, name)
 
+
 async def _resolve_entity(
     entity_id: str,
     entity_type: Literal["document", "document_group", "template", "template_group"],
@@ -171,7 +173,7 @@ async def _resolve_entity(
         EntityCreatedFromTemplate with dispatch-ready entity_id/type and optional
         created_entity_* fields populated when a template was materialised
     """
-    if entity_type in ("template", "template_group"):
+    if entity_type == "template" or entity_type == "template_group":
         if ctx:
             await ctx.report_progress(progress=1, total=3)
         created = _create_from_template(entity_id, entity_type, name, token, client)
@@ -186,4 +188,3 @@ async def _resolve_entity(
         )
 
     return EntityCreatedFromTemplate(entity_id=entity_id, entity_type=entity_type)
-

@@ -306,8 +306,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="send_invite",
         description=(
-            "Send invite to sign a document, document group, template, or template group. "
-            "For templates and template groups, automatically creates a document/group first, then sends the invite."
+            "Send invite to sign a document, document group, template, or template group. For templates and template groups, automatically creates a document/group first, then sends the invite."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",

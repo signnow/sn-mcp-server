@@ -10,9 +10,11 @@ from typing import Any, Literal
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
+from signnow_client.models.document_groups import GetDocumentGroupResponse
 from signnow_client.models.templates_and_documents import FieldInviteAuthentication
-from .models import InviteOrder, SendInviteResponse, SignerAuthentication
+
 from .create_from_template import _resolve_entity
+from .models import InviteOrder, SendInviteResponse, SignerAuthentication
 from .utils import _detect_entity_type
 
 
@@ -62,7 +64,7 @@ def _build_field_invite_authentication(authentication: SignerAuthentication | No
     )
 
 
-def _send_document_group_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: Any) -> SendInviteResponse:
+def _send_document_group_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: GetDocumentGroupResponse) -> SendInviteResponse:
     """Private function to send document group field invite."""
     from signnow_client import (
         CreateFieldInviteRequest,

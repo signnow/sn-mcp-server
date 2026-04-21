@@ -38,7 +38,13 @@ class TokenProvider:
 
     def _get_token_from_config(self) -> str | None:
         """Get token using configured username and password"""
-        response = self.signnow_client.get_tokens_by_password(username=self.signnow_config.user_email, password=self.signnow_config.password)
+        email = self.signnow_config.user_email
+        password = self.signnow_config.password
+        if not email or not password:
+            # Should never happen — has_config_credentials() is checked by the caller,
+            # and SignNowConfig.validate_one_of_credentials enforces the same set at load time.
+            return None
+        response = self.signnow_client.get_tokens_by_password(username=email, password=password)
 
         if response and isinstance(response, dict) and "access_token" in response:
             token = response["access_token"]

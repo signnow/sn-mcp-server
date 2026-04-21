@@ -139,7 +139,7 @@ async def _list_document_groups(
             # document group
             # ----------------------------
             if isinstance(item, DocumentGroupItemLite):
-                simplified_docs: list[SimplifiedDocumentGroupDocument] = []
+                simplified_docs = []
                 group_last_updated = item.updated or item.created or 0
 
                 if item.documents:

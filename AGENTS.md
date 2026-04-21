@@ -2,6 +2,37 @@
 
 Stateless translation layer between AI agents and the SignNow API. Every tool response is curated through `tools/models.py` — never pass raw API JSON. Omit nulls, empty lists, and metadata the agent won't act on.
 
+## Agent-first
+
+100% of the code is agent-written. When something comes out wrong, the fix belongs in automatic feedback (lint rules, type constraints, tests, import-linter contracts), not only in the code. Prose guidance in this file is the fallback, not the first line of defence.
+
+Before closing a task where the human corrected you, ask: "what rule would have prevented this?" and propose adding it.
+
+### Self-check pyramid
+
+Three layers, each bounded by what stays fast for its trigger. The point is to catch in the same conversation what CI would catch minutes later.
+
+| Trigger | What runs | Where defined | Budget |
+|---|---|---|---|
+| `git commit` | ruff-format + ruff on staged files; `mypy src/` (~1 s); `pytest tests/unit` (~4 s) | `.pre-commit-config.yaml` (`stages: [pre-commit]`) | <10 s |
+| `git push` | full `pytest` (unit + integration + api) with coverage ≥70 %; `lint-imports` full-graph boundary check | `.pre-commit-config.yaml` (`stages: [pre-push]`) | <30 s |
+| PR / push to `main` | everything above + full-repo ruff + mypy + diff-coverage ≥80 % vs `origin/main`, posted as sticky PR comment | `.github/workflows/ci.yml` | <10 min |
+
+Install hooks with `pre-commit install --install-hooks` (SessionStart hook does this automatically in a fresh Claude Code session). Bypass with `--no-verify` only in genuine emergencies — if a hook is consistently wrong, fix the hook.
+
+### Enforced invariants
+
+Rules in `## Boundaries` below that can be checked mechanically, are — an edit that violates one fails immediately:
+
+- **`signnow_client → sn_mcp_server` is forbidden** — `import-linter` contract in `pyproject.toml`.
+- **`sn_mcp_server.tools → starlette/uvicorn` is forbidden** — same contract set.
+- **Every MCP tool returns a curated Pydantic model from `sn_mcp_server.tools`** — `tests/unit/sn_mcp_server/test_tool_response_shapes.py` parametrizes over `register_tools()` and fails on raw `dict`/`list`/`Any` returns.
+- **Static types are clean** — `mypy src/` in `strict` mode, zero errors. New `# type: ignore` requires an inline reason.
+- **Lint is clean repo-wide** — `ruff check src/ tests/` (no diff-only escape hatch). New `# noqa` requires a reason.
+- **Coverage doesn't regress** — global ≥70 % (`[tool.coverage.report] fail_under`), patch ≥80 % (CI `diff-cover`).
+
+When adding a new invariant, prefer the same pattern: a contract / lint rule / parametrized test over a new line in the prose.
+
 ## Commands
 
 - `make up` installs editable + starts HTTP on port **8001** (NOT 8000). `sn-mcp http` and Docker use 8000.
@@ -25,11 +56,9 @@ Stateless translation layer between AI agents and the SignNow API. Every tool re
 - **`redirect_target` exclusion.** All request models override `model_dump()` to drop `redirect_target` when `redirect_uri` is absent. SignNow API rejects it otherwise.
 - **`signing_link.py` puts access_token in URL query string.** Security concern (browser history, logs, referrer headers).
 - **`upload_document` implemented but commented out** in `signnow.py`. Business logic in `document.py` is ready.
-- **No CI for tests.** Only release-to-PyPI workflows exist. Tests and linting run locally only.
 
 ## Known issues (need fix)
 
-- **Dual formatters.** Both `ruff-format` and `black` run in pre-commit. Can conflict. Pick one.
 - **`REGISTERED_CLIENTS` mutable dict in `auth.py`.** Module-level mutable state, violates stateless principle.
 - **`cfg` parameter unused.** `register_tools(mcp, cfg)` passes `cfg` to `bind()`, which ignores it.
 
@@ -62,9 +91,13 @@ Aggressive. When touching code, enforce current standards. Refactor adjacent iss
 ## Reference docs
 
 - `ARCHITECTURE.md` — Authoritative architectural specification: layers, dependency rules, component diagrams, cross-cutting concerns
+- `.pre-commit-config.yaml` — local self-check pipeline (pre-commit + pre-push stages)
+- `.github/workflows/ci.yml` — CI pipeline: lint-on-diff, import-linter, pytest + coverage, diff-coverage gate
+- `pyproject.toml` — `[tool.importlinter]` contracts encode the dependency arrows; `[tool.coverage.report] fail_under` is the global threshold
+- `.claude/settings.json` + `.claude/hooks/session-start.sh` — Claude Code session bootstrap (installs dev extras, registers hooks)
 
 ---
 
-Last updated: 2026-04-03
+Last updated: 2026-04-21
 
 Maintained by: AI Agents under human supervision

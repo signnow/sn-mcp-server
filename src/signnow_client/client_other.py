@@ -10,10 +10,11 @@ from typing import Any
 from signnow_client.models.contacts import CrmContactsResponse
 from signnow_client.models.folders_lite import GetFolderByIdResponseLite, GetFoldersResponseLite
 
+from .client_base import SignNowAPIClientBase
 from .models import User
 
 
-class OtherClientMixin:
+class OtherClientMixin(SignNowAPIClientBase):
     """Mixin class for other client methods like authentication and folders"""
 
     def get_tokens(self, code: str) -> dict[str, Any] | None:
@@ -26,7 +27,7 @@ class OtherClientMixin:
         Returns:
             Dictionary with tokens or None if failed
         """
-        return self._post(
+        result: dict[str, Any] | None = self._post(
             "/oauth2/token",
             data={
                 "grant_type": "authorization_code",
@@ -37,6 +38,7 @@ class OtherClientMixin:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+        return result
 
     def refresh_tokens(self, refresh_token: str) -> dict[str, Any] | None:
         """
@@ -48,7 +50,7 @@ class OtherClientMixin:
         Returns:
             Dictionary with new tokens or None if failed
         """
-        return self._post(
+        result: dict[str, Any] | None = self._post(
             "/oauth2/token",
             data={
                 "grant_type": "refresh_token",
@@ -58,6 +60,7 @@ class OtherClientMixin:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+        return result
 
     def revoke_token(self, token: str) -> bool:
         """
@@ -76,7 +79,7 @@ class OtherClientMixin:
         )
         return response.is_success
 
-    def get_tokens_by_password(self, username: str, password: str, scope: str = None) -> dict[str, Any] | None:
+    def get_tokens_by_password(self, username: str, password: str, scope: str | None = None) -> dict[str, Any] | None:
         """
         Get access and refresh tokens from SignNow API using username and password
         (Resource Owner Password Credentials grant)
@@ -91,12 +94,18 @@ class OtherClientMixin:
         """
         scope = scope or self.cfg.default_scope
         basic_auth = self.cfg.basic_token
+        if not basic_auth:
+            # SignNowConfig.validate_one_of_credentials requires basic_token whenever the
+            # password grant is chosen, so this path should be unreachable in configured
+            # deployments. Raise an explicit error rather than sending a broken header.
+            raise ValueError("SIGNNOW_API_BASIC_TOKEN must be set to use the password grant")
 
-        return self._post(
+        result: dict[str, Any] | None = self._post(
             "/oauth2/token",
             headers={"Accept": "application/json", "Authorization": "Basic " + basic_auth, "Content-Type": "application/x-www-form-urlencoded"},
             data={"username": username, "password": password, "grant_type": "password", "scope": scope},
         )
+        return result
 
     def get_folders(self, token: str, entity_type: str | None = None) -> GetFoldersResponseLite:
         """
@@ -171,7 +180,7 @@ class OtherClientMixin:
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
 
-        params = {}
+        params: dict[str, Any] = {}
 
         if filters:
             params["filters"] = filters

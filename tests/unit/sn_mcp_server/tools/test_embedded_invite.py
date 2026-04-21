@@ -1,6 +1,6 @@
-﻿"""Unit tests for embedded_invite module."""
+"""Unit tests for embedded_invite module."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -69,9 +69,7 @@ class TestCreateDocumentEmbeddedInvite:
         """Recipient with delivery_type=link triggers generate_document_embedded_invite_link."""
         invite_item = MagicMock(id="inv_link_1", email="signer@example.com", order=1)
         mock_client.create_document_embedded_invite.return_value = MagicMock(data=[invite_item])
-        mock_client.generate_document_embedded_invite_link.return_value = MagicMock(
-            data={"link": "https://app.signnow.com/link/abc"}
-        )
+        mock_client.generate_document_embedded_invite_link.return_value = MagicMock(data={"link": "https://app.signnow.com/link/abc"})
 
         result = _create_document_embedded_invite(mock_client, "tok", "doc1", [_make_order(delivery_type="link")])
 
@@ -103,13 +101,9 @@ class TestCreateDocumentGroupEmbeddedInvite:
     def test_generates_link_for_link_delivery_type(self, mock_client: MagicMock) -> None:
         """Recipient with delivery_type=link triggers generate_embedded_invite_link."""
         mock_client.create_embedded_invite.return_value = MagicMock(data=MagicMock(id="inv_grp_link"))
-        mock_client.generate_embedded_invite_link.return_value = MagicMock(
-            data=MagicMock(link="https://app.signnow.com/link/grp")
-        )
+        mock_client.generate_embedded_invite_link.return_value = MagicMock(data=MagicMock(link="https://app.signnow.com/link/grp"))
 
-        result = _create_document_group_embedded_invite(
-            mock_client, "tok", "grp1", [_make_order(delivery_type="link")], _make_group()
-        )
+        result = _create_document_group_embedded_invite(mock_client, "tok", "grp1", [_make_order(delivery_type="link")], _make_group())
 
         mock_client.generate_embedded_invite_link.assert_called_once()
         assert len(result.recipient_links) == 1
@@ -177,9 +171,7 @@ class TestCreateEmbeddedInvite:
         mock_client.get_document_group.return_value = _make_group()
         mock_client.create_embedded_invite.return_value = MagicMock(data=MagicMock(id="inv_tg"))
 
-        result = await _create_embedded_invite(
-            "tg1", "template_group", [_make_order()], "tok", mock_client, name="My Group"
-        )
+        result = await _create_embedded_invite("tg1", "template_group", [_make_order()], "tok", mock_client, name="My Group")
 
         assert result.invite_entity == "document_group"
         assert result.created_entity_type == "document_group"

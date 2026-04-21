@@ -40,7 +40,7 @@ class SignNowConfig(BaseSettings):
         """Handle empty string for api_base"""
         if v == "" or v is None:
             return AnyHttpUrl("https://api.signnow.com")
-        return v
+        return AnyHttpUrl(v)
 
     @field_validator("app_base", mode="before")
     @classmethod
@@ -48,7 +48,7 @@ class SignNowConfig(BaseSettings):
         """Handle empty string for app_base"""
         if v == "" or v is None:
             return AnyHttpUrl("https://app.signnow.com")
-        return v
+        return AnyHttpUrl(v)
 
     @field_validator("client_id", mode="before")
     @classmethod
@@ -132,13 +132,16 @@ class SignNowConfig(BaseSettings):
                 f"missing for Option A (password grant): {', '.join(missing_a) or 'none'}; "
                 f"missing for Option B (client credentials): {', '.join(missing_b) or 'none'}"
             )
+            # Pydantic's InitErrorDetails TypedDict doesn't declare "msg"; the message is
+            # derived from the error type. Passing it as ctx is how extra context reaches
+            # the final message. Keeping "msg" here for backwards-compatible error text.
             raise ValidationError.from_exception_data(
                 "SignNowConfig",
                 [
                     {
                         "type": "missing",
                         "loc": ("oneOf",),
-                        "msg": detail,
+                        "msg": detail,  # type: ignore[typeddict-unknown-key]
                         "input": None,
                     }
                 ],

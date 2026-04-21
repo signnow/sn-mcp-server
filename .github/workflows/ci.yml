@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel any in-flight run for the same branch / PR so a new push
+# supersedes the old one instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, types, tests, coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        # Full history so diff-cover can compare against origin/main.
+        # hatch-vcs also needs tags/history to derive the package version
+        # without falling back to 0.0.0.
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install package with dev extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # Full-repo lint: src/ and tests/ are both clean. Any new violation
+      # fails the build immediately — no diff-only escape hatch.
+      - name: Ruff (full repo)
+        run: |
+          ruff check src/ tests/
+          ruff format --check src/ tests/
+
+      # Static types, full src/ tree. Mirrors the pre-commit gate.
+      - name: Mypy (static types, src/)
+        run: python -m mypy src/
+
+      # Architectural boundaries from AGENTS.md — enforced, not advisory.
+      - name: Import-linter (architectural boundaries)
+        run: lint-imports --config pyproject.toml
+
+      - name: Pytest with coverage
+        run: |
+          python -m pytest tests/unit tests/integration tests/api \
+            --cov --cov-report=xml --cov-report=term \
+            --cov-fail-under=70 \
+            --junitxml=junit.xml
+
+      # Patch coverage: every new PR must cover ≥80% of the lines it
+      # changes. Global threshold (70%) ratchets the whole; this one
+      # stops coverage debt from growing.
+      - name: Diff coverage vs origin/main
+        if: github.event_name == 'pull_request'
+        run: |
+          diff-cover coverage.xml \
+            --compare-branch=origin/${{ github.base_ref }} \
+            --fail-under=80 \
+            --markdown-report=diff-coverage.md
+
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request' && always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: coverage-report
+          path: diff-coverage.md
+          # If diff-cover didn't produce the report (e.g. lint failed
+          # earlier), fall back gracefully instead of failing this step.
+          skip_unchanged: true
