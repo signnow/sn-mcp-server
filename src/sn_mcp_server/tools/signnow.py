@@ -306,7 +306,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="send_invite",
         description=(
-            "Send invite to sign a document, document group, template, or template group. For templates and template groups, automatically creates a document/group first, then sends the invite."
+            "Send invite to sign a document, document group, template, or template group. "
+            "Supports both field invites (documents with roles/fields) and freeform invites "
+            "(documents without fields). Document type is auto-detected — omit 'role' for "
+            "freeform documents. For templates and template groups, automatically creates a "
+            "document/group first, then sends the invite."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -326,6 +330,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 description="List of orders with recipients.",
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
+                    [{"order": 1, "recipients": [{"email": "signer@example.com", "action": "sign"}]}],
                 ],
             ),
         ],
@@ -354,6 +359,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
         For direct document/document_group calls the invite is sent immediately.
         The entity type is auto-detected if not provided.
+
+        Note: If the document has no fields, a freeform invite is sent automatically.
+        In that case, ``role`` on each recipient is optional and ignored. For document
+        groups, role presence is checked per document — if no documents have roles,
+        a freeform group invite is sent instead.
 
         Args:
             entity_id: ID of the document, document group, template, or template group

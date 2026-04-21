@@ -577,7 +577,15 @@ class InviteRecipient(BaseModel):
     """Recipient information for invite."""
 
     email: str = Field(..., description="Recipient's email address")
-    role: str = Field(..., description="Recipient's role name in the document")
+    role: str | None = Field(
+        None,
+        description=(
+            "Recipient's role name in the document. "
+            "Required for field invites (documents with roles/fields). "
+            "Omit for freeform invites (documents without fields) — "
+            "the tool auto-detects document type and sends a freeform invite automatically."
+        ),
+    )
     message: str | None = Field(None, description="Custom email message for the recipient")
     subject: str | None = Field(None, description="Custom email subject for the recipient")
     action: str = Field(default="sign", description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
@@ -585,6 +593,16 @@ class InviteRecipient(BaseModel):
     redirect_target: str | None = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     decline_redirect_uri: str | None = Field(None, description="URL that opens after decline")
     close_redirect_uri: str | None = Field(None, description="Link that opens when clicking 'Close' button")
+    language: str | None = Field(
+        None,
+        description=("Signing session and notification email language: 'en', 'es', 'fr'. Used for freeform invites. Ignored for field invites."),
+    )
+    cc: list[str] | None = Field(
+        None,
+        description="CC email addresses. Used for freeform invites only. Ignored for field invites.",
+    )
+    cc_subject: str | None = Field(None, description="CC email subject. Used for freeform invites only.")
+    cc_message: str | None = Field(None, description="CC email body message. Used for freeform invites only.")
     reminder: InviteReminderSettings | None = Field(
         None,
         description="Automatic reminder email schedule. Reminders are sent by SignNow after the invite is created.",
