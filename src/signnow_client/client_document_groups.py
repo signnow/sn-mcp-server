@@ -3,7 +3,9 @@ SignNow API Client - Document Groups and Template Groups Methods
 
 Methods for working with document groups and document group templates.
 """
+
 from __future__ import annotations
+
 import httpx
 
 from .client_base import SignNowAPIClientBase
@@ -46,6 +48,7 @@ from .models import (
     GetFieldInviteResponse,
     GetRecipientsResponse,
     SendEmailRequest,
+    UpdateDocGroupInviteStepRequest,
 )
 
 
@@ -588,3 +591,40 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
             json_data=request_data.model_dump(exclude_none=True),
             validate_model=CreateDocumentGroupEmbeddedViewResponse,
         )
+
+    def update_document_group_invite_step(
+        self,
+        token: str,
+        document_group_id: str,
+        invite_id: str,
+        step_id: str,
+        request_data: UpdateDocGroupInviteStepRequest,
+    ) -> bool:
+        """Update document group invite step recipient.
+
+        Either replaces invitees for a particular step or updates the invite attributes
+        for a user at a particular step. Used to replace a signer on a pending step.
+
+        POST /documentgroup/{document_group_id}/groupinvite/{invite_id}/invitestep/{step_id}/update
+
+        Args:
+            token: Access token for authentication
+            document_group_id: ID of the document group
+            invite_id: ID of the document group invite
+            step_id: ID of the invite step to update
+            request_data: Update request with user_to_update, new email, and attributes
+
+        Returns:
+            True if successful (200 response)
+
+        Raises:
+            SignNowAPIError: On API errors
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._post(
+            f"/documentgroup/{document_group_id}/groupinvite/{invite_id}/invitestep/{step_id}/update",
+            headers=headers,
+            json_data=request_data.model_dump(exclude_none=True),
+        )
+        return True

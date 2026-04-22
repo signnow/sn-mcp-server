@@ -53,6 +53,9 @@ from .document_groups import (
     TemplateShort,
     TemplateShortThumbnail,
     UnmappedDocument,
+    UpdateDocGroupInviteActionAttributes,
+    UpdateDocGroupInviteEmail,
+    UpdateDocGroupInviteStepRequest,
 )
 from .other_models import (
     DocumentDownloadLinkResponse,
@@ -80,7 +83,6 @@ from .templates_and_documents import (
     CreateDocumentFromTemplateResponse,
     CreateDocumentFromUrlRequest,
     CreateDocumentFromUrlResponse,
-    DeleteFieldInviteResponse,
     CreateEmbeddedEditorResponse,
     CreateEmbeddedInviteRequest,
     CreateEmbeddedInviteResponse,
@@ -91,6 +93,7 @@ from .templates_and_documents import (
     CreateFreeformInviteResponse,
     CreateTemplateRequest,
     CreateTemplateResponse,
+    DeleteFieldInviteResponse,
     DocumentEmbeddedInvite,
     DocumentEmbeddedInviteAuthentication,
     DocumentEmbeddedInviteResponse,
@@ -211,6 +214,9 @@ __all__ = [
     "TemplateShort",
     "TemplateShortThumbnail",
     "UnmappedDocument",
+    "UpdateDocGroupInviteActionAttributes",
+    "UpdateDocGroupInviteEmail",
+    "UpdateDocGroupInviteStepRequest",
     # Other Models
     "DocumentDownloadLinkResponse",
     "DocumentRoleName",

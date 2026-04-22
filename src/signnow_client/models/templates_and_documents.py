@@ -108,6 +108,9 @@ class DocumentFieldInviteStatus(BaseModel):
     updated: str = Field(..., description="Last update timestamp")
     role_id: str = Field(..., description="Role ID")
     declined: list[dict[str, Any]] = Field(..., description="Declined information")
+    expiration_days: str | None = Field(None, description="Expiration days for the invite")
+    decline_by_signature: str | None = Field(None, description="Whether decline by signature is enabled ('0' or '1')")
+    
 
 
 class DocumentResponse(BaseModel):

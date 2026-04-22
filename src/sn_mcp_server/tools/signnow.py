@@ -12,6 +12,7 @@ from pydantic import Field
 from signnow_client import SignNowAPIClient
 
 from ..token_provider import TokenProvider
+from .cancel_invite import _cancel_invite
 from .create_from_template import _create_from_template
 from .create_template import create_template as _create_template
 from .document import _get_document, _update_document_fields, _upload_document
@@ -56,7 +57,6 @@ from .models import (
     UploadDocumentResponse,
     ViewDocumentResponse,
 )
-from .cancel_invite import _cancel_invite
 from .reminder import _send_invite_reminder
 from .send_invite import _send_invite
 from .signing_link import _get_signing_link
@@ -1083,13 +1083,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
-            Field(
-                description=(
-                    "Type of entity: 'document' or 'document_group' (optional). "
-                    "Auto-detected if not provided (tries document_group first). "
-                    "Pass explicitly to save one API call."
-                )
-            ),
+            Field(description=("Type of entity: 'document' or 'document_group' (optional). Auto-detected if not provided (tries document_group first). Pass explicitly to save one API call.")),
         ] = None,
         reason: Annotated[
             str | None,
@@ -1119,10 +1113,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="update_invite_recipient",
         description=(
-            "Replace the signing recipient on a pending field invite for a document. "
-            "Finds the pending invite for the current signer, deletes it, creates a new invite "
-            "for the new signer with the same (or overridden) settings, and triggers sending. "
-            "Currently supports documents only; document groups will raise an error."
+            "Replace the signing recipient on a pending field invite for a document or document group. "
+            "Finds the pending invite for the current signer and replaces it with a new signer. "
+            "For documents: deletes the old invite, creates a replacement, and triggers sending. "
+            "For document groups: updates the pending step(s) with the new signer information. "
+            "Supports both individual documents and document groups."
         ),
         annotations=ToolAnnotations(
             title="Replace invite recipient",
@@ -1131,7 +1126,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             idempotentHint=False,
             openWorldHint=True,
         ),
-        tags=["invite", "update", "replace", "document", "workflow"],
+        tags=["invite", "update", "replace", "document", "document_group", "workflow"],
     )
     def update_invite_recipient(
         ctx: Context,
@@ -1140,13 +1135,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         new_email: Annotated[str, Field(description="Email address of the new signer")],
         entity_type: Annotated[
             Literal["document", "document_group"] | None,
-            Field(
-                description=(
-                    "Type of entity: 'document' or 'document_group' (optional). "
-                    "Auto-detected if not provided (tries document_group first). "
-                    "Pass explicitly to save one API call."
-                )
-            ),
+            Field(description=("Type of entity: 'document' or 'document_group' (optional). Auto-detected if not provided (tries document_group first). Pass explicitly to save one API call.")),
         ] = None,
         role: Annotated[
             str | None,
@@ -1179,28 +1168,36 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     ) -> UpdateInviteRecipientResponse:
         """Replace the signing recipient on a pending field invite.
 
-        Performs the three-step SignNow replace-signer flow:
+        Supports both documents and document groups:
+
+        Documents:
         1. Finds the pending/created field invite matching current_email (and optional role)
         2. Deletes the old invite, creates a replacement for new_email
         3. Triggers sending to the new signer
 
-        Currently supports documents only. Document groups raise NotImplementedError.
+        Document Groups:
+        1. Finds pending steps with actions matching current_email (and optional role)
+        2. Updates each step via /invitestep/{step_id}/update endpoint
+        3. Returns list of updated step IDs
+
+        Note: For document groups, authentication_type, password, and phone parameters
+        are not supported by the API and will be ignored.
 
         Args:
             entity_id: Document or document group ID.
             current_email: Email of the current signer to replace.
             new_email: Email of the new signer.
             entity_type: Optional entity type discriminator.
-            role: Optional role filter for multi-role documents.
-            expiration_days: Optional days until invite expires.
-            decline_by_signature: Optional decline button setting.
-            reminder: Optional reminder days.
-            authentication_type: Optional identity verification type.
-            password: Optional password for verification.
-            phone: Optional phone for verification.
+            role: Optional role filter for multi-role documents/steps.
+            expiration_days: Optional days until invite expires (max 30).
+            decline_by_signature: Optional decline button setting (0 or 1).
+            reminder: Optional reminder days (max 30).
+            authentication_type: Optional identity verification type (documents only).
+            password: Optional password for verification (documents only).
+            phone: Optional phone for verification (documents only).
 
         Returns:
-            UpdateInviteRecipientResponse with status, new_invite_id, and email info.
+            UpdateInviteRecipientResponse with status, new_invite_id, email info, and updated_steps (for document groups).
         """
         token, client = _get_token_and_client(token_provider)
         return _update_invite_recipient(
