@@ -817,6 +817,26 @@ class CancelInviteResponse(BaseModel):
     )
 
 
+class UpdateInviteRecipientResponse(BaseModel):
+    """Response from the update_invite_recipient tool."""
+
+    entity_id: str = Field(..., description="Document ID")
+    entity_type: str = Field(..., description="Entity type: 'document'")
+    status: str = Field(
+        ...,
+        description=(
+            "Result status: 'replaced' (invite recipient was replaced and resent), "
+            "'no_pending_invite' (no pending/created invite found for current_email)"
+        ),
+    )
+    new_invite_id: str | None = Field(
+        None,
+        description="ID of the newly created invite (populated only when status is 'replaced')",
+    )
+    previous_email: str = Field(..., description="Email address of the replaced signer")
+    new_email: str = Field(..., description="Email address of the new signer")
+
+
 class DocumentDownloadLinkResponse(BaseModel):
     """Response model for document download link."""
 

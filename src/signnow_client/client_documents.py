@@ -32,6 +32,7 @@ from .models import (
     CreateEmbeddedSendingResponse,
     CreateTemplateRequest,
     CreateTemplateResponse,
+    DeleteFieldInviteResponse,
     DocumentDownloadLinkResponse,
     DocumentResponse,
     GenerateDocumentEmbeddedInviteLinkRequest,
@@ -42,8 +43,11 @@ from .models import (
     MergeDocumentsRequest,
     MergeDocumentsResponse,
     PrefillTextFieldsRequest,
+    ReplaceFieldInviteRequest,
+    ReplaceFieldInviteResponse,
     SendDocumentCopyByEmailRequest,
     SendDocumentCopyByEmailResponse,
+    TriggerFieldInviteResponse,
     UploadDocumentResponse,
 )
 
@@ -569,3 +573,51 @@ class DocumentClientMixin(SignNowAPIClientBase):
             json_data=request_data.model_dump(exclude_none=True),
             validate_model=CreateDocumentEmbeddedViewResponse,
         )
+
+    def delete_field_invite(self, token: str, field_invite_id: str) -> DeleteFieldInviteResponse:
+        """Delete a field invite (step 1 of replace signer flow).
+
+        DELETE /field_invite/{field_invite_id}
+
+        Args:
+            token: Access token for authentication.
+            field_invite_id: ID of the field invite to delete.
+
+        Returns:
+            DeleteFieldInviteResponse with status='success'.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._delete(f"/field_invite/{field_invite_id}", headers=headers, validate_model=DeleteFieldInviteResponse)
+
+    def replace_field_invite(self, token: str, request_data: ReplaceFieldInviteRequest) -> ReplaceFieldInviteResponse:
+        """Replace a signer in a field invite (step 2 of replace signer flow).
+
+        POST /field_invite
+
+        Args:
+            token: Access token for authentication.
+            request_data: Replacement invite data with new email, role_id, and settings.
+
+        Returns:
+            ReplaceFieldInviteResponse with the new invite ID.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._post("/field_invite", headers=headers, json_data=request_data.model_dump(exclude_none=True), validate_model=ReplaceFieldInviteResponse)
+
+    def trigger_field_invite(self, token: str, document_id: str) -> TriggerFieldInviteResponse:
+        """Trigger (send) a field invite to the new signer (step 3 of replace signer flow).
+
+        POST /document/{document_id}/trigger_fieldinvite
+
+        Args:
+            token: Access token for authentication.
+            document_id: ID of the document to trigger the invite for.
+
+        Returns:
+            TriggerFieldInviteResponse with status='success'.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._post(f"/document/{document_id}/trigger_fieldinvite", headers=headers, validate_model=TriggerFieldInviteResponse)

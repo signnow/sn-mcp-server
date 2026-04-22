@@ -52,6 +52,7 @@ from .models import (
     TemplateSummaryList,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
+    UpdateInviteRecipientResponse,
     UploadDocumentResponse,
     ViewDocumentResponse,
 )
@@ -59,6 +60,7 @@ from .cancel_invite import _cancel_invite
 from .reminder import _send_invite_reminder
 from .send_invite import _send_invite
 from .signing_link import _get_signing_link
+from .update_invite_recipient import _update_invite_recipient
 
 RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
 
@@ -1113,6 +1115,109 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
         return _cancel_invite(entity_id, entity_type, reason, token, client)
+
+    @mcp.tool(
+        name="update_invite_recipient",
+        description=(
+            "Replace the signing recipient on a pending field invite for a document. "
+            "Finds the pending invite for the current signer, deletes it, creates a new invite "
+            "for the new signer with the same (or overridden) settings, and triggers sending. "
+            "Currently supports documents only; document groups will raise an error."
+        ),
+        annotations=ToolAnnotations(
+            title="Replace invite recipient",
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["invite", "update", "replace", "document", "workflow"],
+    )
+    def update_invite_recipient(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        current_email: Annotated[str, Field(description="Email address of the current signer to replace")],
+        new_email: Annotated[str, Field(description="Email address of the new signer")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(
+                description=(
+                    "Type of entity: 'document' or 'document_group' (optional). "
+                    "Auto-detected if not provided (tries document_group first). "
+                    "Pass explicitly to save one API call."
+                )
+            ),
+        ] = None,
+        role: Annotated[
+            str | None,
+            Field(description="Role name to match (for multi-role documents). If omitted, matches any role."),
+        ] = None,
+        expiration_days: Annotated[
+            int | None,
+            Field(description="Days until the new invite expires (max 30). If omitted, uses the previous invite's setting.", le=30),
+        ] = None,
+        decline_by_signature: Annotated[
+            int | None,
+            Field(description="Add Decline button: 0=no, 1=yes. If omitted, uses the previous invite's setting."),
+        ] = None,
+        reminder: Annotated[
+            int | None,
+            Field(description="Send reminder after X days (max 30). If omitted, uses the previous invite's setting.", le=30),
+        ] = None,
+        authentication_type: Annotated[
+            str | None,
+            Field(description="Identity verification type: 'password' or 'phone'. If omitted, no authentication."),
+        ] = None,
+        password: Annotated[
+            str | None,
+            Field(description="Password for identity verification (required if authentication_type='password')."),
+        ] = None,
+        phone: Annotated[
+            str | None,
+            Field(description="Phone number for identity verification (required if authentication_type='phone')."),
+        ] = None,
+    ) -> UpdateInviteRecipientResponse:
+        """Replace the signing recipient on a pending field invite.
+
+        Performs the three-step SignNow replace-signer flow:
+        1. Finds the pending/created field invite matching current_email (and optional role)
+        2. Deletes the old invite, creates a replacement for new_email
+        3. Triggers sending to the new signer
+
+        Currently supports documents only. Document groups raise NotImplementedError.
+
+        Args:
+            entity_id: Document or document group ID.
+            current_email: Email of the current signer to replace.
+            new_email: Email of the new signer.
+            entity_type: Optional entity type discriminator.
+            role: Optional role filter for multi-role documents.
+            expiration_days: Optional days until invite expires.
+            decline_by_signature: Optional decline button setting.
+            reminder: Optional reminder days.
+            authentication_type: Optional identity verification type.
+            password: Optional password for verification.
+            phone: Optional phone for verification.
+
+        Returns:
+            UpdateInviteRecipientResponse with status, new_invite_id, and email info.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _update_invite_recipient(
+            entity_id=entity_id,
+            entity_type=entity_type,
+            current_email=current_email,
+            new_email=new_email,
+            role=role,
+            expiration_days=expiration_days,
+            decline_by_signature=decline_by_signature,
+            reminder=reminder,
+            authentication_type=authentication_type,
+            password=password,
+            phone=phone,
+            token=token,
+            client=client,
+        )
 
     @mcp.tool(
         name="view_document",

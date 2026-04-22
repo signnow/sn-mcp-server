@@ -1054,3 +1054,44 @@ class CreateDocumentEmbeddedViewResponse(BaseModel):
         link: str = Field(..., description="Embedded view link for the document")
 
     data: Data = Field(..., description="Embedded view data")
+
+
+# ----------------------------
+# Replace signer (field invite) models
+# ----------------------------
+
+
+class DeleteFieldInviteResponse(BaseModel):
+    """Response from DELETE /field_invite/{field_invite_id}."""
+
+    status: str = Field(..., description="'success' on successful deletion")
+
+
+class ReplaceFieldInviteRequest(BaseModel):
+    """Request body for POST /field_invite (replace signer step).
+
+    All fields except email, role_id, and is_replace are optional.
+    When is_replace is True, the subject/message/order from the previous invite are kept.
+    """
+
+    email: str = Field(..., description="New signer's email address")
+    role_id: str = Field(..., description="The role_id for the new signer (from GET /document/{id} field_invites)")
+    is_replace: bool = Field(..., description="Whether to keep subject, message, and order from the previous signer's invite")
+    expiration_days: int | None = Field(None, description="Days until invite expires (max 30)")
+    decline_by_signature: int | None = Field(None, description="Add Decline button: 0=no, 1=yes")
+    reminder: int | None = Field(None, description="Send reminder after X days (max 30)")
+    authentication_type: str | None = Field(None, description="Identity verification type: 'password' or 'phone'")
+    password: str | None = Field(None, description="Password for identity verification (required if authentication_type='password')")
+    phone: str | None = Field(None, description="Phone number for identity verification (required if authentication_type='phone')")
+
+
+class ReplaceFieldInviteResponse(BaseModel):
+    """Response from POST /field_invite (replace signer)."""
+
+    id: str = Field(..., description="ID of the newly created invite")
+
+
+class TriggerFieldInviteResponse(BaseModel):
+    """Response from POST /document/{document_id}/trigger_fieldinvite."""
+
+    status: str = Field(..., description="'success' on successful trigger")
