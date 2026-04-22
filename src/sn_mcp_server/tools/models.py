@@ -808,9 +808,12 @@ class CancelInviteResponse(BaseModel):
             "'completed' (all signers already completed)"
         ),
     )
-    cancelled_invite_ids: list[CancelledInvite] = Field(
+    cancelled_invite_ids: list[str] = Field(
         default_factory=list,
         description="List of cancelled invites with IDs and types (empty when status is not 'cancelled')",
+    ),
+    cancelled_invite_type: str | None = Field(
+        None,   description="Type of cancelled invites: 'field' or 'freeform' (populated only when status is 'cancelled')"
     )
 
 

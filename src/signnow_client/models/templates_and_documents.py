@@ -816,10 +816,9 @@ class DocumentFreeFormInvite(BaseModel):
     """Single freeform invite from GET /v2/documents/{id}/free-form-invites."""
 
     id: str = Field(..., description="Freeform invite ID")
-    user_id: str = Field(..., description="User ID who created the invite")
     status: str = Field(..., description="Invite status: 'pending', 'fulfilled', 'cancelled'")
-    created: str = Field(..., description="Creation timestamp")
-    updated: str = Field(..., description="Last update timestamp")
+    created: int = Field(..., description="Creation timestamp")
+    email: str = Field(..., description="Recipient email address")
 
 
 class GetDocumentFreeFormInvitesResponse(BaseModel):
