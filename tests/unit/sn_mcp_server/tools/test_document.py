@@ -96,6 +96,24 @@ class TestUploadDocument:
             check_fields=True,
         )
 
+    def test_upload_response_includes_next_steps(self, mock_client: MagicMock) -> None:
+        """Successful upload surfaces the three primary next_steps and agent_guidance."""
+        mock_client.upload_document.return_value = MagicMock(id="doc_next")
+
+        result = _upload_document(client=mock_client, token=FAKE_TOKEN, resource_bytes=b"pdf", filename="contract.pdf")
+
+        assert len(result.next_steps) == 3
+        tools_called = [step.tool for step in result.next_steps]
+        assert tools_called == ["create_embedded_sending", "send_invite", "send_invite"]
+        # The document_id must be embedded in the arguments hint so the agent can call the follow-up tool.
+        for step in result.next_steps:
+            assert "doc_next" in step.arguments_hint
+        # Self-sign step must set self_sign=True; freeform step must include a recipients array.
+        assert "self_sign" in result.next_steps[2].arguments_hint
+        assert "recipients" in result.next_steps[1].arguments_hint
+        assert result.agent_guidance
+        assert "next_steps" in result.agent_guidance
+
     def test_upload_from_local_path_happy(self, mock_client: MagicMock, tmp_path: pathlib.Path) -> None:
         """Local file path branch returns correct UploadDocumentResponse."""
         pdf_file = tmp_path / "test.pdf"

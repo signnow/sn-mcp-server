@@ -933,6 +933,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         description=(
             "Upload a document to SignNow from a local file path, public URL, or MCP resource attachment. "
             "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
+            "On success the response includes a 'next_steps' array (prepare invite / send for signing / self-sign) "
+            "and an 'agent_guidance' string — present those options to the user and wait for them to choose "
+            "before calling any follow-up tool. "
             "NOTE: For URL uploads, the returned filename is locally inferred and may differ from "
             "how SignNow names the document."
         ),
