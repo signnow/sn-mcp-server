@@ -9,7 +9,6 @@ import pytest
 from sn_mcp_server.tools.models import DocumentGroup, SimplifiedInvite
 from sn_mcp_server.tools.signing_link import _get_signing_link
 
-
 APP_BASE = "https://app.example.com"
 FAKE_TOKEN = "tok"  # noqa: S105
 
