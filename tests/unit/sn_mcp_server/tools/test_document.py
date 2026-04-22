@@ -102,15 +102,14 @@ class TestUploadDocument:
 
         result = _upload_document(client=mock_client, token=FAKE_TOKEN, resource_bytes=b"pdf", filename="contract.pdf")
 
+        assert result.document_id == "doc_next"
         assert len(result.next_steps) == 3
         tools_called = [step.tool for step in result.next_steps]
         assert tools_called == ["create_embedded_sending", "send_invite", "send_invite"]
-        # Every step must carry a non-empty intent and description; the description must thread the
-        # uploaded document_id so the agent does not need to re-derive it.
+        # Every step must carry a non-empty intent and description; document_id is on the response.
         for step in result.next_steps:
             assert step.intent
             assert step.description
-            assert "doc_next" in step.description
         # Step 2 (freeform) must instruct the agent to collect a recipient email before calling send_invite.
         assert "email" in result.next_steps[1].description.lower()
         # Step 3 (self-sign) must mention the self_sign flag so the agent picks the right send_invite shape.
