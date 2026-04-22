@@ -873,13 +873,21 @@ class CreateTemplateResult(BaseModel):
     entity_type: Literal["document", "document_group"] = Field(..., description="Entity type that was converted.")
 
 
-class UploadDocumentNextStep(BaseModel):
-    """A single suggested next action the agent should present to the user after upload."""
+class SuggestedStep(BaseModel):
+    """A single suggested follow-up action the agent should present to the user after a tool completes.
+
+    Reusable across tools that want to surface alternative next actions.
+    """
 
     intent: str = Field(..., description="Short label describing the user intent this step addresses.")
-    description: str = Field(..., description="Human-readable description of what this next step does.")
-    tool: str = Field(..., description="MCP tool name the agent should call to execute this step.")
-    arguments_hint: str = Field(..., description="Example/shape of arguments to pass to the tool. Substitute <document_id> with the uploaded document_id.")
+    description: str = Field(
+        ...,
+        description=("Human-readable description of what this next step does, including any non-obvious arguments the agent must collect from the user before calling `tool`."),
+    )
+    tool: str = Field(
+        ...,
+        description=("MCP tool name the agent should call to execute this step. The agent must consult that tool's advertised JSON schema for argument shape."),
+    )
 
 
 class UploadDocumentResponse(BaseModel):
@@ -898,7 +906,7 @@ class UploadDocumentResponse(BaseModel):
         ...,
         description=("How the file was provided: 'local_file' (read from local path), 'url' (fetched by SignNow from URL), 'resource' (attached via MCP resource protocol)"),
     )
-    next_steps: list[UploadDocumentNextStep] = Field(
+    next_steps: list[SuggestedStep] = Field(
         ...,
         description=(
             "Suggested follow-up actions the agent MUST present to the user after a successful upload, "

@@ -24,10 +24,10 @@ from .models import (
     DocumentGroup,
     DocumentGroupDocument,
     SimplifiedInvite,
+    SuggestedStep,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
     UpdateDocumentFieldsResult,
-    UploadDocumentNextStep,
     UploadDocumentResponse,
 )
 
@@ -42,30 +42,37 @@ _UPLOAD_AGENT_GUIDANCE: str = (
 )
 
 
-def _build_upload_next_steps(document_id: str) -> list[UploadDocumentNextStep]:
+def _build_upload_next_steps(document_id: str) -> list[SuggestedStep]:
     """Build the standard post-upload suggestions for the given document_id.
 
     Order matches the primary flow documented in the `signnow101` skill
     ('Upload Document Flow'). Keep this list in sync with that skill.
     """
     return [
-        UploadDocumentNextStep(
+        SuggestedStep(
             intent="Prepare a role-based invite",
-            description=("Open the document in SignNow to add fields and assign roles before sending. Use this when the document needs signer fields or multiple roles."),
+            description=(
+                f"Open the document in SignNow to add fields and assign roles before sending. "
+                f"Use this when the document needs signer fields or multiple roles. "
+            ),
             tool="create_embedded_sending",
-            arguments_hint=f'{{"entity_id": "{document_id}"}}',
         ),
-        UploadDocumentNextStep(
+        SuggestedStep(
             intent="Send for someone else to sign (freeform)",
-            description=("Send the uploaded document to a recipient for signature without predefined fields. Ask the user for the recipient's email first."),
+            description=(
+                f"Send the uploaded document to a recipient for signature without predefined fields. "
+                f"Ask the user for the recipient's email first."
+            ),
             tool="send_invite",
-            arguments_hint=(f'{{"entity_id": "{document_id}", "orders": [{{"order": 1, "recipients": [{{"email": "<recipient_email>"}}]}}]}}'),
         ),
-        UploadDocumentNextStep(
+        SuggestedStep(
             intent="Sign it myself",
-            description=("Generate a self-signing link so the current user signs the document directly. Omit orders; the tool resolves the sender email server-side."),
+            description=(
+                f"Generate a self-signing link so the current user signs the document directly. "
+                f"Call send_invite with self_sign=true; omit orders — "
+                f"the tool resolves the sender email server-side."
+            ),
             tool="send_invite",
-            arguments_hint=f'{{"entity_id": "{document_id}", "self_sign": true}}',
         ),
     ]
 

@@ -105,12 +105,16 @@ class TestUploadDocument:
         assert len(result.next_steps) == 3
         tools_called = [step.tool for step in result.next_steps]
         assert tools_called == ["create_embedded_sending", "send_invite", "send_invite"]
-        # The document_id must be embedded in the arguments hint so the agent can call the follow-up tool.
+        # Every step must carry a non-empty intent and description; the description must thread the
+        # uploaded document_id so the agent does not need to re-derive it.
         for step in result.next_steps:
-            assert "doc_next" in step.arguments_hint
-        # Self-sign step must set self_sign=True; freeform step must include a recipients array.
-        assert "self_sign" in result.next_steps[2].arguments_hint
-        assert "recipients" in result.next_steps[1].arguments_hint
+            assert step.intent
+            assert step.description
+            assert "doc_next" in step.description
+        # Step 2 (freeform) must instruct the agent to collect a recipient email before calling send_invite.
+        assert "email" in result.next_steps[1].description.lower()
+        # Step 3 (self-sign) must mention the self_sign flag so the agent picks the right send_invite shape.
+        assert "self_sign" in result.next_steps[2].description
         assert result.agent_guidance
         assert "next_steps" in result.agent_guidance
 
