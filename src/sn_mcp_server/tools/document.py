@@ -225,12 +225,15 @@ def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: G
         now=now,
     )
 
+    freeform_invite_id = data.freeform_invite.id if data.freeform_invite else None
+
     return DocumentGroup(
         last_updated=data.created,
         entity_id=data.id,
         group_name=data.name,
         entity_type="document_group",
         invite=invite,
+        freeform_invite_id=freeform_invite_id,
         documents=full_documents,
     )
 
@@ -340,6 +343,15 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
     now = int(time.time())
     invite = SimplifiedInvite.from_document_field_invites(document_data.field_invites, now)
 
+    # Freeform invites surface as entries in `requests`; pick the first id if present.
+    freeform_invite_id: str | None = None
+    if document_data.requests:
+        first_request = document_data.requests[0]
+        if isinstance(first_request, dict):
+            candidate = first_request.get("id") or first_request.get("unique_id")
+            if isinstance(candidate, str) and candidate:
+                freeform_invite_id = candidate
+
     # Create DocumentGroup with single document
     return DocumentGroup(
         last_updated=0,  # Not available for single documents
@@ -347,6 +359,7 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
         group_name=full_document.name,
         entity_type="document",
         invite=invite,
+        freeform_invite_id=freeform_invite_id,
         documents=[full_document],
     )
 

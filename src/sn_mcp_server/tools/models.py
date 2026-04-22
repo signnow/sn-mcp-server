@@ -122,6 +122,7 @@ class DocumentGroup(BaseModel):
     group_name: str = Field(..., description="Name of the document group")
     entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
     invite: SimplifiedInvite | None = Field(None, description="Unified invite info")
+    freeform_invite_id: str | None = Field(None, description="Freeform invite ID, if a freeform invite exists on this entity")
     documents: list[DocumentGroupDocument] = Field(..., description="List of documents in this group")
 
 

@@ -239,7 +239,6 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
                 "document",
                 token,
                 client,
-                skip_invite_check=True,
             )
             return SendInviteResponse(invite_id=last_invite_id, invite_entity="document", link=signing_link.link)
 
@@ -321,7 +320,6 @@ def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, e
                 "document_group",
                 token,
                 client,
-                skip_invite_check=True,
             )
             return SendInviteResponse(invite_id=invite_id, invite_entity="document_group", link=signing_link.link)
 
