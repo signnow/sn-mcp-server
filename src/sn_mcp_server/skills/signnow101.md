@@ -45,16 +45,17 @@ When a user wants to upload a document to SignNow:
 
 3. **Upload.** Call `upload_document` with `resource_uri`, `file_path`, or `file_url` (and optionally `filename`).
 
-4. **After upload succeeds, ask what the user wants to do next:**
+4. **After upload succeeds, proactively suggest the next step.** Present these three primary options in order and let the user choose:
 
-   | User intent | What to do |
-   |-------------|------------|
-   | "I want to sign it myself" | Call `send_invite` with the user as recipient, then call `get_signing_link` to get a link the user can open to sign. |
-   | "Send it for someone else to sign (freeform)" | Ask for the recipient's email, then call `send_invite` with that email as recipient. |
-   | "Prepare a role-based invite" | Call `create_embedded_sending` to get a link the user can open in SignNow to prepare fields and roles. |
-   | "Turn it into a template" | Inform the user they can use the document ID with SignNow’s template creation features. Call `create_embedded_editor` to get a link the user can open to prepare the template. |
+   | # | User intent | What to do |
+   |---|-------------|------------|
+   | 1 | "Prepare a role-based invite" | Call `create_embedded_sending(entity_id=<id>)` to get a link the user can open in SignNow to prepare fields and roles. |
+   | 2 | "Send it for someone else to sign (freeform)" | Ask the user for the recipient's email, then call `send_invite(entity_id=<id>, orders=[{"order": 1, "recipients": [{"email": "<their email>"}]}])`. Omit `role` — the tool auto-detects freeform for field-less documents. |
+   | 3 | "Sign it myself" | Call `send_invite(entity_id=<id>, self_sign=True)` with no `orders`. The tool resolves your email server-side and returns a `SigningLinkResponse` with a `link` — present that link for the user to open and sign. |
 
-5. **If the user doesn’t specify intent,** default to asking: *“What would you like to do with this document?”* and present the four options above.
+   **Secondary option** (mention only if the user hints at reuse, not by default): "Turn it into a template" — call `create_embedded_editor(entity_id=<id>)` so the user can prepare the template in SignNow.
+
+5. **If the user doesn't specify intent,** default to asking: *"What would you like to do with this document?"* and present the three primary options above.
 ## 4. Sending for Signing
 
 ### 4.1 Signing Link Etiquette

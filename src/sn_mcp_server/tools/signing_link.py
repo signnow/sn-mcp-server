@@ -14,7 +14,7 @@ from .document import _get_document
 from .models import SigningLinkResponse
 
 
-def _get_signing_link(entity_id: str, entity_type: Literal["document", "document_group"] | None, token: str, client: SignNowAPIClient) -> SigningLinkResponse:
+def _get_signing_link(entity_id: str, entity_type: Literal["document", "document_group"] | None, token: str, client: SignNowAPIClient, *, skip_invite_check: bool = False) -> SigningLinkResponse:
     """Private function to generate signing link for a document or document group.
 
     Args:
@@ -22,6 +22,7 @@ def _get_signing_link(entity_id: str, entity_type: Literal["document", "document
         entity_type: Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type.
         token: Access token for SignNow API
         client: SignNow API client instance
+        skip_invite_check: If True, skip the check that an invite exists on the entity
 
     Returns:
         SigningLinkResponse with signing link
@@ -32,7 +33,7 @@ def _get_signing_link(entity_id: str, entity_type: Literal["document", "document
     if document_group.entity_type not in ("document", "document_group"):
         raise ValueError(f"Entity with ID {entity_id} is not a document or document group")
 
-    if not document_group.invite:
+    if not skip_invite_check and not document_group.invite:
         raise ValueError(f"To sign, an invite must exist for {document_group.entity_type} with ID {document_group.entity_id}")
 
     app_base = str(client.cfg.app_base).rstrip("/")

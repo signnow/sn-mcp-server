@@ -14,8 +14,8 @@ from typing import Any
 import respx
 
 from signnow_client import SignNowAPIClient
-from sn_mcp_server.tools.models import InviteOrder, InviteRecipient, SignerAuthentication
-from sn_mcp_server.tools.send_invite import _send_document_field_invite, _send_document_group_field_invite
+from sn_mcp_server.tools.models import InviteOrder, InviteRecipient, SignerAuthentication, SigningLinkResponse
+from sn_mcp_server.tools.send_invite import _send_document_field_invite, _send_document_group_field_invite, _send_invite
 
 DOC_ID = "doc_auth_test"
 GRP_ID = "grp_auth_test"
@@ -260,3 +260,48 @@ class TestSendInviteDocumentGroupPhoneAuth:
         body = json.loads(invite_route.calls[0].request.content)
         action = body["invite_steps"][0]["invite_actions"][0]
         assert "authentication" not in action
+
+
+SELF_SIGN_DOC_ID = "doc1"  # matches id in get_document__with_pending_invite fixture
+
+
+class TestSendInviteSelfSign:
+    """Integration tests for self-signing a field-less document via send_invite(self_sign=True)."""
+
+    async def test_self_sign_fieldless_document_returns_signing_link(
+        self,
+        sn_client: SignNowAPIClient,
+        mock_api: respx.MockRouter,
+        token: str,
+        load_fixture: Callable[[str], dict[str, Any]],
+    ) -> None:
+        """self_sign=True on a field-less document returns a SigningLinkResponse with sender=recipient=user primary_email."""
+        # ARRANGE — the document fixture has fields: [] (freeform-eligible).
+        user_fixture = load_fixture("get_user_info__success")
+        doc_fixture = load_fixture("get_document__with_pending_invite")
+        mock_api.get("/user").respond(200, json=user_fixture)
+        mock_api.get(f"/document/{SELF_SIGN_DOC_ID}").respond(200, json=doc_fixture)
+        invite_route = mock_api.post(f"/document/{SELF_SIGN_DOC_ID}/invite").respond(
+            200,
+            json={"result": "success", "id": "self_inv_ok", "callback_url": "https://cb.example.com"},
+        )
+
+        # ACT — self_sign=True synthesises orders internally from user_info.primary_email.
+        result = await _send_invite(
+            SELF_SIGN_DOC_ID,
+            "document",
+            [],
+            token,
+            sn_client,
+            self_sign=True,
+        )
+
+        # ASSERT — self-sign returns a signing link rather than a SendInviteResponse.
+        assert isinstance(result, SigningLinkResponse)
+        assert SELF_SIGN_DOC_ID in result.link
+        assert token in result.link  # link embeds access token
+
+        # ASSERT — request body: to == from == primary_email from the user fixture.
+        body = json.loads(invite_route.calls[0].request.content)
+        assert body["to"] == "owner@example.com"
+        assert body["from"] == "owner@example.com"

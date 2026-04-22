@@ -98,15 +98,35 @@ def test_tool_returns_curated_pydantic_model(name: str, fn: Any) -> None:
     annotation = hints.get("return")
     assert annotation is not None, f"Tool {name!r} has no resolvable return type hint."
 
-    assert inspect.isclass(annotation) and issubclass(annotation, BaseModel), (
-        f"Tool {name!r} returns {annotation!r}, which is not a pydantic.BaseModel subclass. "
-        f"AGENTS.md requires every tool to return a curated model from tools/models.py "
-        f"(or a per-tool models module), never raw dict / list / Any."
-    )
+    # Support Union return types (e.g. SendInviteResponse | SigningLinkResponse)
+    # by checking that every member of the union is a BaseModel subclass.
+    # `X | Y` syntax produces types.UnionType; typing.Union produces typing.Union.
+    origin = typing.get_origin(annotation)
+    if origin is typing.Union or isinstance(annotation, type(int | str)):
+        members = typing.get_args(annotation)
+        for member in members:
+            assert inspect.isclass(member) and issubclass(member, BaseModel), (
+                f"Tool {name!r} returns a union containing {member!r}, which is not a "
+                f"pydantic.BaseModel subclass. AGENTS.md requires every tool to return "
+                f"a curated model from tools/models.py (or a per-tool models module), "
+                f"never raw dict / list / Any."
+            )
+            module = member.__module__
+            assert module.startswith("sn_mcp_server.tools"), (
+                f"Tool {name!r} returns a union containing {member.__name__} from {module!r}. "
+                f"Response models must live under sn_mcp_server.tools so the curation "
+                f"layer owns the shape — don't leak signnow_client models to clients."
+            )
+    else:
+        assert inspect.isclass(annotation) and issubclass(annotation, BaseModel), (
+            f"Tool {name!r} returns {annotation!r}, which is not a pydantic.BaseModel subclass. "
+            f"AGENTS.md requires every tool to return a curated model from tools/models.py "
+            f"(or a per-tool models module), never raw dict / list / Any."
+        )
 
-    module = annotation.__module__
-    assert module.startswith("sn_mcp_server.tools"), (
-        f"Tool {name!r} returns {annotation.__name__} from {module!r}. "
-        f"Response models must live under sn_mcp_server.tools so the curation "
-        f"layer owns the shape — don't leak signnow_client models to clients."
-    )
+        module = annotation.__module__
+        assert module.startswith("sn_mcp_server.tools"), (
+            f"Tool {name!r} returns {annotation.__name__} from {module!r}. "
+            f"Response models must live under sn_mcp_server.tools so the curation "
+            f"layer owns the shape — don't leak signnow_client models to clients."
+        )

@@ -310,7 +310,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Supports both field invites (documents with roles/fields) and freeform invites "
             "(documents without fields). Document type is auto-detected — omit 'role' for "
             "freeform documents. For templates and template groups, automatically creates a "
-            "document/group first, then sends the invite."
+            "document/group first, then sends the invite. "
+            "Set self_sign=True (and omit orders) to sign the document yourself — the tool "
+            "resolves the current user's email and returns a SigningLinkResponse directly."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -325,15 +327,15 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         orders: Annotated[
-            list[InviteOrder],
+            list[InviteOrder] | None,
             Field(
-                description="List of orders with recipients.",
+                description=("List of orders with recipients. Required unless self_sign=True. When self_sign=True, omit orders — the tool fills in the current user as the sole recipient."),
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
                     [{"order": 1, "recipients": [{"email": "signer@example.com", "action": "sign"}]}],
                 ],
             ),
-        ],
+        ] = None,
         preview_was_shown: Annotated[
             bool | None,
             Field(
@@ -350,7 +352,19 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
         ] = None,
         name: Annotated[str | None, Field(description="Optional name for the new document or document group (used only when entity_type is template or template_group)")] = None,
-    ) -> SendInviteResponse:
+        self_sign: Annotated[
+            bool,
+            Field(
+                description=(
+                    "If True, the tool resolves the current user's primary email server-side and "
+                    "sends a freeform invite to the user themselves, returning a SigningLinkResponse "
+                    "with a direct signing link. Must be combined with an empty/omitted orders. "
+                    "Requires a field-less document or document group — for entities with fields/roles, "
+                    "use create_embedded_sending instead."
+                )
+            ),
+        ] = False,
+    ) -> SendInviteResponse | SigningLinkResponse:
         """Send invite to sign a document, document group, template, or template group.
 
         When entity_type is 'template' or 'template_group', this tool automatically:
@@ -365,22 +379,36 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         groups, role presence is checked per document — if no documents have roles,
         a freeform group invite is sent instead.
 
+        When sender and recipient emails match, a SigningLinkResponse is returned
+        instead of SendInviteResponse so the sender can sign directly.
+
+        Self-sign shortcut: pass ``self_sign=True`` (and omit ``orders``) to sign the
+        document yourself. The tool resolves your primary email, sends a freeform
+        invite with you as the sole recipient, and returns a SigningLinkResponse with
+        a ready-to-open signing link. Only valid for field-less documents/groups —
+        field entities should use create_embedded_sending.
+
         Args:
             entity_id: ID of the document, document group, template, or template group
-            orders: List of orders with recipients.
+            orders: List of orders with recipients. Required unless self_sign=True.
             preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
             entity_type: Type of entity (optional, auto-detected if not provided).
             name: Optional name for the new document or document group (template flows only)
+            self_sign: If True, self-sign the document using the current user's email.
 
         Returns:
-            SendInviteResponse with invite details; created_entity_* fields populated for template flows
+            SendInviteResponse with invite details, or SigningLinkResponse when self-signing
         """
         token, client = _get_token_and_client(token_provider)
 
-        if not orders:
-            raise ValueError("orders must contain at least one recipient order")
+        if self_sign:
+            if orders:
+                raise ValueError("orders must be empty when self_sign=True — the tool fills in the current user as the sole recipient")
+        else:
+            if not orders:
+                raise ValueError("orders must contain at least one recipient order")
 
-        return await _send_invite(entity_id, entity_type, orders, token, client, name, ctx)
+        return await _send_invite(entity_id, entity_type, orders or [], token, client, name, ctx, self_sign=self_sign)
 
     @mcp.tool(
         name="create_embedded_invite",
@@ -962,11 +990,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         2. file_path — if the user provided a local path
         3. file_url — if the user provided a public URL
 
-        After upload, load the 'signnow101' skill for guidance on next steps:
-        - Sign the document yourself
-        - Send for signing as a freeform invite
-        - Prepare a role-based invite
-        - Turn the document into a reusable template
+        After upload, load the 'signnow101' skill for guidance on next steps.
+        Primary suggestions (present in this order):
+        1. Prepare a role-based invite (create_embedded_sending)
+        2. Send for signing as a freeform invite (send_invite with recipient email)
+        3. Sign the document yourself (send_invite with self_sign=True)
+
+        Secondary suggestion (only if the user hints at reuse):
+        - Turn the document into a reusable template (create_embedded_editor)
 
         Args:
             ctx: FastMCP context (injected)
