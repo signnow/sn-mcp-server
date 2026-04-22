@@ -652,6 +652,15 @@ class SendInviteResponse(BaseModel):
     invite_id: str = Field(..., description="ID of the created invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
 
+    link: str | None = Field(
+        None,
+        description=(
+            "Direct signing link. Populated only when the sender and recipient resolve to "
+            "the same email (self_sign=True, or the recipient email equals the authenticated "
+            "user's primary email). None for normal outbound invites."
+        ),
+    )
+
     created_entity_id: str | None = Field(None, description="ID of the entity created from template (None when entity was document/document_group)")
     created_entity_type: str | None = Field(None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)")
     created_entity_name: str | None = Field(None, description="Name of the entity created from template (None when entity was document/document_group)")

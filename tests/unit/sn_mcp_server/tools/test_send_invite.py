@@ -566,17 +566,19 @@ class TestSendInviteSelfSign:
         return client
 
     async def test_self_sign_builds_synthetic_orders_from_user_info(self, mock_client: MagicMock) -> None:
-        """When self_sign=True and entity has no fields, the tool fills in the user as sole recipient and returns a SigningLinkResponse."""
+        """When self_sign=True and entity has no fields, the tool fills in the user as sole recipient and returns a SendInviteResponse whose link is populated."""
         mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc")
         mock_client.get_user_info.return_value = MagicMock(primary_email="me@co.com")
         mock_client.create_document_freeform_invite.return_value = MagicMock(id="self_inv")
 
         result = await _send_invite("doc1", "document", [], "tok", mock_client, self_sign=True)
 
-        # Freeform self-sign returns a SigningLinkResponse directly (not SendInviteResponse).
-        from sn_mcp_server.tools.models import SigningLinkResponse
-
-        assert isinstance(result, SigningLinkResponse)
+        # Freeform self-sign returns a SendInviteResponse with the signing link
+        # attached via the optional `link` field (no separate response type).
+        assert isinstance(result, SendInviteResponse)
+        assert result.invite_id == "self_inv"
+        assert result.invite_entity == "document"
+        assert result.link is not None
         assert "doc1" in result.link
         # The synthetic order was built with the resolved sender email.
         request = mock_client.create_document_freeform_invite.call_args[0][2]

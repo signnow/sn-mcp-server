@@ -312,7 +312,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "freeform documents. For templates and template groups, automatically creates a "
             "document/group first, then sends the invite. "
             "Set self_sign=True (and omit orders) to sign the document yourself — the tool "
-            "resolves the current user's email and returns a SigningLinkResponse directly."
+            "resolves the current user's email and populates SendInviteResponse.link with a "
+            "direct signing link. The 'link' field is also populated when a freeform "
+            "recipient's email matches the authenticated user's primary email."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -357,14 +359,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             Field(
                 description=(
                     "If True, the tool resolves the current user's primary email server-side and "
-                    "sends a freeform invite to the user themselves, returning a SigningLinkResponse "
-                    "with a direct signing link. Must be combined with an empty/omitted orders. "
-                    "Requires a field-less document or document group — for entities with fields/roles, "
-                    "use create_embedded_sending instead."
+                    "sends a freeform invite to the user themselves. The response's 'link' field "
+                    "is populated with a direct signing link. Must be combined with an empty/omitted "
+                    "orders. Requires a field-less document or document group — for entities with "
+                    "fields/roles, use create_embedded_sending instead."
                 )
             ),
         ] = False,
-    ) -> SendInviteResponse | SigningLinkResponse:
+    ) -> SendInviteResponse:
         """Send invite to sign a document, document group, template, or template group.
 
         When entity_type is 'template' or 'template_group', this tool automatically:
@@ -379,14 +381,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         groups, role presence is checked per document — if no documents have roles,
         a freeform group invite is sent instead.
 
-        When sender and recipient emails match, a SigningLinkResponse is returned
-        instead of SendInviteResponse so the sender can sign directly.
+        When sender and recipient emails match, SendInviteResponse.link is populated
+        with a direct signing link so the sender can sign without checking their inbox.
 
         Self-sign shortcut: pass ``self_sign=True`` (and omit ``orders``) to sign the
         document yourself. The tool resolves your primary email, sends a freeform
-        invite with you as the sole recipient, and returns a SigningLinkResponse with
-        a ready-to-open signing link. Only valid for field-less documents/groups —
-        field entities should use create_embedded_sending.
+        invite with you as the sole recipient, and returns a SendInviteResponse whose
+        ``link`` field holds a ready-to-open signing link. Only valid for field-less
+        documents/groups — field entities should use create_embedded_sending.
 
         Args:
             entity_id: ID of the document, document group, template, or template group
@@ -397,7 +399,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             self_sign: If True, self-sign the document using the current user's email.
 
         Returns:
-            SendInviteResponse with invite details, or SigningLinkResponse when self-signing
+            SendInviteResponse with invite details. ``link`` is populated when
+            self-signing or when recipient email equals the sender's email.
         """
         token, client = _get_token_and_client(token_provider)
 

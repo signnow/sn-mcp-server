@@ -51,7 +51,7 @@ When a user wants to upload a document to SignNow:
    |---|-------------|------------|
    | 1 | "Prepare a role-based invite" | Call `create_embedded_sending(entity_id=<id>)` to get a link the user can open in SignNow to prepare fields and roles. |
    | 2 | "Send it for someone else to sign (freeform)" | Ask the user for the recipient's email, then call `send_invite(entity_id=<id>, orders=[{"order": 1, "recipients": [{"email": "<their email>"}]}])`. Omit `role` — the tool auto-detects freeform for field-less documents. |
-   | 3 | "Sign it myself" | Call `send_invite(entity_id=<id>, self_sign=True)` with no `orders`. The tool resolves your email server-side and returns a `SigningLinkResponse` with a `link` — present that link for the user to open and sign. |
+   | 3 | "Sign it myself" | Call `send_invite(entity_id=<id>, self_sign=True)` with no `orders`. The tool resolves your email server-side and returns a `SendInviteResponse` whose `link` field holds a direct signing link — present that link for the user to open and sign. |
 
    **Secondary option** (mention only if the user hints at reuse, not by default): "Turn it into a template" — call `create_embedded_editor(entity_id=<id>)` so the user can prepare the template in SignNow.
 

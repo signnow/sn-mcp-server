@@ -22,7 +22,7 @@ from signnow_client.models.templates_and_documents import (
 )
 
 from .create_from_template import _resolve_entity
-from .models import InviteOrder, InviteRecipient, SendInviteResponse, SignerAuthentication, SigningLinkResponse
+from .models import InviteOrder, InviteRecipient, SendInviteResponse, SignerAuthentication
 from .signing_link import _get_signing_link
 from .utils import _detect_entity_type
 
@@ -178,7 +178,7 @@ def _send_document_group_field_invite(client: SignNowAPIClient, token: str, enti
     return SendInviteResponse(invite_id=response.id, invite_entity="document_group")
 
 
-def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse | SigningLinkResponse:
+def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse:
     """Send freeform invite(s) for a document without fields.
 
     The SignNow document freeform API (POST /document/{id}/invite) accepts a single
@@ -187,6 +187,10 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
     returned (consistent with SignNow's non-transactional API — earlier invites are
     already sent if a later call fails).
 
+    When any recipient's email matches the sender's primary email, a direct signing
+    link is computed and attached to the response's ``link`` field so the sender can
+    sign without checking their inbox.
+
     Args:
         client: SignNow API client instance
         token: Access token
@@ -194,7 +198,8 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
         orders: Invite orders containing recipients
 
     Returns:
-        SendInviteResponse with the last invite_id and invite_entity='document'
+        SendInviteResponse with the last invite_id and invite_entity='document'.
+        ``link`` is populated when sender == recipient.
 
     Raises:
         ValueError: If no recipients are provided across all orders
@@ -226,26 +231,30 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
         response = client.create_document_freeform_invite(token, entity_id, request)
         last_invite_id = response.id
 
-        # When sender and recipient are the same, return a signing link
-        # so the sender can sign directly without checking email
+        # When sender and recipient are the same, compute a direct signing link and
+        # surface it on the response so the sender can sign without checking email.
         if recipient.email.lower() == sender_email.lower():
-            return _get_signing_link(
+            signing_link = _get_signing_link(
                 entity_id,
                 "document",
                 token,
                 client,
                 skip_invite_check=True,
             )
+            return SendInviteResponse(invite_id=last_invite_id, invite_entity="document", link=signing_link.link)
 
     return SendInviteResponse(invite_id=last_invite_id, invite_entity="document")
 
 
-def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse | SigningLinkResponse:
+def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse:
     """Send a freeform invite for a document group without roles.
 
     Converts all recipients from orders into FreeformInviteRecipient objects,
     aggregates CC across all recipients, and fires
     POST /v2/document-groups/{id}/free-form-invites (returns 201).
+
+    When any recipient's email matches the sender's primary email, a direct signing
+    link is computed and attached to the response's ``link`` field.
 
     Args:
         client: SignNow API client instance
@@ -254,7 +263,8 @@ def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, e
         orders: Invite orders containing recipients
 
     Returns:
-        SendInviteResponse with invite_id and invite_entity='document_group'
+        SendInviteResponse with invite_id and invite_entity='document_group'.
+        ``link`` is populated when sender == recipient.
 
     Raises:
         ValueError: If no recipients are provided, or if the API response is missing 'id'
@@ -300,19 +310,20 @@ def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, e
     if not invite_id:
         raise ValueError(f"Cannot extract invite ID from freeform invite response for document group '{entity_id}'")
 
-    # When sender and recipient are the same, return a signing link
-    # so the sender can sign directly without checking email
+    # When sender and recipient are the same, compute a direct signing link and
+    # surface it on the response so the sender can sign without checking email.
     user_info = client.get_user_info(token)
     sender_email = user_info.primary_email
     for recipient in flat_recipients:
         if recipient.email.lower() == sender_email.lower():
-            return _get_signing_link(
+            signing_link = _get_signing_link(
                 entity_id,
                 "document_group",
                 token,
                 client,
                 skip_invite_check=True,
             )
+            return SendInviteResponse(invite_id=invite_id, invite_entity="document_group", link=signing_link.link)
 
     return SendInviteResponse(invite_id=invite_id, invite_entity="document_group")
 
@@ -381,7 +392,7 @@ async def _send_invite(
     ctx: Context | None = None,
     *,
     self_sign: bool = False,
-) -> SendInviteResponse | SigningLinkResponse:
+) -> SendInviteResponse:
     """Send invite to sign a document, document group, template, or template group.
 
     When entity_type is 'template' or 'template_group', creates a document/group
@@ -397,11 +408,12 @@ async def _send_invite(
         ctx: FastMCP context for progress reporting (used for template flows)
         self_sign: If True, resolve the current user's primary email and build a
                    single-recipient orders list with the user as recipient. The
-                   freeform path naturally returns a SigningLinkResponse in this case.
+                   freeform path populates SendInviteResponse.link in this case.
 
     Returns:
-        SendInviteResponse with invite details and optional created entity info,
-        or SigningLinkResponse when self-signing a field-less entity.
+        SendInviteResponse with invite details and optional created entity info.
+        ``link`` is populated when sender == recipient (self-sign or email match
+        on a field-less entity); otherwise None.
     """
     # note: entity_type is reused during method execution & could be changed from one type to another (e.g. template > document)
     if entity_type is None:
@@ -415,7 +427,7 @@ async def _send_invite(
         sender_email = client.get_user_info(token).primary_email
         orders = [InviteOrder(order=1, recipients=[InviteRecipient(email=sender_email)])]
 
-    invite_response: SendInviteResponse | SigningLinkResponse
+    invite_response: SendInviteResponse
     if entity_type == "document_group":
         group = client.get_document_group(token, entity_id)
         if _document_group_has_roles(group):
@@ -440,12 +452,10 @@ async def _send_invite(
     if ctx and created.created_entity_id:
         await ctx.report_progress(progress=3, total=3)
 
-    if isinstance(invite_response, SigningLinkResponse):
-        return invite_response
-
     return SendInviteResponse(
         invite_id=invite_response.invite_id,
         invite_entity=invite_response.invite_entity,
+        link=invite_response.link,
         created_entity_id=created.created_entity_id,
         created_entity_type=created.created_entity_type,
         created_entity_name=created.created_entity_name,

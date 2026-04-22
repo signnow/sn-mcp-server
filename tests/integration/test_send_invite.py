@@ -14,7 +14,7 @@ from typing import Any
 import respx
 
 from signnow_client import SignNowAPIClient
-from sn_mcp_server.tools.models import InviteOrder, InviteRecipient, SignerAuthentication, SigningLinkResponse
+from sn_mcp_server.tools.models import InviteOrder, InviteRecipient, SendInviteResponse, SignerAuthentication
 from sn_mcp_server.tools.send_invite import _send_document_field_invite, _send_document_group_field_invite, _send_invite
 
 DOC_ID = "doc_auth_test"
@@ -275,7 +275,7 @@ class TestSendInviteSelfSign:
         token: str,
         load_fixture: Callable[[str], dict[str, Any]],
     ) -> None:
-        """self_sign=True on a field-less document returns a SigningLinkResponse with sender=recipient=user primary_email."""
+        """self_sign=True on a field-less document returns a SendInviteResponse with a populated link and sender=recipient=user primary_email."""
         # ARRANGE — the document fixture has fields: [] (freeform-eligible).
         user_fixture = load_fixture("get_user_info__success")
         doc_fixture = load_fixture("get_document__with_pending_invite")
@@ -296,8 +296,12 @@ class TestSendInviteSelfSign:
             self_sign=True,
         )
 
-        # ASSERT — self-sign returns a signing link rather than a SendInviteResponse.
-        assert isinstance(result, SigningLinkResponse)
+        # ASSERT — self-sign returns a SendInviteResponse with the signing link
+        # surfaced via the optional `link` field (no separate response type).
+        assert isinstance(result, SendInviteResponse)
+        assert result.invite_id == "self_inv_ok"
+        assert result.invite_entity == "document"
+        assert result.link is not None
         assert SELF_SIGN_DOC_ID in result.link
         assert token in result.link  # link embeds access token
 
