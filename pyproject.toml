@@ -103,6 +103,7 @@ extend-exclude = ["src/sn_mcp_server/_version.py"]
 # Pydantic field_validator(mode="before") helpers normalize raw API payloads of unknown shape;
 # Any is the correct input type — the helper's job is to narrow it to a concrete type.
 "src/signnow_client/models/**/*.py" = ["ANN401"]
+"eval/**/*.py" = ["ANN401"]
 
 [tool.mypy]
 python_version = "3.10"
