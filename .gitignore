@@ -10,3 +10,9 @@ server.json
 # Coverage
 .coverage
 htmlcov/
+
+# Local scratch directory
+tmp/
+
+# Eval harness outputs (report.json/md, transcripts/)
+eval-reports/
