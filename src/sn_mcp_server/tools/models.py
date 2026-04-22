@@ -788,6 +788,32 @@ class InviteStatus(BaseModel):
     steps: list[DocumentGroupStatusStep] = Field(..., description="List of steps in the invite")
 
 
+class CancelledInvite(BaseModel):
+    """Single cancelled invite entry."""
+
+    id: str = Field(..., description="Cancelled invite ID")
+    invite_type: str = Field(..., description="Type of invite: 'field' or 'freeform'")
+
+
+class CancelInviteResponse(BaseModel):
+    """Response from cancel_invite tool."""
+
+    entity_id: str = Field(..., description="Document or document group ID")
+    entity_type: str = Field(..., description="Entity type: 'document' or 'document_group'")
+    status: str = Field(
+        ...,
+        description=(
+            "Result status: 'cancelled' (invites were cancelled), "
+            "'invite_not_sent' (no active invite found), "
+            "'completed' (all signers already completed)"
+        ),
+    )
+    cancelled_invite_ids: list[CancelledInvite] = Field(
+        default_factory=list,
+        description="List of cancelled invites with IDs and types (empty when status is not 'cancelled')",
+    )
+
+
 class DocumentDownloadLinkResponse(BaseModel):
     """Response model for document download link."""
 

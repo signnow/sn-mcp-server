@@ -4,6 +4,8 @@ SignNow API Client - Document and Template Methods
 Methods for working with individual documents and templates.
 """
 
+from __future__ import annotations
+
 import httpx
 
 from .client_base import SignNowAPIClientBase
@@ -11,6 +13,7 @@ from .exceptions import SignNowAPIError, SignNowAPITimeoutError
 from .models import (
     CancelDocumentFieldInviteRequest,
     CancelDocumentFieldInviteResponse,
+    CancelDocumentFreeformInviteRequest,
     CreateDocumentEmbeddedEditorRequest,
     CreateDocumentEmbeddedInviteRequest,
     CreateDocumentEmbeddedInviteResponse,
@@ -34,6 +37,7 @@ from .models import (
     GenerateDocumentEmbeddedInviteLinkRequest,
     GenerateDocumentEmbeddedInviteLinkResponse,
     GetDocumentFieldsResponse,
+    GetDocumentFreeFormInvitesResponse,
     GetDocumentHistoryResponse,
     MergeDocumentsRequest,
     MergeDocumentsResponse,
@@ -424,6 +428,44 @@ class DocumentClientMixin(SignNowAPIClientBase):
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
         return self._put(f"/document/{document_id}/fieldinvitecancel", headers=headers, json_data=request_data.model_dump(exclude_none=True), validate_model=CancelDocumentFieldInviteResponse)
+
+    def get_document_freeform_invites(self, token: str, document_id: str) -> GetDocumentFreeFormInvitesResponse:
+        """
+        List freeform invites for a document.
+
+        GET /v2/documents/{document_id}/free-form-invites
+
+        Args:
+            token: Access token for authentication
+            document_id: ID of the document
+
+        Returns:
+            Validated GetDocumentFreeFormInvitesResponse with list of freeform invites
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._get(f"/v2/documents/{document_id}/free-form-invites", headers=headers, validate_model=GetDocumentFreeFormInvitesResponse)
+
+    def cancel_document_freeform_invite(self, token: str, invite_id: str, request_data: CancelDocumentFreeformInviteRequest) -> bool:
+        """
+        Cancel a document freeform invite.
+
+        PUT /invite/{invite_id}/cancel
+
+        Args:
+            token: Access token for authentication
+            invite_id: ID of the freeform invite to cancel
+            request_data: Cancellation request with optional reason
+
+        Returns:
+            True if successful
+        """
+
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._put(f"/invite/{invite_id}/cancel", headers=headers, json_data=request_data.model_dump(exclude_none=True))
+        return True
 
     def create_document_freeform_invite(self, token: str, document_id: str, request_data: CreateDocumentFreeformInviteRequest) -> CreateDocumentFreeformInviteResponse:
         """

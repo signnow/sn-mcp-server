@@ -33,6 +33,7 @@ from .list_contacts import _list_contacts
 from .list_documents import _list_document_groups
 from .list_templates import _list_all_templates
 from .models import (
+    CancelInviteResponse,
     ContactListResponse,
     CreateEmbeddedEditorResponse,
     CreateEmbeddedInviteResponse,
@@ -54,6 +55,7 @@ from .models import (
     UploadDocumentResponse,
     ViewDocumentResponse,
 )
+from .cancel_invite import _cancel_invite
 from .reminder import _send_invite_reminder
 from .send_invite import _send_invite
 from .signing_link import _get_signing_link
@@ -1061,6 +1063,56 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
         return await _send_invite_reminder(client, token, entity_id, entity_type, email, subject, message, ctx=ctx)
+
+    @mcp.tool(
+        name="cancel_invite",
+        description="Cancel all active (pending) signing invites on a document or document group.",
+        annotations=ToolAnnotations(
+            title="Cancel signing invite",
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["invite", "cancel", "document", "document_group", "workflow"],
+    )
+    async def cancel_invite(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(
+                description=(
+                    "Type of entity: 'document' or 'document_group' (optional). "
+                    "Auto-detected if not provided (tries document_group first). "
+                    "Pass explicitly to save one API call."
+                )
+            ),
+        ] = None,
+        reason: Annotated[
+            str | None,
+            Field(description="Optional reason for cancellation"),
+        ] = None,
+    ) -> CancelInviteResponse:
+        """Cancel all active (pending) signing invites on a document or document group.
+
+        Auto-detects entity type when not provided by trying document_group first,
+        then document. Detects invite type (field vs freeform) automatically.
+
+        If all invites are already completed, returns status='completed'.
+        If no invite was ever sent, returns status='invite_not_sent'.
+        Otherwise cancels pending invites and returns status='cancelled'.
+
+        Args:
+            entity_id: ID of the document or document group.
+            entity_type: Optional discriminator ('document' or 'document_group').
+            reason: Optional cancellation reason forwarded to SignNow API.
+
+        Returns:
+            CancelInviteResponse with entity_id, entity_type, status, cancelled_invite_ids.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _cancel_invite(entity_id, entity_type, reason, token, client)
 
     @mcp.tool(
         name="view_document",

@@ -4,6 +4,8 @@ SignNow API Data Models - Document Groups and Template Groups
 Pydantic models for SignNow API responses and requests related to document groups and template groups.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
@@ -244,6 +246,7 @@ class GetDocumentGroupResponse(BaseModel):
     id: str = Field(..., description="Document group ID")
     group_name: str = Field(..., description="Name of the document group")
     invite_id: str | None = Field(None, description="Invite ID for this group")
+    freeform_invite: DocumentGroupV2FreeformInvite | None = Field(None, description="Freeform invite info if present")
     documents: list[DocumentGroupDocument] = Field(..., description="List of documents in this group")
     originator_organization_settings: list[dict[str, Any]] = Field(..., description="Organization settings for the originator")
 

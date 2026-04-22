@@ -4,6 +4,8 @@ SignNow API Data Models - Templates and Documents
 Pydantic models for SignNow API responses and requests related to templates and documents.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -808,6 +810,28 @@ class CancelFreeformInviteRequest(BaseModel):
 
     reason: str | None = Field(None, description="Cancellation reason", max_length=1000)
     client_timestamp: int = Field(..., description="UNIX timestamp")
+
+
+class DocumentFreeFormInvite(BaseModel):
+    """Single freeform invite from GET /v2/documents/{id}/free-form-invites."""
+
+    id: str = Field(..., description="Freeform invite ID")
+    user_id: str = Field(..., description="User ID who created the invite")
+    status: str = Field(..., description="Invite status: 'pending', 'fulfilled', 'cancelled'")
+    created: str = Field(..., description="Creation timestamp")
+    updated: str = Field(..., description="Last update timestamp")
+
+
+class GetDocumentFreeFormInvitesResponse(BaseModel):
+    """Response from GET /v2/documents/{document_id}/free-form-invites."""
+
+    data: list[DocumentFreeFormInvite] = Field(..., description="List of freeform invites")
+
+
+class CancelDocumentFreeformInviteRequest(BaseModel):
+    """Request model for canceling a document freeform invite via PUT /invite/{id}/cancel."""
+
+    reason: str | None = Field(None, description="Cancellation reason")
 
 
 # General Embedded Invite models (for document signing)

@@ -3,7 +3,7 @@ SignNow API Client - Document Groups and Template Groups Methods
 
 Methods for working with document groups and document group templates.
 """
-
+from __future__ import annotations
 import httpx
 
 from .client_base import SignNowAPIClientBase
@@ -258,6 +258,26 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
         self._post(f"/v2/document-groups/{document_group_id}/free-form-invites/{freeform_invite_id}/cancel", headers=headers, json_data=request_data.model_dump(exclude_none=True))
+        return True
+
+    def cancel_document_group_field_invite(self, token: str, document_group_id: str, invite_id: str) -> bool:
+        """
+        Cancel a document group field invite.
+
+        POST /documentgroup/{document_group_id}/groupinvite/{invite_id}/cancelinvite
+
+        Args:
+            token: Access token for authentication
+            document_group_id: ID of the document group
+            invite_id: ID of the group field invite
+
+        Returns:
+            True if successful
+        """
+
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._post(f"/documentgroup/{document_group_id}/groupinvite/{invite_id}/cancelinvite", headers=headers, json_data={})
         return True
 
     def create_field_invite(self, token: str, document_group_id: str, request_data: CreateFieldInviteRequest) -> CreateFieldInviteResponse:
