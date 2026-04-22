@@ -51,26 +51,18 @@ def _build_upload_next_steps(document_id: str) -> list[SuggestedStep]:
     return [
         SuggestedStep(
             intent="Prepare a role-based invite",
-            description=(
-                f"Open the document in SignNow to add fields and assign roles before sending. "
-                f"Use this when the document needs signer fields or multiple roles. "
-            ),
+            description=("Open the document in SignNow to add fields and assign roles before sending. Use this when the document needs signer fields or multiple roles. "),
             tool="create_embedded_sending",
         ),
         SuggestedStep(
             intent="Send for someone else to sign (freeform)",
-            description=(
-                f"Send the uploaded document to a recipient for signature without predefined fields. "
-                f"Ask the user for the recipient's email first."
-            ),
+            description=("Send the uploaded document to a recipient for signature without predefined fields. Ask the user for the recipient's email first."),
             tool="send_invite",
         ),
         SuggestedStep(
             intent="Sign it myself",
             description=(
-                f"Generate a self-signing link so the current user signs the document directly. "
-                f"Call send_invite with self_sign=true; omit orders — "
-                f"the tool resolves the sender email server-side."
+                "Generate a self-signing link so the current user signs the document directly. Call send_invite with self_sign=true; omit orders — the tool resolves the sender email server-side."
             ),
             tool="send_invite",
         ),
