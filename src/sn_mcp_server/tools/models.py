@@ -797,7 +797,7 @@ class DocumentGroupStatusAction(BaseModel):
     email: str = Field(..., description="Recipient's email address")
     document_id: str = Field(..., description="ID of the document")
     status: str = Field(..., description="Action status: 'created', 'pending', 'fulfilled'")
-    role: str = Field(..., description="Role name for this action")
+    role: str | None = Field(None, description="Role name for field invites; None for freeform invites")
 
 
 class DocumentGroupStatusStep(BaseModel):
@@ -814,6 +814,10 @@ class InviteStatus(BaseModel):
     invite_id: str = Field(..., description="ID of the invite")
     status: str = Field(..., description="Overall invite status: 'created', 'pending', 'fulfilled'")
     steps: list[DocumentGroupStatusStep] = Field(..., description="List of steps in the invite")
+    invite_mode: Literal["field", "freeform"] = Field(
+        "field",
+        description="field = role/field invite path; freeform = mapped from free-form or group documents list",
+    )
 
 
 class DocumentDownloadLinkResponse(BaseModel):

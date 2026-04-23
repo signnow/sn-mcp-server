@@ -339,6 +339,31 @@ class GetDocumentGroupV2Response(BaseModel):
     data: DocumentGroupV2Data = Field(..., description="Document group data as returned by v2 endpoint")
 
 
+class DocumentGroupSignatureRequest(BaseModel):
+    """Signer row from GET /v2/document-groups/{id}/documents (signature_requests)."""
+
+    user_id: str = Field(..., description="Signer user ID")
+    status: str = Field(..., description="Raw signer status")
+    email: str | None = Field(None, description="Signer email when available")
+
+
+class DocumentGroupDocumentListItem(BaseModel):
+    """One document in the group with pending signature requests."""
+
+    id: str = Field(..., description="Document ID")
+    signature_requests: list[DocumentGroupSignatureRequest] = Field(
+        default_factory=list,
+        description="Signature requests for this document",
+    )
+
+
+class ListDocumentGroupDocumentsResponse(BaseModel):
+    """Response from GET /v2/document-groups/{document_group_id}/documents."""
+
+    data: list[DocumentGroupDocumentListItem] = Field(default_factory=list, description="Documents in the group")
+    meta: dict[str, Any] | None = Field(None, description="Pagination and metadata")
+
+
 class TemplateShortThumbnail(BaseModel):
     """Thumbnail information for template in document group template response."""
 

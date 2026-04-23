@@ -663,7 +663,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_invite_status",
-        description="Get invite status for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        description=(
+            "Get invite status for a document or document group. "
+            "Supports field invites and freeform invites (field invite is preferred when both exist). "
+            "For freeform document groups, uses the group documents list so signature_requests include signer emails when the API provides them. "
+            "Returns invite_mode 'field' or 'freeform'."
+        )
+        + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="Get invite status",
             readOnlyHint=True,
@@ -686,7 +692,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.resource(
         "signnow://invite-status/{entity_id}{?entity_type}",
         name="get_invite_status_resource",
-        description="Get invite status for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
+        description=("Get invite status for a document or document group (field and freeform). See get_invite_status tool for behaviour.") + RESOURCE_PREFERRED_SUFFIX,
         tags=["invite", "status", "document", "document_group", "workflow"],
     )
     def get_invite_status_resource(

@@ -35,6 +35,7 @@ from .models import (
     GenerateDocumentEmbeddedInviteLinkResponse,
     GetDocumentFieldsResponse,
     GetDocumentHistoryResponse,
+    ListDocumentFreeformInvitesResponse,
     MergeDocumentsRequest,
     MergeDocumentsResponse,
     PrefillTextFieldsRequest,
@@ -449,6 +450,41 @@ class DocumentClientMixin(SignNowAPIClientBase):
             headers=headers,
             json_data=request_data.model_dump(exclude_none=True, by_alias=True),
             validate_model=CreateDocumentFreeformInviteResponse,
+        )
+
+    def list_document_freeform_invites(
+        self,
+        token: str,
+        document_id: str,
+        *,
+        per_page: int = 15,
+        page: int = 1,
+    ) -> ListDocumentFreeformInvitesResponse:
+        """
+        List freeform invites for a document.
+
+        GET /v2/documents/{document_id}/free-form-invites
+
+        Pagination: only the first page is fetched by default (per_page=15, page=1).
+        For more results, call with a higher ``page`` or add a pagination loop.
+
+        Args:
+            token: Access token for authentication
+            document_id: Document ID
+            per_page: Items per page (1–100 per API; default 15)
+            page: Page number (default 1)
+
+        Returns:
+            Validated ListDocumentFreeformInvitesResponse
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params = {"per_page": per_page, "page": page}
+        return self._get(
+            f"/v2/documents/{document_id}/free-form-invites",
+            headers=headers,
+            params=params,
+            validate_model=ListDocumentFreeformInvitesResponse,
         )
 
     def send_document_copy_by_email(

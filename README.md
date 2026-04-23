@@ -411,7 +411,7 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`create_embedded_sending_from_template`** — One-shot: template → embedded sending.
 * **`create_embedded_editor_from_template`** — One-shot: template → embedded editor.
 * **`create_embedded_invite_from_template`** — One-shot: template → embedded signing.
-* **`get_invite_status`** — Current invite status/steps for document or group.
+* **`get_invite_status`** — Current invite status/steps for document or group. Covers field invites and freeform invites (field path preferred when both exist). Response includes `invite_mode` (`field` or `freeform`). For freeform document groups, signer emails come from the group `documents` list (`signature_requests`).
 * **`get_document_download_link`** — Direct download link (merged output for groups).
 * **`get_signing_link`** — Get signing link for a document or document group.
 * **`get_document`** — Normalized document/group structure with field values.

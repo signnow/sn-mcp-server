@@ -4,6 +4,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from signnow_client.models import (
+    DocumentFreeformInviteItem,
+    DocumentGroupDocumentListItem,
+    DocumentGroupSignatureRequest,
+    ListDocumentFreeformInvitesResponse,
+    ListDocumentGroupDocumentsResponse,
+)
 from sn_mcp_server.tools.invite_status import (
     _get_document_group_status,
     _get_document_status,
@@ -62,6 +69,7 @@ class TestGetDocumentStatus:
         assert result.steps[0].actions[0].role == "Signer"
         assert result.steps[0].actions[0].document_id == "doc1"
         assert result.steps[0].actions[0].action == "sign"
+        assert result.invite_mode == "field"
 
     def test_raises_when_no_field_invites(self, mock_client: MagicMock) -> None:
         """Test ValueError raised when document has no field invites."""
@@ -105,6 +113,7 @@ class TestGetDocumentGroupStatus:
         """Build a mock document group response."""
         group = MagicMock()
         group.data.invite_id = invite_id
+        group.data.freeform_invite = None
         return group
 
     def _make_field_invite_response(
@@ -155,6 +164,7 @@ class TestGetDocumentGroupStatus:
         assert len(result.steps) == 1
         assert result.steps[0].order == 1
         assert result.steps[0].actions[0].email == "signer@test.com"
+        assert result.invite_mode == "field"
 
     def test_filters_actions_without_email(self, mock_client: MagicMock) -> None:
         """Test actions with no email are excluded from step actions."""
@@ -195,6 +205,7 @@ class TestGetInviteStatus:
         """Configure mock client to succeed on get_document_group_v2."""
         group = MagicMock()
         group.data.invite_id = invite_id
+        group.data.freeform_invite = None
         mock_client.get_document_group_v2.return_value = group
 
         action = MagicMock()
@@ -266,3 +277,232 @@ class TestGetInviteStatus:
 
         with pytest.raises(ValueError, match="entity_gone"):
             _get_invite_status("entity_gone", None, "tok", mock_client)
+
+
+class TestDocumentFreeformInviteStatus:
+    """Document entity with no field_invites — uses list_document_freeform_invites."""
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        return MagicMock()
+
+    def test_freeform_list_maps_to_invite_status(self, mock_client: MagicMock) -> None:
+        doc = _make_document_response("doc_ff", field_invites=[])
+        mock_client.get_document.return_value = doc
+        mock_client.list_document_freeform_invites.return_value = ListDocumentFreeformInvitesResponse(
+            data=[
+                DocumentFreeformInviteItem(
+                    id="ff_inv_1",
+                    status="pending",
+                    created=123,
+                    email="a@ex.com",
+                )
+            ],
+            meta={},
+        )
+
+        result = _get_invite_status("doc_ff", "document", "tok", mock_client)
+
+        assert result.invite_mode == "freeform"
+        assert result.invite_id == "ff_inv_1"
+        assert result.status == "pending"
+        assert result.steps[0].actions[0].email == "a@ex.com"
+        assert result.steps[0].actions[0].role is None
+        assert result.steps[0].actions[0].document_id == "doc_ff"
+        mock_client.list_document_freeform_invites.assert_called_once()
+        # default per_page=15, page=1
+        mock_client.list_document_freeform_invites.assert_called_with("tok", "doc_ff")
+
+    def test_raises_when_no_field_and_empty_freeform(self, mock_client: MagicMock) -> None:
+        doc = _make_document_response("doc_empty", field_invites=[])
+        mock_client.get_document.return_value = doc
+        mock_client.list_document_freeform_invites.return_value = ListDocumentFreeformInvitesResponse(data=[], meta={})
+
+        with pytest.raises(ValueError, match="doc_empty"):
+            _get_invite_status("doc_empty", "document", "tok", mock_client)
+
+    def test_overall_status_is_first_kept_freeform_row_like_field(self, mock_client: MagicMock) -> None:
+        """Same as field path: top-level status comes from the first invite row, not a rollup."""
+        doc = _make_document_response("doc_mix", field_invites=[])
+        mock_client.get_document.return_value = doc
+        mock_client.list_document_freeform_invites.return_value = ListDocumentFreeformInvitesResponse(
+            data=[
+                DocumentFreeformInviteItem(id="a", status="fulfilled", email="x@ex.com"),
+                DocumentFreeformInviteItem(id="b", status="pending", email="y@ex.com"),
+            ],
+            meta={},
+        )
+
+        result = _get_invite_status("doc_mix", "document", "tok", mock_client)
+
+        assert result.status == "fulfilled"
+        assert result.steps[0].status == "fulfilled"
+
+    def test_skips_freeform_rows_without_email(self, mock_client: MagicMock) -> None:
+        """Rows without an email are omitted; invite_id is the first row that has an email."""
+        doc = _make_document_response("doc_skip", field_invites=[])
+        mock_client.get_document.return_value = doc
+        mock_client.list_document_freeform_invites.return_value = ListDocumentFreeformInvitesResponse(
+            data=[
+                DocumentFreeformInviteItem(id="ff_skip", status="pending", email=None),
+                DocumentFreeformInviteItem(id="ff_keep", status="fulfilled", email=" keep@ex.com "),
+            ],
+            meta={},
+        )
+
+        result = _get_invite_status("doc_skip", "document", "tok", mock_client)
+
+        assert result.invite_id == "ff_keep"
+        assert result.status == "fulfilled"
+        assert result.steps[0].status == "fulfilled"
+        assert len(result.steps[0].actions) == 1
+        assert result.steps[0].actions[0].email == "keep@ex.com"
+
+    def test_raises_when_all_freeform_rows_missing_email(self, mock_client: MagicMock) -> None:
+        doc = _make_document_response("doc_noem", field_invites=[])
+        mock_client.get_document.return_value = doc
+        mock_client.list_document_freeform_invites.return_value = ListDocumentFreeformInvitesResponse(
+            data=[
+                DocumentFreeformInviteItem(id="n1", status="pending", email=None),
+                DocumentFreeformInviteItem(id="n2", status="pending", email="   "),
+            ],
+            meta={},
+        )
+
+        with pytest.raises(ValueError, match="doc_noem"):
+            _get_invite_status("doc_noem", "document", "tok", mock_client)
+
+
+class TestDocumentGroupFreeformInviteStatus:
+    """Document group with field invite_id absent — uses list_document_group_documents."""
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        return MagicMock()
+
+    def _group_freeform_only(self) -> MagicMock:
+        g = MagicMock()
+        g.data.invite_id = None
+        ff = MagicMock()
+        ff.id = "ff_dg_1"
+        g.data.freeform_invite = ff
+        return g
+
+    def test_signature_requests_map_with_emails(self, mock_client: MagicMock) -> None:
+        mock_client.get_document_group_v2.return_value = self._group_freeform_only()
+        mock_client.list_document_group_documents.return_value = ListDocumentGroupDocumentsResponse(
+            data=[
+                DocumentGroupDocumentListItem(
+                    id="cd19b02135214e6e9ec0a5f40b430e3b6f58873f",
+                    signature_requests=[
+                        DocumentGroupSignatureRequest(
+                            user_id="u1",
+                            status="pending",
+                            email="a@ex.com",
+                        ),
+                        DocumentGroupSignatureRequest(
+                            user_id="u2",
+                            status="pending",
+                            email="b@ex.com",
+                        ),
+                    ],
+                )
+            ],
+            meta={},
+        )
+
+        result = _get_invite_status("grp_ff", "document_group", "tok", mock_client)
+
+        assert result.invite_mode == "freeform"
+        assert result.invite_id == "ff_dg_1"
+        assert result.status == "pending"
+        assert len(result.steps[0].actions) == 2
+        assert {a.email for a in result.steps[0].actions} == {"a@ex.com", "b@ex.com"}
+        mock_client.get_field_invite.assert_not_called()
+
+    def test_raises_when_freeform_but_no_signers(self, mock_client: MagicMock) -> None:
+        mock_client.get_document_group_v2.return_value = self._group_freeform_only()
+        mock_client.list_document_group_documents.return_value = ListDocumentGroupDocumentsResponse(
+            data=[DocumentGroupDocumentListItem(id="d1", signature_requests=[])],
+            meta={},
+        )
+
+        with pytest.raises(ValueError, match="grp_ns"):
+            _get_invite_status("grp_ns", "document_group", "tok", mock_client)
+
+    def test_skips_signature_requests_without_email(self, mock_client: MagicMock) -> None:
+        mock_client.get_document_group_v2.return_value = self._group_freeform_only()
+        mock_client.list_document_group_documents.return_value = ListDocumentGroupDocumentsResponse(
+            data=[
+                DocumentGroupDocumentListItem(
+                    id="d1",
+                    signature_requests=[
+                        DocumentGroupSignatureRequest(user_id="u0", status="pending", email=None),
+                        DocumentGroupSignatureRequest(user_id="u1", status="fulfilled", email=" ok@ex.com "),
+                    ],
+                )
+            ],
+            meta={},
+        )
+
+        result = _get_invite_status("grp_email", "document_group", "tok", mock_client)
+
+        assert len(result.steps[0].actions) == 1
+        assert result.steps[0].actions[0].email == "ok@ex.com"
+
+    def test_raises_when_all_signature_requests_lack_email(self, mock_client: MagicMock) -> None:
+        mock_client.get_document_group_v2.return_value = self._group_freeform_only()
+        mock_client.list_document_group_documents.return_value = ListDocumentGroupDocumentsResponse(
+            data=[
+                DocumentGroupDocumentListItem(
+                    id="d1",
+                    signature_requests=[
+                        DocumentGroupSignatureRequest(user_id="u0", status="pending", email=None),
+                    ],
+                )
+            ],
+            meta={},
+        )
+
+        with pytest.raises(ValueError, match="with an email"):
+            _get_invite_status("grp_noemail", "document_group", "tok", mock_client)
+
+    def test_field_invite_takes_precedence_over_freeform(self, mock_client: MagicMock) -> None:
+        """When both invite_id and freeform_invite are set, use field path only."""
+        g = MagicMock()
+        g.data.invite_id = "field_inv_1"
+        ff = MagicMock()
+        ff.id = "ff_orphan"
+        g.data.freeform_invite = ff
+        mock_client.get_document_group_v2.return_value = g
+
+        action = MagicMock()
+        action.action = "sign"
+        action.email = "s@test.com"
+        action.document_id = "d1"
+        action.status = "pending"
+        action.role_name = "Signer"
+        step = MagicMock()
+        step.status = "pending"
+        step.order = 1
+        step.actions = [action]
+        inv = MagicMock()
+        inv.id = "field_inv_1"
+        inv.status = "pending"
+        inv.steps = [step]
+        mock_client.get_field_invite.return_value = MagicMock(invite=inv)
+
+        result = _get_invite_status("grp_both", "document_group", "tok", mock_client)
+
+        assert result.invite_mode == "field"
+        mock_client.get_field_invite.assert_called_once()
+        mock_client.list_document_group_documents.assert_not_called()
+
+    def test_raises_when_no_field_and_no_freeform_id(self, mock_client: MagicMock) -> None:
+        g = MagicMock()
+        g.data.invite_id = None
+        g.data.freeform_invite = None
+        mock_client.get_document_group_v2.return_value = g
+
+        with pytest.raises(ValueError, match="grp_none"):
+            _get_invite_status("grp_none", "document_group", "tok", mock_client)
