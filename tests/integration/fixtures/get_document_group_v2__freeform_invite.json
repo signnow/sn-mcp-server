@@ -1,0 +1,24 @@
+{
+  "data": {
+    "id": "grp_ff_int",
+    "name": "Test Document Group",
+    "created": 1700000000,
+    "invite_id": null,
+    "pending_step_id": null,
+    "state": "pending",
+    "last_invite_id": null,
+    "freeform_invite": {
+      "id": "ff_grp_1",
+      "last_id": null
+    },
+    "documents": [
+      {
+        "roles": [],
+        "document_name": "Doc A",
+        "id": "doc_a",
+        "updated": 1700000100,
+        "field_invites": []
+      }
+    ]
+  }
+}

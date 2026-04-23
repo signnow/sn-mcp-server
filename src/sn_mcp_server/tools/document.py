@@ -24,6 +24,7 @@ from .models import (
     DocumentGroup,
     DocumentGroupDocument,
     SimplifiedInvite,
+    SuggestedStep,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
     UpdateDocumentFieldsResult,
@@ -33,6 +34,39 @@ from .models import (
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"})
 MAX_FILE_SIZE_BYTES: int = 40 * 1024 * 1024  # SignNow API limit
 SAFE_UPLOAD_BASE: pathlib.Path = pathlib.Path.home().resolve()
+
+_UPLOAD_AGENT_GUIDANCE: str = (
+    "Upload succeeded. Present the next_steps options to the user and ask them which one they want "
+    "before calling any follow-up tool. Do not auto-pick a step. If you need more context on SignNow "
+    "concepts or flow, call signnow_skills(skill_name='signnow101')."
+)
+
+
+def _build_upload_next_steps(document_id: str) -> list[SuggestedStep]:
+    """Build the standard post-upload suggestions for the given document_id.
+
+    Order matches the primary flow documented in the `signnow101` skill
+    ('Upload Document Flow'). Keep this list in sync with that skill.
+    """
+    return [
+        SuggestedStep(
+            intent="Prepare a role-based invite",
+            description=("Open the document in SignNow to add fields and assign roles before sending. Use this when the document needs signer fields or multiple roles. "),
+            tool="create_embedded_sending",
+        ),
+        SuggestedStep(
+            intent="Send for someone else to sign (freeform)",
+            description=("Send the uploaded document to a recipient for signature without predefined fields. Ask the user for the recipient's email first."),
+            tool="send_invite",
+        ),
+        SuggestedStep(
+            intent="Sign it myself",
+            description=(
+                "Generate a self-signing link so the current user signs the document directly. Call send_invite with self_sign=true; omit orders — the tool resolves the sender email server-side."
+            ),
+            tool="send_invite",
+        ),
+    ]
 
 
 def _validate_extension(filename: str) -> None:
@@ -107,7 +141,13 @@ def _upload_document(
         if len(resource_bytes) > MAX_FILE_SIZE_BYTES:
             raise ValueError(f"File too large ({len(resource_bytes)} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes (40 MB)")
         response = client.upload_document(token=token, file_content=resource_bytes, filename=filename, check_fields=True)
-        return UploadDocumentResponse(document_id=response.id, filename=filename, source="resource")
+        return UploadDocumentResponse(
+            document_id=response.id,
+            filename=filename,
+            source="resource",
+            next_steps=_build_upload_next_steps(response.id),
+            agent_guidance=_UPLOAD_AGENT_GUIDANCE,
+        )
 
     if file_path is not None:
         path = pathlib.Path(file_path).expanduser().resolve()
@@ -127,7 +167,13 @@ def _upload_document(
             raise ValueError(f"File too large ({len(file_content):,} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES:,} bytes (40 MB)")
         effective_filename = filename if filename else path.name
         response = client.upload_document(token=token, file_content=file_content, filename=effective_filename, check_fields=True)
-        return UploadDocumentResponse(document_id=response.id, filename=effective_filename, source="local_file")
+        return UploadDocumentResponse(
+            document_id=response.id,
+            filename=effective_filename,
+            source="local_file",
+            next_steps=_build_upload_next_steps(response.id),
+            agent_guidance=_UPLOAD_AGENT_GUIDANCE,
+        )
 
     # file_url branch — provided == 1 guarantees file_url is not None at this point
     assert file_url is not None  # noqa: S101  # unreachable: provided==1 guarantees this
@@ -147,7 +193,13 @@ def _upload_document(
     # NOTE (H-2): CreateDocumentFromUrlRequest has no 'name' field — url_effective_filename
     # is locally inferred and not transmitted to SignNow. The actual document name in
     # SignNow may differ (set by SignNow from URL path or Content-Disposition header).
-    return UploadDocumentResponse(document_id=url_response.id, filename=url_effective_filename, source="url")
+    return UploadDocumentResponse(
+        document_id=url_response.id,
+        filename=url_effective_filename,
+        source="url",
+        next_steps=_build_upload_next_steps(url_response.id),
+        agent_guidance=_UPLOAD_AGENT_GUIDANCE,
+    )
 
 
 def _get_full_document(client: SignNowAPIClient, token: str, document_id: str, document_data: DocumentResponse) -> DocumentGroupDocument:
@@ -225,12 +277,15 @@ def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: G
         now=now,
     )
 
+    freeform_invite_id = data.freeform_invite.id if data.freeform_invite else None
+
     return DocumentGroup(
         last_updated=data.created,
         entity_id=data.id,
         group_name=data.name,
         entity_type="document_group",
         invite=invite,
+        freeform_invite_id=freeform_invite_id,
         documents=full_documents,
     )
 
@@ -340,6 +395,15 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
     now = int(time.time())
     invite = SimplifiedInvite.from_document_field_invites(document_data.field_invites, now)
 
+    # Freeform invites surface as entries in `requests`; pick the first id if present.
+    freeform_invite_id: str | None = None
+    if document_data.requests:
+        first_request = document_data.requests[0]
+        if isinstance(first_request, dict):
+            candidate = first_request.get("id") or first_request.get("unique_id")
+            if isinstance(candidate, str) and candidate:
+                freeform_invite_id = candidate
+
     # Create DocumentGroup with single document
     return DocumentGroup(
         last_updated=0,  # Not available for single documents
@@ -347,6 +411,7 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
         group_name=full_document.name,
         entity_type="document",
         invite=invite,
+        freeform_invite_id=freeform_invite_id,
         documents=[full_document],
     )
 

@@ -1,0 +1,47 @@
+{
+  "id": "doc_ff_int",
+  "user_id": "user-001",
+  "document_name": "Test Document",
+  "page_count": "1",
+  "created": "1700000000",
+  "updated": "1700000100",
+  "original_filename": "test.pdf",
+  "origin_document_id": null,
+  "owner": "owner@example.com",
+  "template": false,
+  "thumbnail": {
+    "small": "https://cdn.example.com/small.png",
+    "medium": "https://cdn.example.com/medium.png",
+    "large": "https://cdn.example.com/large.png"
+  },
+  "signatures": [],
+  "seals": [],
+  "texts": [],
+  "checks": [],
+  "inserts": [],
+  "tags": [],
+  "fields": [],
+  "requests": [],
+  "notary_invites": [],
+  "roles": [],
+  "field_invites": [],
+  "version_time": "1700000100",
+  "enumeration_options": [],
+  "attachments": [],
+  "routing_details": [],
+  "integrations": [],
+  "hyperlinks": [],
+  "radiobuttons": [],
+  "document_group_template_info": [],
+  "originator_organization_settings": [],
+  "document_group_info": {},
+  "parent_id": null,
+  "originator_logo": "",
+  "pages": [
+    {
+      "src": "https://cdn.example.com/page1.png",
+      "size": {"width": 612.0, "height": 792.0}
+    }
+  ],
+  "lines": []
+}

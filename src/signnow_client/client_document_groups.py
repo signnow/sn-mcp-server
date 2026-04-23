@@ -47,6 +47,7 @@ from .models import (
     GetDocumentGroupV2Response,
     GetFieldInviteResponse,
     GetRecipientsResponse,
+    ListDocumentGroupDocumentsResponse,
     SendEmailRequest,
     UpdateDocGroupInviteStepRequest,
 )
@@ -339,6 +340,43 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
 
         return self._get(f"/documentgroup/{document_group_id}/groupinvite/{invite_id}", headers=headers, validate_model=GetFieldInviteResponse)
+
+    def list_document_group_documents(
+        self,
+        token: str,
+        document_group_id: str,
+        *,
+        per_page: int = 15,
+        page: int = 1,
+    ) -> ListDocumentGroupDocumentsResponse:
+        """
+        List documents in a document group with signature request details.
+
+        GET /v2/document-groups/{document_group_id}/documents
+
+        Each item may include ``signature_requests`` with ``user_id``, ``status``, and ``email``
+        for freeform / multi-signer flows.
+
+        Pagination: only the first page is fetched by default (per_page=15, page=1).
+
+        Args:
+            token: Access token for authentication
+            document_group_id: Document group ID
+            per_page: Items per page (default 15)
+            page: Page number (default 1)
+
+        Returns:
+            Validated ListDocumentGroupDocumentsResponse
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params = {"per_page": per_page, "page": page}
+        return self._get(
+            f"/v2/document-groups/{document_group_id}/documents",
+            headers=headers,
+            params=params,
+            validate_model=ListDocumentGroupDocumentsResponse,
+        )
 
     def send_document_group_email(self, token: str, document_group_id: str, request_data: SendEmailRequest) -> bool:
         """
