@@ -140,6 +140,7 @@ def bind(mcp: FastMCP, cfg: Any) -> None:  # noqa: ANN401
     # wire-level payload serializable; the type: ignore covers the stub mismatch.
     @mcp.tool(  # type: ignore[call-overload]
         name="signnow_skills",
+        version="2.0",
         description=(
             "Query the bundled SignNow skill library. Omit skill_name to list all skills with descriptions. "
             "Provide skill_name to read the full skill body. "

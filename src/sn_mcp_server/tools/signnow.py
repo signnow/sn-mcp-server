@@ -99,6 +99,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_all_templates",
+        version="1.0",
         description="Get simplified list of all templates and template groups with basic information" + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="List templates and template groups",
@@ -182,6 +183,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_documents",
+        version="1.0",
         description=(
             "Get simplified list of documents and document groups with basic information. "
             "Returns both documents and document groups in a unified format. "
@@ -309,6 +311,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="send_invite",
+        version="2.0",
         description=(
             "Send invite to sign a document, document group, template, or template group. "
             "Supports both field invites (documents with roles/fields) and freeform invites "
@@ -419,6 +422,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_embedded_invite",
+        version="2.0",
         description=(
             "Create embedded invite for signing a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded invite."
@@ -477,6 +481,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_embedded_sending",
+        version="2.0",
         description=(
             "Create embedded sending for managing, editing, or sending invites for a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded sending. "
@@ -532,6 +537,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_embedded_editor",
+        version="2.0",
         description=(
             "Create embedded editor for editing a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded editor."
@@ -583,6 +589,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_template",
+        version="2.0",
         description="Convert an existing document or document group into a reusable template",
         annotations=ToolAnnotations(
             title="Create template from document or document group",
@@ -628,6 +635,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_from_template",
+        version="1.0",
         description="Create a new document or document group from an existing template or template group",
         annotations=ToolAnnotations(
             title="Create from template",
@@ -667,6 +675,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_invite_status",
+        version="1.0",
         description=(
             "Get invite status for a document or document group. "
             "Supports field invites and freeform invites (field invite is preferred when both exist). "
@@ -717,6 +726,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_document_download_link",
+        version="1.0",
         description="Get download link for a document or document group" + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="Get document download link",
@@ -773,6 +783,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_signing_link",
+        version="1.0",
         description="Get signing link for a document or document group" + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="Get signing link",
@@ -826,6 +837,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_document",
+        version="1.0",
         description="Get full document, template, template group or document group information with field values",
         annotations=ToolAnnotations(
             title="Get document or group details",
@@ -884,6 +896,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="update_document_fields",
+        version="1.0",
         description="Update text fields in multiple documents (only individual documents, not document groups)",
         annotations=ToolAnnotations(
             title="Update document text fields",
@@ -940,6 +953,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="upload_document",
+        version="2.0",
         description=(
             "Upload a document to SignNow from a local file path, public URL, or MCP resource attachment. "
             "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
@@ -1064,6 +1078,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="send_invite_reminder",
+        version="2.0",
         description=("Send a signing reminder to pending signers on a document or document group. "),
         annotations=ToolAnnotations(
             title="Send signing reminder",
@@ -1235,6 +1250,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="view_document",
+        version="2.0",
         description=(
             "Generate a read-only embedded view link for a document or document group. "
             "To find an entity by name, first call list_documents or list_templates "
@@ -1315,6 +1331,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_contacts",
+        version="2.0",
         description="Search CRM contacts by name, email, or phone. Use this tool before send_invite to resolve a recipient's email address by their name." + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="List CRM contacts",
