@@ -122,6 +122,7 @@ class DocumentGroup(BaseModel):
     group_name: str = Field(..., description="Name of the document group")
     entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
     invite: SimplifiedInvite | None = Field(None, description="Unified invite info")
+    freeform_invite_id: str | None = Field(None, description="Freeform invite ID, if a freeform invite exists on this entity")
     documents: list[DocumentGroupDocument] = Field(..., description="List of documents in this group")
 
 
@@ -577,7 +578,15 @@ class InviteRecipient(BaseModel):
     """Recipient information for invite."""
 
     email: str = Field(..., description="Recipient's email address")
-    role: str = Field(..., description="Recipient's role name in the document")
+    role: str | None = Field(
+        None,
+        description=(
+            "Recipient's role name in the document. "
+            "Required for field invites (documents with roles/fields). "
+            "Omit for freeform invites (documents without fields) — "
+            "the tool auto-detects document type and sends a freeform invite automatically."
+        ),
+    )
     message: str | None = Field(None, description="Custom email message for the recipient")
     subject: str | None = Field(None, description="Custom email subject for the recipient")
     action: str = Field(default="sign", description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
@@ -633,6 +642,15 @@ class SendInviteResponse(BaseModel):
 
     invite_id: str = Field(..., description="ID of the created invite")
     invite_entity: str = Field(..., description="Type of invite entity: 'document' or 'document_group'")
+
+    link: str | None = Field(
+        None,
+        description=(
+            "Direct signing link. Populated only when the sender and recipient resolve to "
+            "the same email (self_sign=True, or the recipient email equals the authenticated "
+            "user's primary email). None for normal outbound invites."
+        ),
+    )
 
     created_entity_id: str | None = Field(None, description="ID of the entity created from template (None when entity was document/document_group)")
     created_entity_type: str | None = Field(None, description="Type of created entity: 'document' or 'document_group' (None when entity was document/document_group)")
@@ -769,7 +787,7 @@ class DocumentGroupStatusAction(BaseModel):
     email: str = Field(..., description="Recipient's email address")
     document_id: str = Field(..., description="ID of the document")
     status: str = Field(..., description="Action status: 'created', 'pending', 'fulfilled'")
-    role: str = Field(..., description="Role name for this action")
+    role: str | None = Field(None, description="Role name for field invites; None for freeform invites")
 
 
 class DocumentGroupStatusStep(BaseModel):
@@ -786,6 +804,10 @@ class InviteStatus(BaseModel):
     invite_id: str = Field(..., description="ID of the invite")
     status: str = Field(..., description="Overall invite status: 'created', 'pending', 'fulfilled'")
     steps: list[DocumentGroupStatusStep] = Field(..., description="List of steps in the invite")
+    invite_mode: Literal["field", "freeform"] = Field(
+        "field",
+        description="field = role/field invite path; freeform = mapped from free-form or group documents list",
+    )
 
 
 class CancelledInvite(BaseModel):
@@ -895,6 +917,23 @@ class CreateTemplateResult(BaseModel):
     entity_type: Literal["document", "document_group"] = Field(..., description="Entity type that was converted.")
 
 
+class SuggestedStep(BaseModel):
+    """A single suggested follow-up action the agent should present to the user after a tool completes.
+
+    Reusable across tools that want to surface alternative next actions.
+    """
+
+    intent: str = Field(..., description="Short label describing the user intent this step addresses.")
+    description: str = Field(
+        ...,
+        description=("Human-readable description of what this next step does, including any non-obvious arguments the agent must collect from the user before calling `tool`."),
+    )
+    tool: str = Field(
+        ...,
+        description=("MCP tool name the agent should call to execute this step. The agent must consult that tool's advertised JSON schema for argument shape."),
+    )
+
+
 class UploadDocumentResponse(BaseModel):
     """Response model for uploading document."""
 
@@ -910,6 +949,21 @@ class UploadDocumentResponse(BaseModel):
     source: Literal["local_file", "url", "resource"] = Field(
         ...,
         description=("How the file was provided: 'local_file' (read from local path), 'url' (fetched by SignNow from URL), 'resource' (attached via MCP resource protocol)"),
+    )
+    next_steps: list[SuggestedStep] = Field(
+        ...,
+        description=(
+            "Suggested follow-up actions the agent MUST present to the user after a successful upload, "
+            "in the given order. Ask the user which one they want before proceeding — do not silently pick one."
+        ),
+    )
+    agent_guidance: str = Field(
+        ...,
+        description=(
+            "Instruction for the agent: after upload, present the next_steps options to the user and "
+            "wait for them to choose before calling any follow-up tool. Load the 'signnow101' skill via "
+            "signnow_skills(skill_name='signnow101') if more context is needed."
+        ),
     )
 
 

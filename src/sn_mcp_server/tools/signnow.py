@@ -310,7 +310,15 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="send_invite",
         description=(
-            "Send invite to sign a document, document group, template, or template group. For templates and template groups, automatically creates a document/group first, then sends the invite."
+            "Send invite to sign a document, document group, template, or template group. "
+            "Supports both field invites (documents with roles/fields) and freeform invites "
+            "(documents without fields). Document type is auto-detected — omit 'role' for "
+            "freeform documents. For templates and template groups, automatically creates a "
+            "document/group first, then sends the invite. "
+            "Set self_sign=True (and omit orders) to sign the document yourself — the tool "
+            "resolves the current user's email and populates SendInviteResponse.link with a "
+            "direct signing link. The 'link' field is also populated when a freeform "
+            "recipient's email matches the authenticated user's primary email."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -325,14 +333,15 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         orders: Annotated[
-            list[InviteOrder],
+            list[InviteOrder] | None,
             Field(
-                description="List of orders with recipients.",
+                description=("List of orders with recipients. Required unless self_sign=True. When self_sign=True, omit orders — the tool fills in the current user as the sole recipient."),
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
+                    [{"order": 1, "recipients": [{"email": "signer@example.com", "action": "sign"}]}],
                 ],
             ),
-        ],
+        ] = None,
         preview_was_shown: Annotated[
             bool | None,
             Field(
@@ -349,6 +358,18 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             Field(description="Type of entity: 'document', 'document_group', 'template', or 'template_group' (optional). Auto-detected if not provided."),
         ] = None,
         name: Annotated[str | None, Field(description="Optional name for the new document or document group (used only when entity_type is template or template_group)")] = None,
+        self_sign: Annotated[
+            bool,
+            Field(
+                description=(
+                    "If True, the tool resolves the current user's primary email server-side and "
+                    "sends a freeform invite to the user themselves. The response's 'link' field "
+                    "is populated with a direct signing link. Must be combined with an empty/omitted "
+                    "orders. Requires a field-less document or document group — for entities with "
+                    "fields/roles, use create_embedded_sending instead."
+                )
+            ),
+        ] = False,
     ) -> SendInviteResponse:
         """Send invite to sign a document, document group, template, or template group.
 
@@ -359,22 +380,42 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         For direct document/document_group calls the invite is sent immediately.
         The entity type is auto-detected if not provided.
 
+        Note: If the document has no fields, a freeform invite is sent automatically.
+        In that case, ``role`` on each recipient is optional and ignored. For document
+        groups, role presence is checked per document — if no documents have roles,
+        a freeform group invite is sent instead.
+
+        When sender and recipient emails match, SendInviteResponse.link is populated
+        with a direct signing link so the sender can sign without checking their inbox.
+
+        Self-sign shortcut: pass ``self_sign=True`` (and omit ``orders``) to sign the
+        document yourself. The tool resolves your primary email, sends a freeform
+        invite with you as the sole recipient, and returns a SendInviteResponse whose
+        ``link`` field holds a ready-to-open signing link. Only valid for field-less
+        documents/groups — field entities should use create_embedded_sending.
+
         Args:
             entity_id: ID of the document, document group, template, or template group
-            orders: List of orders with recipients.
+            orders: List of orders with recipients. Required unless self_sign=True.
             preview_was_shown: Prompt the user to view the document first. True if shown, False to skip.
             entity_type: Type of entity (optional, auto-detected if not provided).
             name: Optional name for the new document or document group (template flows only)
+            self_sign: If True, self-sign the document using the current user's email.
 
         Returns:
-            SendInviteResponse with invite details; created_entity_* fields populated for template flows
+            SendInviteResponse with invite details. ``link`` is populated when
+            self-signing or when recipient email equals the sender's email.
         """
         token, client = _get_token_and_client(token_provider)
 
-        if not orders:
-            raise ValueError("orders must contain at least one recipient order")
+        if self_sign:
+            if orders:
+                raise ValueError("orders must be empty when self_sign=True — the tool fills in the current user as the sole recipient")
+        else:
+            if not orders:
+                raise ValueError("orders must contain at least one recipient order")
 
-        return await _send_invite(entity_id, entity_type, orders, token, client, name, ctx)
+        return await _send_invite(entity_id, entity_type, orders or [], token, client, name, ctx, self_sign=self_sign)
 
     @mcp.tool(
         name="create_embedded_invite",
@@ -626,7 +667,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_invite_status",
-        description="Get invite status for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        description=(
+            "Get invite status for a document or document group. "
+            "Supports field invites and freeform invites (field invite is preferred when both exist). "
+            "For freeform document groups, uses the group documents list so signature_requests include signer emails when the API provides them. "
+            "Returns invite_mode 'field' or 'freeform'."
+        )
+        + TOOL_FALLBACK_SUFFIX,
         annotations=ToolAnnotations(
             title="Get invite status",
             readOnlyHint=True,
@@ -649,7 +696,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.resource(
         "signnow://invite-status/{entity_id}{?entity_type}",
         name="get_invite_status_resource",
-        description="Get invite status for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
+        description=("Get invite status for a document or document group (field and freeform). See get_invite_status tool for behaviour.") + RESOURCE_PREFERRED_SUFFIX,
         tags=["invite", "status", "document", "document_group", "workflow"],
     )
     def get_invite_status_resource(
@@ -896,6 +943,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         description=(
             "Upload a document to SignNow from a local file path, public URL, or MCP resource attachment. "
             "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
+            "On success the response includes a 'next_steps' array (prepare invite / send for signing / self-sign) "
+            "and an 'agent_guidance' string — present those options to the user and wait for them to choose "
+            "before calling any follow-up tool. "
             "NOTE: For URL uploads, the returned filename is locally inferred and may differ from "
             "how SignNow names the document."
         ),
@@ -956,11 +1006,14 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         2. file_path — if the user provided a local path
         3. file_url — if the user provided a public URL
 
-        After upload, load the 'signnow101' skill for guidance on next steps:
-        - Sign the document yourself
-        - Send for signing as a freeform invite
-        - Prepare a role-based invite
-        - Turn the document into a reusable template
+        After upload, load the 'signnow101' skill for guidance on next steps.
+        Primary suggestions (present in this order):
+        1. Prepare a role-based invite (create_embedded_sending)
+        2. Send for signing as a freeform invite (send_invite with recipient email)
+        3. Sign the document yourself (send_invite with self_sign=True)
+
+        Secondary suggestion (only if the user hints at reuse):
+        - Turn the document into a reusable template (create_embedded_editor)
 
         Args:
             ctx: FastMCP context (injected)

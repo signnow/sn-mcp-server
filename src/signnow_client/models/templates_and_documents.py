@@ -980,6 +980,22 @@ class CreateDocumentFreeformInviteResponse(BaseModel):
     callback_url: str = Field(..., description="Callback URL")
 
 
+class DocumentFreeformInviteItem(BaseModel):
+    """Single freeform invite row from GET /v2/documents/{document_id}/free-form-invites."""
+
+    id: str = Field(..., description="Invite ID")
+    status: str = Field(..., description="Raw invite status from SignNow")
+    created: int | None = Field(None, description="Unix timestamp when the invite was created")
+    email: str | None = Field(None, description="Signer email")
+
+
+class ListDocumentFreeformInvitesResponse(BaseModel):
+    """Response from GET /v2/documents/{document_id}/free-form-invites."""
+
+    data: list[DocumentFreeformInviteItem] = Field(default_factory=list, description="Freeform invites for the document")
+    meta: dict[str, Any] | None = Field(None, description="Pagination and metadata")
+
+
 class UploadDocumentRequest(BaseModel):
     """Request model for uploading document."""
 

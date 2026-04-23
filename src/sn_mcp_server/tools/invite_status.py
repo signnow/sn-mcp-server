@@ -8,7 +8,7 @@ from the SignNow API.
 from typing import Literal
 
 from signnow_client import SignNowAPIClient
-from signnow_client.models import DocumentResponse
+from signnow_client.models import DocumentResponse, ListDocumentFreeformInvitesResponse
 from signnow_client.models.document_groups import GetDocumentGroupV2Response
 
 from .models import DocumentGroupStatusAction, DocumentGroupStatusStep, InviteStatus, InviteStatusValues
@@ -54,7 +54,7 @@ def _get_document_group_status(client: SignNowAPIClient, token: str, document_gr
 
         steps.append(DocumentGroupStatusStep(status=step.status, order=step.order, actions=actions))
 
-    return InviteStatus(invite_id=invite.id, status=invite.status, steps=steps)
+    return InviteStatus(invite_id=invite.id, status=invite.status, steps=steps, invite_mode="field")
 
 
 def _get_document_status(client: SignNowAPIClient, token: str, document_data: DocumentResponse) -> InviteStatus:
@@ -105,7 +105,99 @@ def _get_document_status(client: SignNowAPIClient, token: str, document_data: Do
     # Use first field invite ID as invite_id, or generate a placeholder
     invite_id = field_invites[0].id if field_invites else f"doc_{document_response.id}"
 
-    return InviteStatus(invite_id=invite_id, status=field_invites[0].status if field_invites else InviteStatusValues.UNKNOWN, steps=steps)
+    return InviteStatus(
+        invite_id=invite_id,
+        status=field_invites[0].status if field_invites else InviteStatusValues.UNKNOWN,
+        steps=steps,
+        invite_mode="field",
+    )
+
+
+def _map_document_freeform_to_invite_status(document_id: str, freeform_response: ListDocumentFreeformInvitesResponse) -> InviteStatus:
+    """Build InviteStatus from GET /v2/documents/{id}/free-form-invites response."""
+    items = freeform_response.data
+    if not items:
+        raise ValueError(f"No field or freeform invite found for document {document_id}")
+
+    actions: list[DocumentGroupStatusAction] = []
+    first_invite_id = ""
+    first_status = ""
+    for item in items:
+        if not (item.email and item.email.strip()):
+            continue
+        if not first_invite_id:
+            first_invite_id = item.id
+            first_status = item.status
+        actions.append(
+            DocumentGroupStatusAction(
+                action="sign",
+                email=item.email.strip(),
+                document_id=document_id,
+                status=item.status,
+                role=None,
+            )
+        )
+    if not actions:
+        raise ValueError(f"No freeform invite signers with an email for document {document_id}")
+    steps = [DocumentGroupStatusStep(status=first_status, order=1, actions=actions)]
+    return InviteStatus(invite_id=first_invite_id, status=first_status, steps=steps, invite_mode="freeform")
+
+
+def _get_document_group_freeform_status(client: SignNowAPIClient, token: str, document_group_id: str, freeform_invite_id: str) -> InviteStatus:
+    """Build InviteStatus from GET /v2/document-groups/{id}/documents (signature_requests)."""
+    doc_list = client.list_document_group_documents(token, document_group_id)
+    actions: list[DocumentGroupStatusAction] = []
+    first_status = ""
+    for doc in doc_list.data:
+        for req in doc.signature_requests:
+            if not (req.email and req.email.strip()):
+                continue
+            if not first_status:
+                first_status = req.status
+            actions.append(
+                DocumentGroupStatusAction(
+                    action="sign",
+                    email=req.email.strip(),
+                    document_id=doc.id,
+                    status=req.status,
+                    role=None,
+                )
+            )
+    if not actions:
+        raise ValueError(f"No signers with an email in signature_requests for freeform document group {document_group_id!r} (freeform_invite_id={freeform_invite_id!r})")
+    steps = [DocumentGroupStatusStep(status=first_status, order=1, actions=actions)]
+    return InviteStatus(
+        invite_id=freeform_invite_id,
+        status=first_status,
+        steps=steps,
+        invite_mode="freeform",
+    )
+
+
+def _document_group_invite_dispatch(
+    client: SignNowAPIClient,
+    token: str,
+    entity_id: str,
+    group: GetDocumentGroupV2Response,
+) -> InviteStatus:
+    """Field invite first, then freeform (group documents list)."""
+    data = group.data
+    if data.invite_id:
+        return _get_document_group_status(client, token, group, entity_id)
+    freeform = data.freeform_invite
+    if freeform and freeform.id:
+        return _get_document_group_freeform_status(client, token, entity_id, freeform.id)
+    raise ValueError(f"No field or freeform invite found for document group {entity_id}")
+
+
+def _document_invite_dispatch(client: SignNowAPIClient, token: str, document: DocumentResponse) -> InviteStatus:
+    """Field invites first, then document freeform list."""
+    if document.field_invites:
+        return _get_document_status(client, token, document)
+    freeform = client.list_document_freeform_invites(token, document.id)
+    if not freeform.data:
+        raise ValueError(f"No field or freeform invite found for document {document.id}")
+    return _map_document_freeform_to_invite_status(document.id, freeform)
 
 
 def _get_invite_status(entity_id: str, entity_type: Literal["document", "document_group"] | None, token: str, client: SignNowAPIClient) -> InviteStatus:
@@ -126,16 +218,16 @@ def _get_invite_status(entity_id: str, entity_type: Literal["document", "documen
     if not entity_type:
         try:
             document_group = client.get_document_group_v2(token, entity_id)
-            return _get_document_group_status(client, token, document_group, entity_id)
+            return _document_group_invite_dispatch(client, token, entity_id, document_group)
         except Exception:  # noqa: S110
             pass
         try:
             document = client.get_document(token, entity_id)
-            return _get_document_status(client, token, document)
+            return _document_invite_dispatch(client, token, document)
         except Exception:
             raise ValueError(f"Entity with ID {entity_id} not found as either document group or document") from None
 
     # Entity type is provided — dispatch directly to the appropriate fetcher.
     if entity_type == "document_group":
-        return _get_document_group_status(client, token, client.get_document_group_v2(token, entity_id), entity_id)
-    return _get_document_status(client, token, client.get_document(token, entity_id))
+        return _document_group_invite_dispatch(client, token, entity_id, client.get_document_group_v2(token, entity_id))
+    return _document_invite_dispatch(client, token, client.get_document(token, entity_id))
