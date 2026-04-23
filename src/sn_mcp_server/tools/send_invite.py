@@ -216,12 +216,8 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
         request_kwargs: dict[str, Any] = {
             "to": recipient.email,
             "from_": sender_email,
-            "cc": recipient.cc,
             "subject": recipient.subject,
             "message": recipient.message,
-            "cc_subject": recipient.cc_subject,
-            "cc_message": recipient.cc_message,
-            "language": recipient.language,
             "redirect_uri": recipient.redirect_uri,
             "close_redirect_uri": recipient.close_redirect_uri,
         }
@@ -248,8 +244,7 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
 def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse:
     """Send a freeform invite for a document group without roles.
 
-    Converts all recipients from orders into FreeformInviteRecipient objects,
-    aggregates CC across all recipients, and fires
+    Converts all recipients from orders into FreeformInviteRecipient objects and fires
     POST /v2/document-groups/{id}/free-form-invites (returns 201).
 
     When any recipient's email matches the sender's primary email, a direct signing
@@ -278,27 +273,14 @@ def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, e
             "email": recipient.email,
             "redirect_uri": recipient.redirect_uri,
             "close_redirect_uri": recipient.close_redirect_uri,
-            "language": recipient.language,
         }
         if recipient.redirect_uri and recipient.redirect_uri.strip():
             signer_kwargs["redirect_target"] = recipient.redirect_target
         to_list.append(FreeformInviteRecipient(**signer_kwargs))
 
-    # Aggregate unique CC emails from all recipients and map to FreeformInviteRecipient
-    seen_cc: set[str] = set()
-    cc_list: list[FreeformInviteRecipient] | None = None
-    for recipient in flat_recipients:
-        if recipient.cc:
-            for cc_email in recipient.cc:
-                if cc_email not in seen_cc:
-                    seen_cc.add(cc_email)
-    if seen_cc:
-        cc_list = [FreeformInviteRecipient(email=e) for e in seen_cc]
-
     first = flat_recipients[0]
     request = CreateFreeformInviteRequest(
         to=to_list,
-        cc=cc_list,
         subject=first.subject,
         message=first.message,
         redirect_uri=first.redirect_uri,

@@ -343,18 +343,16 @@ class TestSendDocumentFreeformInvite:
         with pytest.raises(ValueError, match="doc1"):
             _send_document_freeform_invite(mock_client, "tok", "doc1", orders)
 
-    def test_includes_cc_subject_message_in_request(self, mock_client: MagicMock) -> None:
-        """Test optional fields are passed through to the API request."""
+    def test_includes_subject_message_in_request(self, mock_client: MagicMock) -> None:
+        """Test subject and message are passed through to the API request."""
         order = InviteOrder(
             order=1,
             recipients=[
                 InviteRecipient(
                     email="signer@example.com",
                     action="sign",
-                    cc=["cc@example.com"],
                     subject="Please sign",
                     message="Sign this document",
-                    language="es",
                 )
             ],
         )
@@ -363,10 +361,8 @@ class TestSendDocumentFreeformInvite:
 
         request = mock_client.create_document_freeform_invite.call_args[0][2]
         assert request.to == "signer@example.com"
-        assert request.cc == ["cc@example.com"]
         assert request.subject == "Please sign"
         assert request.message == "Sign this document"
-        assert request.language == "es"
 
     def test_redirect_target_excluded_without_redirect_uri(self, mock_client: MagicMock) -> None:
         """Test redirect_target is not included when redirect_uri is absent."""
@@ -442,26 +438,8 @@ class TestSendDocumentGroupFreeformInvite:
         with pytest.raises(ValueError, match="grp1"):
             _send_document_group_freeform_invite(mock_client, "tok", "grp1", [order])
 
-    def test_aggregates_cc_from_multiple_recipients(self, mock_client: MagicMock) -> None:
-        """Test CC emails are deduplicated across all recipients."""
-        orders = [
-            InviteOrder(
-                order=1,
-                recipients=[
-                    InviteRecipient(email="a@test.com", action="sign", cc=["cc1@test.com", "cc2@test.com"]),
-                    InviteRecipient(email="b@test.com", action="sign", cc=["cc2@test.com", "cc3@test.com"]),
-                ],
-            ),
-        ]
-
-        _send_document_group_freeform_invite(mock_client, "tok", "grp1", orders)
-
-        request = mock_client.create_freeform_invite.call_args[0][2]
-        cc_emails = {r.email for r in request.cc} if request.cc else set()
-        assert cc_emails == {"cc1@test.com", "cc2@test.com", "cc3@test.com"}
-
-    def test_no_cc_leaves_cc_none(self, mock_client: MagicMock) -> None:
-        """Test cc_list is None when no recipients have CC."""
+    def test_group_freeform_request_omits_cc(self, mock_client: MagicMock) -> None:
+        """CC is not configured from tool-layer recipients; request leaves cc unset."""
         order = InviteOrder(
             order=1,
             recipients=[InviteRecipient(email="signer@example.com", action="sign")],

@@ -594,16 +594,6 @@ class InviteRecipient(BaseModel):
     redirect_target: str | None = Field("blank", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     decline_redirect_uri: str | None = Field(None, description="URL that opens after decline")
     close_redirect_uri: str | None = Field(None, description="Link that opens when clicking 'Close' button")
-    language: str | None = Field(
-        None,
-        description=("Signing session and notification email language: 'en', 'es', 'fr'. Used for freeform invites. Ignored for field invites."),
-    )
-    cc: list[str] | None = Field(
-        None,
-        description="CC email addresses. Used for freeform invites only. Ignored for field invites.",
-    )
-    cc_subject: str | None = Field(None, description="CC email subject. Used for freeform invites only.")
-    cc_message: str | None = Field(None, description="CC email body message. Used for freeform invites only.")
     reminder: InviteReminderSettings | None = Field(
         None,
         description="Automatic reminder email schedule. Reminders are sent by SignNow after the invite is created.",
