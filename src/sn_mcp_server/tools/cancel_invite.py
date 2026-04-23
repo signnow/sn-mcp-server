@@ -43,7 +43,7 @@ def _resolve_document_invite_info(
 
     Returns:
         Tuple of (invite_type, status, pending_invite_ids):
-        - invite_type: 'field' | 'freeform' | None
+        - invite_type: 'field' | 'freeform' | 'embedded' | None
         - status: 'pending' | 'completed' | 'no_invite'
         - pending_invite_ids: list of IDs to cancel
     """
@@ -67,7 +67,7 @@ def _resolve_document_invite_info(
         return (invite_type, "pending", pending_ids)
 
     if document_data.field_invites and done_ids and len(done_ids) == len(document_data.field_invites):
-       return (None, "completed", [])
+        return (None, "completed", [])
 
     if done_ids and len(done_ids) > 0:
         return (None, "completed", [])
@@ -198,13 +198,11 @@ def _cancel_invite(
     elif entity_type == "document" and invite_type == "field":
         client.cancel_document_field_invite(token, entity_id, CancelDocumentFieldInviteRequest(reason=reason))
     elif entity_type == "document" and invite_type == "freeform":
-        for id in pending_ids:
-            client.cancel_document_freeform_invite(token, id, CancelDocumentFreeformInviteRequest(reason=reason))
+        for invite_id in pending_ids:
+            client.cancel_document_freeform_invite(token, invite_id, CancelDocumentFreeformInviteRequest(reason=reason))
     elif entity_type == "document_group" and invite_type == "field":
         client.cancel_document_group_field_invite(token, entity_id, pending_ids[0])
     elif entity_type == "document_group" and invite_type == "freeform":
         client.cancel_freeform_invite(token, entity_id, pending_ids[0], CancelFreeformInviteRequest(reason=reason, client_timestamp=int(time.time())))
-
-
 
     return CancelInviteResponse(entity_id=entity_id, entity_type=entity_type, status="cancelled", cancelled_invite_ids=pending_ids, cancelled_invite_type=invite_type)

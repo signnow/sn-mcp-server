@@ -37,6 +37,7 @@ from .models import InviteStatusValues, UpdateInviteRecipientResponse
 
 _PENDING_STATUSES = {InviteStatusValues.PENDING, InviteStatusValues.CREATED}
 
+
 def _find_pending_invites_for_email(
     document: DocumentResponse,
     current_email: str,
@@ -188,6 +189,7 @@ def _update_document_group_invite_recipient(
         updated_steps=updated_step_ids,
     )
 
+
 _UNSUPPORTED_INVITE_TYPES = {"freeform", "embedded"}
 
 
@@ -293,11 +295,17 @@ def _update_invite_recipient(
     if resolved_type == "document_group":
         group_data = entity.data  # type: ignore[union-attr]
         invite_type, _status, _ids = _resolve_document_group_invite_info(
-            client, token, entity_id, group_data,
+            client,
+            token,
+            entity_id,
+            group_data,
         )
     else:
         invite_type, _status, _ids = _resolve_document_invite_info(
-            client, token, entity_id, entity,  # type: ignore[arg-type]
+            client,
+            token,
+            entity_id,
+            entity,  # type: ignore[arg-type]
         )
 
     if invite_type in _UNSUPPORTED_INVITE_TYPES:

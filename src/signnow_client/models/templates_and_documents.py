@@ -113,7 +113,6 @@ class DocumentFieldInviteStatus(BaseModel):
     is_embedded: bool | None = Field(None, description="Whether this is an embedded invite")
 
 
-
 class DocumentResponse(BaseModel):
     """Response model for getting document."""
 
