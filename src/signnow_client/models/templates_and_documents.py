@@ -578,7 +578,7 @@ class CreateDocumentFieldInviteResponse(BaseModel):
 class CancelDocumentFieldInviteRequest(BaseModel):
     """Request model for canceling document field invite."""
 
-    reason: str = Field(..., description="The reason for cancellation")
+    reason: str | None = Field(None, description="The reason for cancellation")
 
 
 class CancelDocumentFieldInviteResponse(BaseModel):

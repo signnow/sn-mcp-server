@@ -1,0 +1,24 @@
+{
+  "invite": {
+    "id": "group-inv-001",
+    "status": "pending",
+    "is_embedded": false,
+    "steps": [
+      {
+        "id": "step-001",
+        "status": "pending",
+        "order": 1,
+        "actions": [
+          {
+            "action": "sign",
+            "email": "signer@example.com",
+            "email_group": {},
+            "document_id": "doc-001",
+            "status": "pending",
+            "role_name": "Signer 1"
+          }
+        ]
+      }
+    ]
+  }
+}

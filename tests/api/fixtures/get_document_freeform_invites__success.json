@@ -1,0 +1,10 @@
+{
+  "data": [
+    {
+      "id": "ff-invite-001",
+      "status": "pending",
+      "created": 1700000000,
+      "email": "signer@example.com"
+    }
+  ]
+}
