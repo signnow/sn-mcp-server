@@ -792,7 +792,7 @@ class CancelledInvite(BaseModel):
     """Single cancelled invite entry."""
 
     id: str = Field(..., description="Cancelled invite ID")
-    invite_type: str = Field(..., description="Type of invite: 'field' or 'freeform'")
+    invite_type: str = Field(..., description="Type of invite: 'field', 'freeform', or 'embedded'")
 
 
 class CancelInviteResponse(BaseModel):
@@ -810,7 +810,7 @@ class CancelInviteResponse(BaseModel):
             description="List of cancelled invites with IDs and types (empty when status is not 'cancelled')",
         ),
     )
-    cancelled_invite_type: str | None = Field(None, description="Type of cancelled invites: 'field' or 'freeform' (populated only when status is 'cancelled')")
+    cancelled_invite_type: str | None = Field(None, description="Type of cancelled invites: 'field', 'freeform', or 'embedded' (populated only when status is 'cancelled')")
 
 
 class UpdateInviteRecipientResponse(BaseModel):

@@ -219,6 +219,24 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
             validate_model=EmbeddedInviteLinkResponse,
         )
 
+    def delete_document_group_embedded_invites(self, token: str, document_group_id: str) -> None:
+        """
+        Delete all embedded invites for a document group.
+
+        DELETE /v2/document-groups/{document_group_id}/embedded-invites
+
+        Args:
+            token: Access token for authentication
+            document_group_id: ID of the document group whose embedded invites to delete
+
+        Returns:
+            None (204 No Content on success)
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._delete(f"/v2/document-groups/{document_group_id}/embedded-invites", headers=headers)
+
     def create_freeform_invite(self, token: str, document_group_id: str, request_data: CreateFreeformInviteRequest) -> CreateFreeformInviteResponse:
         """
         Create a FreeForm invite for a document group.

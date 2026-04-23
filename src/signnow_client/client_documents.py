@@ -283,6 +283,24 @@ class DocumentClientMixin(SignNowAPIClientBase):
             validate_model=GenerateDocumentEmbeddedInviteLinkResponse,
         )
 
+    def delete_document_embedded_invites(self, token: str, document_id: str) -> None:
+        """
+        Delete all embedded invites for a document.
+
+        DELETE /v2/documents/{document_id}/embedded-invites
+
+        Args:
+            token: Access token for authentication
+            document_id: ID of the document whose embedded invites to delete
+
+        Returns:
+            None (204 No Content on success)
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._delete(f"/v2/documents/{document_id}/embedded-invites", headers=headers)
+
     def create_document_embedded_editor(self, token: str, document_id: str, request_data: CreateDocumentEmbeddedEditorRequest) -> CreateEmbeddedEditorResponse:
         """
         Create link for document embedded editor.

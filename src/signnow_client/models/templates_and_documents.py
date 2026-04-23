@@ -110,7 +110,8 @@ class DocumentFieldInviteStatus(BaseModel):
     declined: list[dict[str, Any]] = Field(..., description="Declined information")
     expiration_days: str | None = Field(None, description="Expiration days for the invite")
     decline_by_signature: str | None = Field(None, description="Whether decline by signature is enabled ('0' or '1')")
-    
+    is_embedded: bool | None = Field(None, description="Whether this is an embedded invite")
+
 
 
 class DocumentResponse(BaseModel):
@@ -738,6 +739,7 @@ class FieldInviteStatus(BaseModel):
 
     id: str = Field(..., description="Invite ID")
     status: str = Field(..., description="Invite status: 'created', 'pending', 'fulfilled'")
+    is_embedded: bool | None = Field(None, description="Whether this is an embedded invite")
     steps: list[FieldInviteStepStatus] = Field(..., description="List of invite steps with their status")
 
 
