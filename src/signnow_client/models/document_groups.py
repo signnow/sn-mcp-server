@@ -332,7 +332,6 @@ class DocumentGroupV2Data(BaseModel):
     pending_step_id: str | None = Field(None, description="ID of the pending step")
     state: str = Field(..., description="Current state of the document group (e.g., 'pending')")
     last_invite_id: str | None = Field(None, description="ID of the last invite")
-    freeform_invite: DocumentGroupV2FreeformInvite | None = Field(None, description="Freeform invite info, if any")
     documents: list[DocumentGroupV2Document] = Field(..., description="List of documents in the group")
     freeform_invite: DocumentGroupV2FreeformInvite | None = Field(None, description="Freeform invite info if present")
 
