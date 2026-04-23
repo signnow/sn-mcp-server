@@ -288,20 +288,20 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target: 'self' (default), 'blank'")] = None,
-        link_expiration: Annotated[int | None, Field(ge=14, le=45, description="Link expiration in days (14–45)")] = None,
+        link_expiration: Annotated[int | None, Field(ge=15, le=45, description="Link expiration in minutes (15–45)")] = None,
         type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage' (default), 'edit', or 'send-invite'")] = "manage",
     ) -> CreateEmbeddedSendingResponseV1:
         """Create embedded sending for a document or document group (v1.0 contract).
 
-        The link_expiration parameter is in days (14–45), matching the v1.0.1 API contract.
-        The value is passed as-is to the underlying API field, preserving identical behavior.
+        The link_expiration parameter is in minutes (15–45), matching the downstream
+        SignNow embedded sending request models (ge=15).
 
         Args:
             entity_id: ID of the document or document group.
             entity_type: Type of entity (optional, auto-detected if not provided).
             redirect_uri: Optional redirect URI after completion.
             redirect_target: Optional redirect target.
-            link_expiration: Link expiration in days (14–45).
+            link_expiration: Link expiration in minutes (15–45).
             type: Sending step type: 'manage', 'edit', or 'send-invite'.
 
         Returns:
@@ -489,8 +489,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         name: Annotated[str | None, Field(description="Optional name for the new document or document group")] = None,
         redirect_uri: Annotated[str | None, Field(description="Optional redirect URI after completion")] = None,
         redirect_target: Annotated[str | None, Field(description="Optional redirect target")] = None,
-        link_expiration: Annotated[int | None, Field(ge=14, le=45, description="Link expiration in days (14–45)")] = None,
-        type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = None,
+        link_expiration: Annotated[int | None, Field(ge=15, le=45, description="Link expiration in minutes (15–45)")] = None,
+        type: Annotated[Literal["manage", "edit", "send-invite"] | None, Field(description="Type of sending step: 'manage', 'edit', or 'send-invite'")] = "manage",
     ) -> CreateEmbeddedSendingFromTemplateResponse:
         """Create from template then create embedded sending (v1.0 compound tool).
 
@@ -498,8 +498,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         1. Create document/group from template via _create_from_template.
         2. Create embedded sending on the created entity via _create_embedded_sending.
 
-        The link_expiration parameter is in days (14–45), passed as-is to the
-        underlying API field (same field regardless of the v2 parameter rename).
+        The link_expiration parameter is in minutes (15–45), matching the downstream
+        SignNow embedded sending request models (ge=15).
 
         Args:
             entity_id: ID of the template or template group.
@@ -507,7 +507,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             name: Optional name for the created document or document group.
             redirect_uri: Optional redirect URI after completion.
             redirect_target: Optional redirect target.
-            link_expiration: Link expiration in days (14–45).
+            link_expiration: Link expiration in minutes (15–45).
             type: Sending step type: 'manage', 'edit', or 'send-invite'.
 
         Returns:

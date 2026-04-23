@@ -428,8 +428,8 @@ class TestCreateEmbeddedSendingV1:
         assert result.sending_url == "https://app.signnow.com/send/1"
         assert not hasattr(result, "created_entity_id")
 
-    async def test_link_expiration_days_passed_as_is(self, mock_ctx: MagicMock) -> None:
-        """link_expiration (days 14-45) is passed as-is to business logic."""
+    async def test_link_expiration_minutes_passed_as_is(self, mock_ctx: MagicMock) -> None:
+        """link_expiration (minutes, 15-45) is passed as-is to business logic."""
         from sn_mcp_server.tools.models import CreateEmbeddedSendingResponse
 
         v2_response = CreateEmbeddedSendingResponse(sending_entity="document", sending_url="https://test", created_entity_id=None, created_entity_type=None, created_entity_name=None)

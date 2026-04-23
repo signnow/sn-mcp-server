@@ -96,8 +96,9 @@ _COMPOUND_V1_ONLY_TOOLS = {
 
 
 def test_all_tools_were_registered() -> None:
-    """Sanity: at least 25 tools should be registered (17 current + 8 v1 compat)."""
-    assert len(_TOOL_VERSIONS) >= 17, f"Too few unique tool names registered: {sorted(_TOOL_VERSIONS)}"
+    """Sanity: at least 25 versioned tool registrations should be present."""
+    total_registrations = sum(len(versions) for versions in _TOOL_VERSIONS.values())
+    assert total_registrations >= 25, f"Too few tool registrations found: {total_registrations}; registered tools={sorted(_TOOL_VERSIONS)}"
 
 
 @pytest.mark.parametrize("tool_name", sorted(_TOOL_VERSIONS.keys()))
