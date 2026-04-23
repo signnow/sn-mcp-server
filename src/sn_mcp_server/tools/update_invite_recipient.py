@@ -28,18 +28,21 @@ from signnow_client.models.templates_and_documents import (
     ReplaceFieldInviteRequest,
 )
 
-from .cancel_invite import _resolve_entity_type
+from .cancel_invite import (
+    _resolve_document_group_invite_info,
+    _resolve_document_invite_info,
+    _resolve_entity_type,
+)
 from .models import InviteStatusValues, UpdateInviteRecipientResponse
 
 _PENDING_STATUSES = {InviteStatusValues.PENDING, InviteStatusValues.CREATED}
 
-
-def _find_pending_invite_for_email(
+def _find_pending_invites_for_email(
     document: DocumentResponse,
     current_email: str,
     role: str | None,
-) -> DocumentFieldInviteStatus | None:
-    """Find a pending/created field invite matching the given email (and optional role).
+) -> list[DocumentFieldInviteStatus]:
+    """Find all pending/created field invites matching the given email (and optional role).
 
     Args:
         document: Pre-fetched DocumentResponse with field_invites.
@@ -47,8 +50,9 @@ def _find_pending_invite_for_email(
         role: Optional role name filter for multi-role documents.
 
     Returns:
-        The matching DocumentFieldInviteStatus, or None if not found.
+        List of matching DocumentFieldInviteStatus entries. Empty list if none found.
     """
+    matches: list[DocumentFieldInviteStatus] = []
     for invite in document.field_invites:
         normalized_status = InviteStatusValues.from_raw_status(invite.status)
         if normalized_status not in _PENDING_STATUSES:
@@ -57,8 +61,8 @@ def _find_pending_invite_for_email(
             continue
         if role is not None and invite.role.lower() != role.lower():
             continue
-        return invite
-    return None
+        matches.append(invite)
+    return matches
 
 
 def _find_pending_steps_for_email(
@@ -104,9 +108,6 @@ def _update_document_group_invite_recipient(
     current_email: str,
     new_email: str,
     role: str | None,
-    expiration_days: int | None,
-    reminder: int | None,
-    decline_by_signature: int | None,
     token: str,
     client: SignNowAPIClient,
 ) -> UpdateInviteRecipientResponse:
@@ -118,9 +119,6 @@ def _update_document_group_invite_recipient(
         current_email: Email of the current signer to replace.
         new_email: Email of the new signer.
         role: Optional role name filter.
-        expiration_days: Optional days until invite expires.
-        reminder: Optional reminder days.
-        decline_by_signature: Optional decline button setting (0 or 1).
         token: Bearer access token.
         client: SignNow API client.
 
@@ -159,7 +157,7 @@ def _update_document_group_invite_recipient(
             UpdateDocGroupInviteActionAttributes(
                 document_id=action.document_id,
                 allow_reassign=None,
-                decline_by_signature=str(decline_by_signature) if decline_by_signature is not None else None,
+                decline_by_signature=None,
             )
             for action in actions
         ]
@@ -169,8 +167,8 @@ def _update_document_group_invite_recipient(
             user_to_update=current_email,
             invite_email=UpdateDocGroupInviteEmail(
                 email=new_email,
-                reminder=reminder,
-                expiration_days=expiration_days,
+                reminder=None,
+                expiration_days=None,
             ),
             update_invite_action_attributes=update_invite_action_attributes,
             replace_with_this_user=new_email,
@@ -190,19 +188,78 @@ def _update_document_group_invite_recipient(
         updated_steps=updated_step_ids,
     )
 
+_UNSUPPORTED_INVITE_TYPES = {"freeform", "embedded"}
+
+
+def _update_document_invite_recipient(
+    entity_id: str,
+    document: DocumentResponse,
+    current_email: str,
+    new_email: str,
+    role: str | None,
+    token: str,
+    client: SignNowAPIClient,
+) -> UpdateInviteRecipientResponse:
+    """Replace the signing recipient on pending field invites for a document.
+
+    For each matching pending invite: Delete → Replace → Trigger (once at the end).
+
+    Args:
+        entity_id: Document ID.
+        document: Pre-fetched DocumentResponse.
+        current_email: Email of the current signer to replace.
+        new_email: Email of the new signer.
+        role: Optional role name filter.
+        token: Bearer access token.
+        client: SignNow API client.
+
+    Returns:
+        UpdateInviteRecipientResponse with status and new_invite_id.
+    """
+    pending_invites = _find_pending_invites_for_email(document, current_email, role)
+    if not pending_invites:
+        return UpdateInviteRecipientResponse(
+            entity_id=entity_id,
+            entity_type="document",
+            status="no_pending_invite",
+            new_invite_id=None,
+            previous_email=current_email,
+            new_email=new_email,
+        )
+
+    last_replace_id: str | None = None
+    for pending_invite in pending_invites:
+        # Delete the existing field invite
+        client.delete_field_invite(token, pending_invite.id)
+
+        # Replace with new signer via POST /field_invite
+        replace_request = ReplaceFieldInviteRequest(
+            email=new_email,
+            role_id=pending_invite.role_id,
+            is_replace=True,
+        )
+        replace_response = client.replace_field_invite(token, replace_request)
+        last_replace_id = replace_response.id
+
+    # Trigger the invite once after all replacements
+    client.trigger_field_invite(token, entity_id)
+
+    return UpdateInviteRecipientResponse(
+        entity_id=entity_id,
+        entity_type="document",
+        status="replaced",
+        new_invite_id=last_replace_id,
+        previous_email=current_email,
+        new_email=new_email,
+    )
+
 
 def _update_invite_recipient(
     entity_id: str,
     entity_type: Literal["document", "document_group"] | None,
     current_email: str,
     new_email: str,
-    role: str | None,  # exlclude
-    expiration_days: int | None,
-    decline_by_signature: int | None,
-    reminder: int | None,
-    authentication_type: str | None,
-    password: str | None,
-    phone: str | None,
+    role: str | None,
     token: str,
     client: SignNowAPIClient,
 ) -> UpdateInviteRecipientResponse:
@@ -218,31 +275,40 @@ def _update_invite_recipient(
         2. Find pending steps matching current_email
         3. Update each step via /invitestep/{step_id}/update
 
-    Note: For document groups, authentication_type, password, and phone parameters
-    are not used — the update endpoint uses a different mechanism.
-
     Args:
         entity_id: Document or document group ID.
         entity_type: Optional entity type discriminator. Auto-detected if None.
         current_email: Email of the current signer to replace.
         new_email: Email of the new signer.
         role: Optional role filter for multi-role documents/steps.
-        expiration_days: Optional days until invite expires (max 30).
-        decline_by_signature: Optional decline button setting (0 or 1).
-        reminder: Optional reminder days (max 30).
-        authentication_type: Optional identity verification type (documents only).
-        password: Optional password for identity verification (documents only).
-        phone: Optional phone number for identity verification (documents only).
         token: Bearer access token.
         client: SignNow API client.
 
     Returns:
         UpdateInviteRecipientResponse.
-
-    Raises:
-        ValueError: When no pending invite is found for current_email.
     """
     resolved_type, entity = _resolve_entity_type(client, token, entity_id, entity_type)
+
+    # Check invite type — freeform and embedded invites are not supported
+    if resolved_type == "document_group":
+        group_data = entity.data  # type: ignore[union-attr]
+        invite_type, _status, _ids = _resolve_document_group_invite_info(
+            client, token, entity_id, group_data,
+        )
+    else:
+        invite_type, _status, _ids = _resolve_document_invite_info(
+            client, token, entity_id, entity,  # type: ignore[arg-type]
+        )
+
+    if invite_type in _UNSUPPORTED_INVITE_TYPES:
+        return UpdateInviteRecipientResponse(
+            entity_id=entity_id,
+            entity_type=resolved_type,
+            status="unsupported_invite_type",
+            new_invite_id=None,
+            previous_email=current_email,
+            new_email=new_email,
+        )
 
     if resolved_type == "document_group":
         return _update_document_group_invite_recipient(
@@ -251,52 +317,16 @@ def _update_invite_recipient(
             current_email=current_email,
             new_email=new_email,
             role=role,
-            expiration_days=expiration_days,
-            reminder=reminder,
-            decline_by_signature=decline_by_signature,
             token=token,
             client=client,
         )
 
-    document: DocumentResponse = entity  # type: ignore[assignment]
-
-    # Step 1: Find pending invite matching current_email
-    pending_invite = _find_pending_invite_for_email(document, current_email, role)
-    if pending_invite is None:
-        return UpdateInviteRecipientResponse(
-            entity_id=entity_id,
-            entity_type="document",
-            status="no_pending_invite",
-            new_invite_id=None,
-            previous_email=current_email,
-            new_email=new_email,
-        )
-
-    # Step 2: Delete the existing field invite
-    client.delete_field_invite(token, pending_invite.id)
-
-    # Step 3: Replace with new signer via POST /field_invite
-    replace_request = ReplaceFieldInviteRequest(
-        email=new_email,
-        role_id=pending_invite.role_id,
-        is_replace=True,
-        expiration_days=expiration_days,
-        decline_by_signature=decline_by_signature,
-        reminder=reminder,
-        authentication_type=authentication_type,
-        password=password,
-        phone=phone,
-    )
-    replace_response = client.replace_field_invite(token, replace_request)
-
-    # Step 4: Trigger the invite to send to the new signer
-    client.trigger_field_invite(token, entity_id)
-
-    return UpdateInviteRecipientResponse(
+    return _update_document_invite_recipient(
         entity_id=entity_id,
-        entity_type="document",
-        status="replaced",
-        new_invite_id=replace_response.id,
-        previous_email=current_email,
+        document=entity,  # type: ignore[arg-type]
+        current_email=current_email,
         new_email=new_email,
+        role=role,
+        token=token,
+        client=client,
     )

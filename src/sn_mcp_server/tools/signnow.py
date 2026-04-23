@@ -1117,7 +1117,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Finds the pending invite for the current signer and replaces it with a new signer. "
             "For documents: deletes the old invite, creates a replacement, and triggers sending. "
             "For document groups: updates the pending step(s) with the new signer information. "
-            "Supports both individual documents and document groups."
+            "Only field invites are supported — freeform and embedded invites cannot be updated."
         ),
         annotations=ToolAnnotations(
             title="Replace invite recipient",
@@ -1141,30 +1141,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             str | None,
             Field(description="Role name to match (for multi-role documents). If omitted, matches any role."),
         ] = None,
-        expiration_days: Annotated[
-            int | None,
-            Field(description="Days until the new invite expires (max 30). If omitted, uses the previous invite's setting.", le=30),
-        ] = None,
-        decline_by_signature: Annotated[
-            int | None,
-            Field(description="Add Decline button: 0=no, 1=yes. If omitted, uses the previous invite's setting."),
-        ] = None,
-        reminder: Annotated[
-            int | None,
-            Field(description="Send reminder after X days (max 30). If omitted, uses the previous invite's setting.", le=30),
-        ] = None,
-        authentication_type: Annotated[
-            str | None,
-            Field(description="Identity verification type: 'password' or 'phone'. If omitted, no authentication."),
-        ] = None,
-        password: Annotated[
-            str | None,
-            Field(description="Password for identity verification (required if authentication_type='password')."),
-        ] = None,
-        phone: Annotated[
-            str | None,
-            Field(description="Phone number for identity verification (required if authentication_type='phone')."),
-        ] = None,
     ) -> UpdateInviteRecipientResponse:
         """Replace the signing recipient on a pending field invite.
 
@@ -1180,8 +1156,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         2. Updates each step via /invitestep/{step_id}/update endpoint
         3. Returns list of updated step IDs
 
-        Note: For document groups, authentication_type, password, and phone parameters
-        are not supported by the API and will be ignored.
+        Only field invites are supported. Freeform and embedded invites return
+        status='unsupported_invite_type'.
 
         Args:
             entity_id: Document or document group ID.
@@ -1189,12 +1165,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             new_email: Email of the new signer.
             entity_type: Optional entity type discriminator.
             role: Optional role filter for multi-role documents/steps.
-            expiration_days: Optional days until invite expires (max 30).
-            decline_by_signature: Optional decline button setting (0 or 1).
-            reminder: Optional reminder days (max 30).
-            authentication_type: Optional identity verification type (documents only).
-            password: Optional password for verification (documents only).
-            phone: Optional phone for verification (documents only).
 
         Returns:
             UpdateInviteRecipientResponse with status, new_invite_id, email info, and updated_steps (for document groups).
@@ -1206,12 +1176,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             current_email=current_email,
             new_email=new_email,
             role=role,
-            expiration_days=expiration_days,
-            decline_by_signature=decline_by_signature,
-            reminder=reminder,
-            authentication_type=authentication_type,
-            password=password,
-            phone=phone,
             token=token,
             client=client,
         )

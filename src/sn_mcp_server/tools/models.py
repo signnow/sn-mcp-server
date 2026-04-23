@@ -820,7 +820,11 @@ class UpdateInviteRecipientResponse(BaseModel):
     entity_type: str = Field(..., description="Entity type: 'document' or 'document_group'")
     status: str = Field(
         ...,
-        description=("Result status: 'replaced' (invite recipient was replaced and resent), 'no_pending_invite' (no pending/created invite found for current_email)"),
+        description=(
+            "Result status: 'replaced' (invite recipient was replaced and resent), "
+            "'no_pending_invite' (no pending/created invite found for current_email), "
+            "'unsupported_invite_type' (freeform or embedded invites cannot be updated)"
+        ),
     )
     new_invite_id: str | None = Field(
         None,
