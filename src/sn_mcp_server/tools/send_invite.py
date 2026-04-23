@@ -418,6 +418,11 @@ async def _send_invite(
         if _document_group_has_roles(group):
             if self_sign:
                 raise ValueError(f"Cannot self-sign document group '{entity_id}': one or more documents in the group define roles. Use create_embedded_sending to prepare a role-based invite instead.")
+            # Validate all recipients have a role assigned before sending group field invite
+            for order in orders:
+                for recipient in order.recipients:
+                    if recipient.role is None:
+                        raise ValueError(f"Cannot send field invite for document group '{entity_id}': recipient '{recipient.email}' has no role assigned")
             invite_response = _send_document_group_field_invite(client, token, entity_id, orders, group)
         else:
             invite_response = _send_document_group_freeform_invite(client, token, entity_id, orders)

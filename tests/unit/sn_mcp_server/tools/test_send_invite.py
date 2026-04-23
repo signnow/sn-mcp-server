@@ -563,6 +563,17 @@ class TestSendInviteFreeformRouting:
         with pytest.raises(ValueError, match="no role assigned"):
             await _send_invite("doc1", "document", [self._make_freeform_order()], "tok", mock_client)
 
+    async def test_group_field_invite_raises_when_recipient_has_no_role(self, mock_client: MagicMock) -> None:
+        """Test group field invite path raises ValueError when any recipient lacks a role."""
+        doc = MagicMock()
+        doc.roles = ["Signer"]
+        group = MagicMock()
+        group.documents = [doc]
+        mock_client.get_document_group.return_value = group
+
+        with pytest.raises(ValueError, match="no role assigned"):
+            await _send_invite("grp1", "document_group", [self._make_freeform_order()], "tok", mock_client)
+
 
 class TestSendInviteSelfSign:
     """Test cases for _send_invite with self_sign=True."""
