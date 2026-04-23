@@ -837,7 +837,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_document",
-        version="1.0",
+        version="2.0",
         description="Get full document, template, template group or document group information with field values",
         annotations=ToolAnnotations(
             title="Get document or group details",

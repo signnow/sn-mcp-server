@@ -60,7 +60,6 @@ _V1_ONLY_TOOLS = {
     "get_invite_status",
     "get_document_download_link",
     "get_signing_link",
-    "get_document",
     "update_document_fields",
 }
 
@@ -70,6 +69,7 @@ _V2_TOOLS_WITH_V1_COMPAT = {
     "create_embedded_invite",
     "create_embedded_sending",
     "create_embedded_editor",
+    "get_document",
 }
 
 # Tools that only exist in v2.0 (new since v1.0.1)

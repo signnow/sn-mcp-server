@@ -5,11 +5,12 @@ Preserved for backward compatibility. All tools call the same business logic
 modules as v2 — only the external parameter schema and response shape differ.
 
 v1.0 tools registered here:
-  - send_invite                          (doc/doc_group only, optional JSON orders)
+  - send_invite                          (doc/doc_group only, optional JSON orders, v1 recipients)
   - create_embedded_invite               (doc/doc_group only, optional JSON orders)
   - create_embedded_sending              (doc/doc_group only, link_expiration in days 14-45)
   - create_embedded_editor               (doc/doc_group only, link_expiration in minutes 15-45)
-  - send_invite_from_template            (compound: create + send_invite)
+  - get_document                         (DocumentField.name guaranteed str, not nullable)
+  - send_invite_from_template            (compound: create + send_invite, v1 recipients)
   - create_embedded_sending_from_template (compound: create + embedded sending)
   - create_embedded_editor_from_template  (compound: create + embedded editor)
   - create_embedded_invite_from_template  (compound: create + embedded invite)
@@ -27,12 +28,15 @@ from pydantic import Field, TypeAdapter
 from sn_mcp_server.token_provider import TokenProvider
 
 from .create_from_template import _create_from_template
+from .document import _get_document
 from .embedded_editor import _create_embedded_editor
 from .embedded_invite import _create_embedded_invite
 from .embedded_sending import _create_embedded_sending
 from .models import (
+    DocumentGroup,
     EmbeddedInviteOrder,
     InviteOrder,
+    InviteRecipient,
 )
 from .models_v1 import (
     CreateEmbeddedEditorFromTemplateResponse,
@@ -41,6 +45,10 @@ from .models_v1 import (
     CreateEmbeddedInviteResponseV1,
     CreateEmbeddedSendingFromTemplateResponse,
     CreateEmbeddedSendingResponseV1,
+    DocumentFieldV1,
+    DocumentGroupDocumentV1,
+    DocumentGroupV1,
+    InviteOrderV1,
     SendInviteFromTemplateResponse,
     SendInviteResponseV1,
 )
@@ -48,17 +56,20 @@ from .send_invite import _send_invite
 from .signnow import _get_token_and_client
 
 
-def _parse_invite_orders(orders: list[InviteOrder] | str | None) -> list[InviteOrder]:
-    """Parse orders from list or JSON string into list[InviteOrder].
+def _parse_invite_orders(orders: list[InviteOrderV1] | str | None) -> list[InviteOrder]:
+    """Parse v1 orders from list or JSON string into list[InviteOrder] (v2).
+
+    Accepts v1 InviteOrderV1 (no reminder/expiration_days/authentication fields)
+    and converts to v2 InviteOrder for business logic. The extra v2 fields default to None.
 
     Args:
-        orders: List of InviteOrder objects, a JSON string, or None.
+        orders: List of InviteOrderV1 objects, a JSON string, or None.
 
     Returns:
-        Parsed list of InviteOrder objects; empty list if orders is None.
+        Parsed list of InviteOrder (v2) objects; empty list if orders is None.
 
     Raises:
-        ValueError: If JSON string cannot be parsed as list[InviteOrder].
+        ValueError: If JSON string cannot be parsed as list[InviteOrderV1].
     """
     if orders is None:
         return []
@@ -67,9 +78,18 @@ def _parse_invite_orders(orders: list[InviteOrder] | str | None) -> list[InviteO
             raw: Any = json.loads(orders)
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid orders JSON string: {exc}") from exc
-        adapter: TypeAdapter[list[InviteOrder]] = TypeAdapter(list[InviteOrder])
-        return adapter.validate_python(raw)
-    return orders
+        adapter: TypeAdapter[list[InviteOrderV1]] = TypeAdapter(list[InviteOrderV1])
+        v1_orders = adapter.validate_python(raw)
+    else:
+        v1_orders = orders
+    # Convert v1 → v2: InviteRecipientV1 fields are a strict subset of InviteRecipient
+    return [
+        InviteOrder(
+            order=o.order,
+            recipients=[InviteRecipient(**r.model_dump()) for r in o.recipients],
+        )
+        for o in v1_orders
+    ]
 
 
 def _parse_embedded_orders(orders: list[EmbeddedInviteOrder] | str | None) -> list[EmbeddedInviteOrder]:
@@ -94,6 +114,39 @@ def _parse_embedded_orders(orders: list[EmbeddedInviteOrder] | str | None) -> li
         adapter: TypeAdapter[list[EmbeddedInviteOrder]] = TypeAdapter(list[EmbeddedInviteOrder])
         return adapter.validate_python(raw)
     return orders
+
+
+def _to_document_group_v1(result: DocumentGroup) -> DocumentGroupV1:
+    """Convert a v2 DocumentGroup to v1 DocumentGroupV1.
+
+    Coerces DocumentField.name from None → "" to match v1.0.1 contract
+    where name was guaranteed str (non-nullable).
+    """
+    return DocumentGroupV1(
+        last_updated=result.last_updated,
+        entity_id=result.entity_id,
+        group_name=result.group_name,
+        entity_type=result.entity_type,
+        invite=result.invite,
+        documents=[
+            DocumentGroupDocumentV1(
+                id=doc.id,
+                name=doc.name,
+                roles=doc.roles,
+                fields=[
+                    DocumentFieldV1(
+                        id=f.id,
+                        type=f.type,
+                        role_id=f.role_id,
+                        value=f.value,
+                        name=f.name or "",
+                    )
+                    for f in doc.fields
+                ],
+            )
+            for doc in result.documents
+        ],
+    )
 
 
 def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
@@ -124,7 +177,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         orders: Annotated[
-            list[InviteOrder] | str | None,
+            list[InviteOrderV1] | str | None,
             Field(description="List of orders with recipients (can be a list or JSON string)"),
         ] = None,
         entity_type: Annotated[
@@ -307,6 +360,47 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         result = await _create_embedded_editor(entity_id, entity_type, redirect_uri, redirect_target, link_expiration, token, client, name=None, ctx=ctx)
         return CreateEmbeddedEditorResponseV1(editor_entity=result.editor_entity, editor_url=result.editor_url)
 
+    # ─── get_document v1.0 ───────────────────────────────────────────────────
+    # v2 widened DocumentField.name from str → str | None.
+    # v1.0.1 contract guaranteed name: str — this wrapper coerces None → "".
+
+    @mcp.tool(
+        name="get_document",
+        version="1.0",
+        description="Get full document, template, template group or document group information with field values",
+        annotations=ToolAnnotations(
+            title="Get document or group details",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "template", "template_group", "get", "fields"],
+    )
+    def get_document(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
+        entity_type: Annotated[
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional). If not provided, will be determined automatically"),
+        ] = None,
+    ) -> DocumentGroupV1:
+        """Get full document, template, template group or document group information (v1.0 contract).
+
+        Same as v2, but DocumentField.name is guaranteed to be a non-null string.
+        Unnamed fields are returned with name="" instead of None.
+
+        Args:
+            entity_id: ID of the document, template, template group or document group.
+            entity_type: Type of entity (optional, auto-detected if not provided).
+
+        Returns:
+            DocumentGroupV1 with complete information including field values.
+        """
+        token, client = _get_token_and_client(token_provider)
+        result = _get_document(client, token, entity_id, entity_type)
+        return _to_document_group_v1(result)
+
     # ─── send_invite_from_template v1.0 (compound, removed in v2) ────────────
 
     @mcp.tool(
@@ -326,7 +420,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         orders: Annotated[
-            list[InviteOrder] | str,
+            list[InviteOrderV1] | str,
             Field(description="List of orders with recipients for the invite (can be a list or JSON string)"),
         ],
         entity_type: Annotated[

@@ -19,18 +19,21 @@ from sn_mcp_server.tools.models_v1 import (
     CreateEmbeddedInviteFromTemplateResponse,
     CreateEmbeddedInviteResponseV1,
     CreateEmbeddedSendingResponseV1,
+    DocumentGroupV1,
+    InviteOrderV1,
+    InviteRecipientV1,
     SendInviteFromTemplateResponse,
     SendInviteResponseV1,
 )
-from sn_mcp_server.tools.signnow_v1 import _parse_embedded_orders, _parse_invite_orders
+from sn_mcp_server.tools.signnow_v1 import _parse_embedded_orders, _parse_invite_orders, _to_document_group_v1
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _make_invite_order(email: str = "signer@example.com", role: str = "Signer", order: int = 1) -> InviteOrder:
-    return InviteOrder(order=order, recipients=[InviteRecipient(email=email, role=role, action="sign", redirect_uri=None)])
+def _make_invite_order_v1(email: str = "signer@example.com", role: str = "Signer", order: int = 1) -> InviteOrderV1:
+    return InviteOrderV1(order=order, recipients=[InviteRecipientV1(email=email, role=role, action="sign", redirect_uri=None)])
 
 
 def _make_embedded_order(email: str = "signer@example.com", role: str = "Signer", order: int = 1) -> EmbeddedInviteOrder:
@@ -80,10 +83,13 @@ class TestParseInviteOrders:
         result = _parse_invite_orders(None)
         assert result == []
 
-    def test_list_passthrough(self) -> None:
-        orders = [_make_invite_order()]
+    def test_list_converts_v1_to_v2(self) -> None:
+        orders = [_make_invite_order_v1()]
         result = _parse_invite_orders(orders)
-        assert result == orders
+        assert len(result) == 1
+        assert isinstance(result[0], InviteOrder)
+        assert isinstance(result[0].recipients[0], InviteRecipient)
+        assert result[0].recipients[0].email == "signer@example.com"
 
     def test_valid_json_string_parsed(self) -> None:
         orders_json = json.dumps([{"order": 1, "recipients": [{"email": "a@b.com", "role": "Signer", "action": "sign", "redirect_uri": None}]}])
@@ -159,7 +165,7 @@ class TestSendInviteV1:
         with patch("sn_mcp_server.tools.signnow_v1._get_token_and_client", return_value=("tok", MagicMock())):
             with patch("sn_mcp_server.tools.signnow_v1._send_invite", new=AsyncMock(return_value=v2_response)):
                 fn = _V1_TOOLS["send_invite@1.0"]
-                result = await fn(mock_ctx, entity_id="doc1", orders=[_make_invite_order()])
+                result = await fn(mock_ctx, entity_id="doc1", orders=[_make_invite_order_v1()])
 
         assert isinstance(result, SendInviteResponseV1)
         assert result.invite_id == "inv_1"
@@ -194,6 +200,143 @@ class TestSendInviteV1:
             fn = _V1_TOOLS["send_invite@1.0"]
             with pytest.raises(ValueError, match="orders must contain at least one"):
                 await fn(mock_ctx, entity_id="doc1", orders=None)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# v1 input model schema (InviteRecipientV1 must NOT expose v2 fields)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestInviteRecipientV1Schema:
+    """InviteRecipientV1 must not expose v2-only fields."""
+
+    def test_no_reminder_field(self) -> None:
+        """InviteRecipientV1 schema must not contain reminder."""
+        fields = InviteRecipientV1.model_fields
+        assert "reminder" not in fields
+
+    def test_no_expiration_days_field(self) -> None:
+        """InviteRecipientV1 schema must not contain expiration_days."""
+        fields = InviteRecipientV1.model_fields
+        assert "expiration_days" not in fields
+
+    def test_no_authentication_field(self) -> None:
+        """InviteRecipientV1 schema must not contain authentication."""
+        fields = InviteRecipientV1.model_fields
+        assert "authentication" not in fields
+
+    def test_v1_has_core_fields(self) -> None:
+        """InviteRecipientV1 has all v1.0.1 contract fields."""
+        expected = {"email", "role", "message", "subject", "action", "redirect_uri", "redirect_target", "decline_redirect_uri", "close_redirect_uri"}
+        assert expected == set(InviteRecipientV1.model_fields.keys())
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# get_document v1.0
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class TestGetDocumentV1:
+    """Tests for get_document v1.0 wrapper."""
+
+    def test_returns_document_group_v1(self) -> None:
+        """get_document v1.0 returns DocumentGroupV1."""
+        from sn_mcp_server.tools.models import DocumentField, DocumentGroup, DocumentGroupDocument
+
+        v2_result = DocumentGroup(
+            last_updated=1000,
+            entity_id="doc1",
+            group_name="Test Doc",
+            entity_type="document",
+            invite=None,
+            documents=[
+                DocumentGroupDocument(
+                    id="doc1",
+                    name="Test Doc",
+                    roles=["Signer"],
+                    fields=[
+                        DocumentField(id="f1", type="text", role_id="Signer", value="hello", name="field1"),
+                    ],
+                ),
+            ],
+        )
+
+        with patch("sn_mcp_server.tools.signnow_v1._get_token_and_client", return_value=("tok", MagicMock())):
+            with patch("sn_mcp_server.tools.signnow_v1._get_document", return_value=v2_result):
+                fn = _V1_TOOLS["get_document@1.0"]
+                result = fn(MagicMock(), entity_id="doc1")
+
+        assert isinstance(result, DocumentGroupV1)
+        assert result.entity_id == "doc1"
+        assert result.documents[0].fields[0].name == "field1"
+
+    def test_none_name_coerced_to_empty_string(self) -> None:
+        """get_document v1.0 coerces DocumentField.name=None to empty string."""
+        from sn_mcp_server.tools.models import DocumentField, DocumentGroup, DocumentGroupDocument
+
+        v2_result = DocumentGroup(
+            last_updated=1000,
+            entity_id="doc1",
+            group_name="Test Doc",
+            entity_type="document",
+            invite=None,
+            documents=[
+                DocumentGroupDocument(
+                    id="doc1",
+                    name="Test Doc",
+                    roles=["Signer"],
+                    fields=[
+                        DocumentField(id="f1", type="text", role_id="Signer", value="v", name=None),
+                    ],
+                ),
+            ],
+        )
+
+        with patch("sn_mcp_server.tools.signnow_v1._get_token_and_client", return_value=("tok", MagicMock())):
+            with patch("sn_mcp_server.tools.signnow_v1._get_document", return_value=v2_result):
+                fn = _V1_TOOLS["get_document@1.0"]
+                result = fn(MagicMock(), entity_id="doc1")
+
+        assert isinstance(result, DocumentGroupV1)
+        # v1 contract: name is str, not None
+        field = result.documents[0].fields[0]
+        assert field.name == ""
+        assert isinstance(field.name, str)
+
+    def test_conversion_helper_directly(self) -> None:
+        """_to_document_group_v1 correctly converts all fields."""
+        from sn_mcp_server.tools.models import DocumentField, DocumentGroup, DocumentGroupDocument
+
+        v2_result = DocumentGroup(
+            last_updated=999,
+            entity_id="grp1",
+            group_name="Group",
+            entity_type="document_group",
+            invite=None,
+            documents=[
+                DocumentGroupDocument(
+                    id="d1",
+                    name="Doc 1",
+                    roles=["Signer", "Viewer"],
+                    fields=[
+                        DocumentField(id="f1", type="text", role_id="Signer", value="a", name="Named"),
+                        DocumentField(id="f2", type="text", role_id="Viewer", value="b", name=None),
+                    ],
+                ),
+                DocumentGroupDocument(id="d2", name="Doc 2", roles=[], fields=[]),
+            ],
+        )
+
+        result = _to_document_group_v1(v2_result)
+        assert isinstance(result, DocumentGroupV1)
+        assert result.entity_id == "grp1"
+        assert result.entity_type == "document_group"
+        assert len(result.documents) == 2
+        # First doc: named field stays, None → ""
+        assert result.documents[0].fields[0].name == "Named"
+        assert result.documents[0].fields[1].name == ""
+        # Second doc: no fields
+        assert result.documents[1].fields == []
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -383,7 +526,7 @@ class TestSendInviteFromTemplateV1:
             with patch("sn_mcp_server.tools.signnow_v1._create_from_template", return_value=created):
                 with patch("sn_mcp_server.tools.signnow_v1._send_invite", new=AsyncMock(return_value=invite)):
                     fn = _V1_TOOLS["send_invite_from_template@1.0"]
-                    result = await fn(mock_ctx, entity_id="tmpl1", orders=[_make_invite_order()])
+                    result = await fn(mock_ctx, entity_id="tmpl1", orders=[_make_invite_order_v1()])
 
         assert isinstance(result, SendInviteFromTemplateResponse)
         assert result.created_entity_id == "new_doc"
@@ -403,7 +546,7 @@ class TestSendInviteFromTemplateV1:
             with patch("sn_mcp_server.tools.signnow_v1._create_from_template", return_value=created):
                 with patch("sn_mcp_server.tools.signnow_v1._send_invite", new=AsyncMock(return_value=invite)):
                     fn = _V1_TOOLS["send_invite_from_template@1.0"]
-                    await fn(mock_ctx, entity_id="tmpl1", orders=[_make_invite_order()])
+                    await fn(mock_ctx, entity_id="tmpl1", orders=[_make_invite_order_v1()])
 
         assert mock_ctx.report_progress.call_count == 3
 
