@@ -212,6 +212,7 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
     sender_email = user_info.primary_email
 
     last_invite_id = ""
+    sender_is_recipient = False
     for recipient in flat_recipients:
         request_kwargs: dict[str, Any] = {
             "to": recipient.email,
@@ -227,16 +228,20 @@ def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_
         response = client.create_document_freeform_invite(token, entity_id, request)
         last_invite_id = response.id
 
-        # When sender and recipient are the same, compute a direct signing link and
-        # surface it on the response so the sender can sign without checking email.
         if recipient.email.lower() == sender_email.lower():
-            signing_link = _get_signing_link(
-                entity_id,
-                "document",
-                token,
-                client,
-            )
-            return SendInviteResponse(invite_id=last_invite_id, invite_entity="document", link=signing_link.link)
+            sender_is_recipient = True
+
+    # When sender and recipient are the same, compute a direct signing link and
+    # surface it on the response so the sender can sign without checking email.
+    # This is done after all invites are sent so no recipient is skipped.
+    if sender_is_recipient:
+        signing_link = _get_signing_link(
+            entity_id,
+            "document",
+            token,
+            client,
+        )
+        return SendInviteResponse(invite_id=last_invite_id, invite_entity="document", link=signing_link.link)
 
     return SendInviteResponse(invite_id=last_invite_id, invite_entity="document")
 

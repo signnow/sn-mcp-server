@@ -336,6 +336,37 @@ class TestSendDocumentFreeformInvite:
         assert mock_client.create_document_freeform_invite.call_count == 3
         assert result.invite_id == "inv_c"  # last invite ID
 
+    def test_sender_is_mid_list_recipient_all_invites_sent_and_link_populated(self, mock_client: MagicMock) -> None:
+        """When sender is one of several recipients, all invites are still sent and the signing link is attached."""
+        mock_client.get_user_info.return_value = MagicMock(primary_email="sender@example.com")
+        mock_client.create_document_freeform_invite.side_effect = [
+            MagicMock(id="inv_a"),
+            MagicMock(id="inv_b"),
+            MagicMock(id="inv_c"),
+        ]
+        mock_client.cfg.app_base = "https://app.test.signnow.com"
+        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc", roles=[])
+        orders = [
+            InviteOrder(
+                order=1,
+                recipients=[
+                    InviteRecipient(email="other1@test.com", action="sign"),
+                    InviteRecipient(email="sender@example.com", action="sign"),
+                    InviteRecipient(email="other2@test.com", action="sign"),
+                ],
+            ),
+        ]
+
+        result = _send_document_freeform_invite(mock_client, "tok", "doc1", orders)
+
+        # All three invites must be sent — no early return mid-loop.
+        assert mock_client.create_document_freeform_invite.call_count == 3
+        # Final invite ID is the last one in the loop.
+        assert result.invite_id == "inv_c"
+        # Signing link is populated because sender == one of the recipients.
+        assert result.link is not None
+        assert "doc1" in result.link
+
     def test_no_recipients_raises_value_error(self, mock_client: MagicMock) -> None:
         """Test empty recipients raises ValueError with entity ID."""
         orders = [InviteOrder(order=1, recipients=[])]
