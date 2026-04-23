@@ -5,16 +5,25 @@ This module contains functions for sending invites to sign documents and documen
 from the SignNow API.
 """
 
+from __future__ import annotations
+
+import time
 from typing import Any, Literal
 
 from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 from signnow_client.models.document_groups import GetDocumentGroupResponse
-from signnow_client.models.templates_and_documents import FieldInviteAuthentication
+from signnow_client.models.templates_and_documents import (
+    CreateDocumentFreeformInviteRequest,
+    CreateFreeformInviteRequest,
+    FieldInviteAuthentication,
+    FreeformInviteRecipient,
+)
 
 from .create_from_template import _resolve_entity
-from .models import InviteOrder, SendInviteResponse, SignerAuthentication
+from .models import InviteOrder, InviteRecipient, SendInviteResponse, SignerAuthentication
+from .signing_link import _get_signing_link
 from .utils import _detect_entity_type
 
 
@@ -62,6 +71,39 @@ def _build_field_invite_authentication(authentication: SignerAuthentication | No
         method=authentication.method,
         message=authentication.sms_message,
     )
+
+
+def _has_fields(client: SignNowAPIClient, token: str, entity_id: str) -> bool:
+    """Check whether a document has fields defined (i.e. requires a field invite).
+
+    Calls GET /document/{id} and returns True when the document has at least one
+    field element.  Documents with fields require field invites with role assignment.
+    Documents without fields use freeform invites (recipients sign anywhere).
+
+    Args:
+        client: SignNow API client instance
+        token: Access token
+        entity_id: Document ID
+
+    Returns:
+        True if document has at least one field, False otherwise
+    """
+    document = client.get_document(token, entity_id)
+    return len(document.fields) > 0
+
+
+def _document_group_has_roles(group: GetDocumentGroupResponse) -> bool:
+    """Check whether any document in a document group has roles defined.
+
+    Pure function — no network calls.
+
+    Args:
+        group: Pre-fetched document group response
+
+    Returns:
+        True if any document in the group defines at least one role, False otherwise
+    """
+    return any(len(doc.roles) > 0 for doc in group.documents)
 
 
 def _send_document_group_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any], document_group: GetDocumentGroupResponse) -> SendInviteResponse:
@@ -136,6 +178,141 @@ def _send_document_group_field_invite(client: SignNowAPIClient, token: str, enti
     return SendInviteResponse(invite_id=response.id, invite_entity="document_group")
 
 
+def _send_document_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse:
+    """Send freeform invite(s) for a document without fields.
+
+    The SignNow document freeform API (POST /document/{id}/invite) accepts a single
+    ``to`` email per call. When multiple recipients are supplied across all orders,
+    this function loops and fires one API call per recipient. The last invite ID is
+    returned (consistent with SignNow's non-transactional API — earlier invites are
+    already sent if a later call fails).
+
+    When any recipient's email matches the sender's primary email, a direct signing
+    link is computed and attached to the response's ``link`` field so the sender can
+    sign without checking their inbox.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token
+        entity_id: Document ID
+        orders: Invite orders containing recipients
+
+    Returns:
+        SendInviteResponse with the last invite_id and invite_entity='document'.
+        ``link`` is populated when sender == recipient.
+
+    Raises:
+        ValueError: If no recipients are provided across all orders
+    """
+    flat_recipients = [recipient for order in orders for recipient in order.recipients]
+    if not flat_recipients:
+        raise ValueError(f"Cannot send freeform invite for document '{entity_id}': no recipients provided")
+
+    user_info = client.get_user_info(token)
+    sender_email = user_info.primary_email
+
+    last_invite_id = ""
+    sender_is_recipient = False
+    for recipient in flat_recipients:
+        request_kwargs: dict[str, Any] = {
+            "to": recipient.email,
+            "from_": sender_email,
+            "subject": recipient.subject,
+            "message": recipient.message,
+            "redirect_uri": recipient.redirect_uri,
+            "close_redirect_uri": recipient.close_redirect_uri,
+        }
+        if recipient.redirect_uri and recipient.redirect_uri.strip():
+            request_kwargs["redirect_target"] = recipient.redirect_target
+        request = CreateDocumentFreeformInviteRequest(**request_kwargs)
+        response = client.create_document_freeform_invite(token, entity_id, request)
+        last_invite_id = response.id
+
+        if recipient.email.lower() == sender_email.lower():
+            sender_is_recipient = True
+
+    # When sender and recipient are the same, compute a direct signing link and
+    # surface it on the response so the sender can sign without checking email.
+    # This is done after all invites are sent so no recipient is skipped.
+    if sender_is_recipient:
+        signing_link = _get_signing_link(
+            entity_id,
+            "document",
+            token,
+            client,
+        )
+        return SendInviteResponse(invite_id=last_invite_id, invite_entity="document", link=signing_link.link)
+
+    return SendInviteResponse(invite_id=last_invite_id, invite_entity="document")
+
+
+def _send_document_group_freeform_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[InviteOrder]) -> SendInviteResponse:
+    """Send a freeform invite for a document group without roles.
+
+    Converts all recipients from orders into FreeformInviteRecipient objects and fires
+    POST /v2/document-groups/{id}/free-form-invites (returns 201).
+
+    When any recipient's email matches the sender's primary email, a direct signing
+    link is computed and attached to the response's ``link`` field.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token
+        entity_id: Document group ID
+        orders: Invite orders containing recipients
+
+    Returns:
+        SendInviteResponse with invite_id and invite_entity='document_group'.
+        ``link`` is populated when sender == recipient.
+
+    Raises:
+        ValueError: If no recipients are provided, or if the API response is missing 'id'
+    """
+    flat_recipients = [recipient for order in orders for recipient in order.recipients]
+    if not flat_recipients:
+        raise ValueError(f"Cannot send freeform invite for document group '{entity_id}': no recipients provided")
+
+    to_list: list[FreeformInviteRecipient] = []
+    for recipient in flat_recipients:
+        signer_kwargs: dict[str, Any] = {
+            "email": recipient.email,
+            "redirect_uri": recipient.redirect_uri,
+            "close_redirect_uri": recipient.close_redirect_uri,
+        }
+        if recipient.redirect_uri and recipient.redirect_uri.strip():
+            signer_kwargs["redirect_target"] = recipient.redirect_target
+        to_list.append(FreeformInviteRecipient(**signer_kwargs))
+
+    first = flat_recipients[0]
+    request = CreateFreeformInviteRequest(
+        to=to_list,
+        subject=first.subject,
+        message=first.message,
+        redirect_uri=first.redirect_uri,
+        client_timestamp=int(time.time()),
+    )
+    response = client.create_freeform_invite(token, entity_id, request)
+    invite_id = response.data.get("id")
+    if not invite_id:
+        raise ValueError(f"Cannot extract invite ID from freeform invite response for document group '{entity_id}'")
+
+    # When sender and recipient are the same, compute a direct signing link and
+    # surface it on the response so the sender can sign without checking email.
+    user_info = client.get_user_info(token)
+    sender_email = user_info.primary_email
+    for recipient in flat_recipients:
+        if recipient.email.lower() == sender_email.lower():
+            signing_link = _get_signing_link(
+                entity_id,
+                "document_group",
+                token,
+                client,
+            )
+            return SendInviteResponse(invite_id=invite_id, invite_entity="document_group", link=signing_link.link)
+
+    return SendInviteResponse(invite_id=invite_id, invite_entity="document_group")
+
+
 def _send_document_field_invite(client: SignNowAPIClient, token: str, entity_id: str, orders: list[Any]) -> SendInviteResponse:
     """Private function to send document field invite."""
     from signnow_client import (
@@ -198,6 +375,8 @@ async def _send_invite(
     client: SignNowAPIClient,
     name: str | None = None,
     ctx: Context | None = None,
+    *,
+    self_sign: bool = False,
 ) -> SendInviteResponse:
     """Send invite to sign a document, document group, template, or template group.
 
@@ -207,14 +386,19 @@ async def _send_invite(
     Args:
         entity_id: ID of the document, document group, template, or template group
         entity_type: Entity type (optional, auto-detected if None)
-        orders: List of orders with recipients
+        orders: List of orders with recipients. Must be empty when self_sign=True.
         token: Access token for SignNow API
         client: SignNow API client instance
         name: Optional name for the new entity (used only for template/template_group)
         ctx: FastMCP context for progress reporting (used for template flows)
+        self_sign: If True, resolve the current user's primary email and build a
+                   single-recipient orders list with the user as recipient. The
+                   freeform path populates SendInviteResponse.link in this case.
 
     Returns:
-        SendInviteResponse with invite details and optional created entity info
+        SendInviteResponse with invite details and optional created entity info.
+        ``link`` is populated when sender == recipient (self-sign or email match
+        on a field-less entity); otherwise None.
     """
     # note: entity_type is reused during method execution & could be changed from one type to another (e.g. template > document)
     if entity_type is None:
@@ -224,11 +408,36 @@ async def _send_invite(
     entity_id = created.entity_id
     entity_type = created.entity_type
 
+    if self_sign:
+        sender_email = client.get_user_info(token).primary_email
+        orders = [InviteOrder(order=1, recipients=[InviteRecipient(email=sender_email)])]
+
+    invite_response: SendInviteResponse
     if entity_type == "document_group":
         group = client.get_document_group(token, entity_id)
-        invite_response = _send_document_group_field_invite(client, token, entity_id, orders, group)
+        if _document_group_has_roles(group):
+            if self_sign:
+                raise ValueError(f"Cannot self-sign document group '{entity_id}': one or more documents in the group define roles. Use create_embedded_sending to prepare a role-based invite instead.")
+            # Validate all recipients have a role assigned before sending group field invite
+            for order in orders:
+                for recipient in order.recipients:
+                    if recipient.role is None:
+                        raise ValueError(f"Cannot send field invite for document group '{entity_id}': recipient '{recipient.email}' has no role assigned")
+            invite_response = _send_document_group_field_invite(client, token, entity_id, orders, group)
+        else:
+            invite_response = _send_document_group_freeform_invite(client, token, entity_id, orders)
     else:
-        invite_response = _send_document_field_invite(client, token, entity_id, orders)
+        if _has_fields(client, token, entity_id):
+            if self_sign:
+                raise ValueError(f"Cannot self-sign document '{entity_id}': document has fields and requires a role-based invite. Use create_embedded_sending to prepare a role-based invite instead.")
+            # Validate all recipients have a role assigned before sending field invite
+            for order in orders:
+                for recipient in order.recipients:
+                    if recipient.role is None:
+                        raise ValueError(f"Cannot send field invite for document '{entity_id}': recipient '{recipient.email}' has no role assigned")
+            invite_response = _send_document_field_invite(client, token, entity_id, orders)
+        else:
+            invite_response = _send_document_freeform_invite(client, token, entity_id, orders)
 
     if ctx and created.created_entity_id:
         await ctx.report_progress(progress=3, total=3)
@@ -236,6 +445,7 @@ async def _send_invite(
     return SendInviteResponse(
         invite_id=invite_response.invite_id,
         invite_entity=invite_response.invite_entity,
+        link=invite_response.link,
         created_entity_id=created.created_entity_id,
         created_entity_type=created.created_entity_type,
         created_entity_name=created.created_entity_name,
