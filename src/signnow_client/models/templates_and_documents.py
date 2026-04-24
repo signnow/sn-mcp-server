@@ -4,6 +4,8 @@ SignNow API Data Models - Templates and Documents
 Pydantic models for SignNow API responses and requests related to templates and documents.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -106,6 +108,9 @@ class DocumentFieldInviteStatus(BaseModel):
     updated: str = Field(..., description="Last update timestamp")
     role_id: str = Field(..., description="Role ID")
     declined: list[dict[str, Any]] = Field(..., description="Declined information")
+    expiration_days: str | None = Field(None, description="Expiration days for the invite")
+    decline_by_signature: str | None = Field(None, description="Whether decline by signature is enabled ('0' or '1')")
+    is_embedded: bool | None = Field(None, description="Whether this is an embedded invite")
 
 
 class DocumentResponse(BaseModel):
@@ -572,7 +577,7 @@ class CreateDocumentFieldInviteResponse(BaseModel):
 class CancelDocumentFieldInviteRequest(BaseModel):
     """Request model for canceling document field invite."""
 
-    reason: str = Field(..., description="The reason for cancellation")
+    reason: str | None = Field(None, description="The reason for cancellation")
 
 
 class CancelDocumentFieldInviteResponse(BaseModel):
@@ -733,6 +738,7 @@ class FieldInviteStatus(BaseModel):
 
     id: str = Field(..., description="Invite ID")
     status: str = Field(..., description="Invite status: 'created', 'pending', 'fulfilled'")
+    is_embedded: bool | None = Field(None, description="Whether this is an embedded invite")
     steps: list[FieldInviteStepStatus] = Field(..., description="List of invite steps with their status")
 
 
@@ -808,6 +814,27 @@ class CancelFreeformInviteRequest(BaseModel):
 
     reason: str | None = Field(None, description="Cancellation reason", max_length=1000)
     client_timestamp: int = Field(..., description="UNIX timestamp")
+
+
+class DocumentFreeFormInvite(BaseModel):
+    """Single freeform invite from GET /v2/documents/{id}/free-form-invites."""
+
+    id: str = Field(..., description="Freeform invite ID")
+    status: str = Field(..., description="Invite status: 'pending', 'fulfilled', 'cancelled'")
+    created: int = Field(..., description="Creation timestamp")
+    email: str = Field(..., description="Recipient email address")
+
+
+class GetDocumentFreeFormInvitesResponse(BaseModel):
+    """Response from GET /v2/documents/{document_id}/free-form-invites."""
+
+    data: list[DocumentFreeFormInvite] = Field(..., description="List of freeform invites")
+
+
+class CancelDocumentFreeformInviteRequest(BaseModel):
+    """Request model for canceling a document freeform invite via PUT /invite/{id}/cancel."""
+
+    reason: str | None = Field(None, description="Cancellation reason")
 
 
 # General Embedded Invite models (for document signing)
@@ -1047,3 +1074,44 @@ class CreateDocumentEmbeddedViewResponse(BaseModel):
         link: str = Field(..., description="Embedded view link for the document")
 
     data: Data = Field(..., description="Embedded view data")
+
+
+# ----------------------------
+# Replace signer (field invite) models
+# ----------------------------
+
+
+class DeleteFieldInviteResponse(BaseModel):
+    """Response from DELETE /field_invite/{field_invite_id}."""
+
+    status: str = Field(..., description="'success' on successful deletion")
+
+
+class ReplaceFieldInviteRequest(BaseModel):
+    """Request body for POST /field_invite (replace signer step).
+
+    All fields except email, role_id, and is_replace are optional.
+    When is_replace is True, the subject/message/order from the previous invite are kept.
+    """
+
+    email: str = Field(..., description="New signer's email address")
+    role_id: str = Field(..., description="The role_id for the new signer (from GET /document/{id} field_invites)")
+    is_replace: bool = Field(..., description="Whether to keep subject, message, and order from the previous signer's invite")
+    expiration_days: int | None = Field(None, description="Days until invite expires (max 30)")
+    decline_by_signature: int | None = Field(None, description="Add Decline button: 0=no, 1=yes")
+    reminder: int | None = Field(None, description="Send reminder after X days (max 30)")
+    authentication_type: str | None = Field(None, description="Identity verification type: 'password' or 'phone'")
+    password: str | None = Field(None, description="Password for identity verification (required if authentication_type='password')")
+    phone: str | None = Field(None, description="Phone number for identity verification (required if authentication_type='phone')")
+
+
+class ReplaceFieldInviteResponse(BaseModel):
+    """Response from POST /field_invite (replace signer)."""
+
+    id: str = Field(..., description="ID of the newly created invite")
+
+
+class TriggerFieldInviteResponse(BaseModel):
+    """Response from POST /document/{document_id}/trigger_fieldinvite."""
+
+    status: str = Field(..., description="'success' on successful trigger")

@@ -4,6 +4,8 @@ SignNow API Client - Document and Template Methods
 Methods for working with individual documents and templates.
 """
 
+from __future__ import annotations
+
 import httpx
 
 from .client_base import SignNowAPIClientBase
@@ -11,6 +13,7 @@ from .exceptions import SignNowAPIError, SignNowAPITimeoutError
 from .models import (
     CancelDocumentFieldInviteRequest,
     CancelDocumentFieldInviteResponse,
+    CancelDocumentFreeformInviteRequest,
     CreateDocumentEmbeddedEditorRequest,
     CreateDocumentEmbeddedInviteRequest,
     CreateDocumentEmbeddedInviteResponse,
@@ -29,18 +32,23 @@ from .models import (
     CreateEmbeddedSendingResponse,
     CreateTemplateRequest,
     CreateTemplateResponse,
+    DeleteFieldInviteResponse,
     DocumentDownloadLinkResponse,
     DocumentResponse,
     GenerateDocumentEmbeddedInviteLinkRequest,
     GenerateDocumentEmbeddedInviteLinkResponse,
     GetDocumentFieldsResponse,
+    GetDocumentFreeFormInvitesResponse,
     GetDocumentHistoryResponse,
     ListDocumentFreeformInvitesResponse,
     MergeDocumentsRequest,
     MergeDocumentsResponse,
     PrefillTextFieldsRequest,
+    ReplaceFieldInviteRequest,
+    ReplaceFieldInviteResponse,
     SendDocumentCopyByEmailRequest,
     SendDocumentCopyByEmailResponse,
+    TriggerFieldInviteResponse,
     UploadDocumentResponse,
 )
 
@@ -276,6 +284,24 @@ class DocumentClientMixin(SignNowAPIClientBase):
             validate_model=GenerateDocumentEmbeddedInviteLinkResponse,
         )
 
+    def delete_document_embedded_invites(self, token: str, document_id: str) -> None:
+        """
+        Delete all embedded invites for a document.
+
+        DELETE /v2/documents/{document_id}/embedded-invites
+
+        Args:
+            token: Access token for authentication
+            document_id: ID of the document whose embedded invites to delete
+
+        Returns:
+            None (204 No Content on success)
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._delete(f"/v2/documents/{document_id}/embedded-invites", headers=headers)
+
     def create_document_embedded_editor(self, token: str, document_id: str, request_data: CreateDocumentEmbeddedEditorRequest) -> CreateEmbeddedEditorResponse:
         """
         Create link for document embedded editor.
@@ -426,6 +452,44 @@ class DocumentClientMixin(SignNowAPIClientBase):
 
         return self._put(f"/document/{document_id}/fieldinvitecancel", headers=headers, json_data=request_data.model_dump(exclude_none=True), validate_model=CancelDocumentFieldInviteResponse)
 
+    def get_document_freeform_invites(self, token: str, document_id: str) -> GetDocumentFreeFormInvitesResponse:
+        """
+        List freeform invites for a document.
+
+        GET /v2/documents/{document_id}/free-form-invites
+
+        Args:
+            token: Access token for authentication
+            document_id: ID of the document
+
+        Returns:
+            Validated GetDocumentFreeFormInvitesResponse with list of freeform invites
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._get(f"/v2/documents/{document_id}/free-form-invites", headers=headers, validate_model=GetDocumentFreeFormInvitesResponse)
+
+    def cancel_document_freeform_invite(self, token: str, invite_id: str, request_data: CancelDocumentFreeformInviteRequest) -> bool:
+        """
+        Cancel a document freeform invite.
+
+        PUT /invite/{invite_id}/cancel
+
+        Args:
+            token: Access token for authentication
+            invite_id: ID of the freeform invite to cancel
+            request_data: Cancellation request with optional reason
+
+        Returns:
+            True if successful
+        """
+
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._put(f"/invite/{invite_id}/cancel", headers=headers, json_data=request_data.model_dump(exclude_none=True))
+        return True
+
     def create_document_freeform_invite(self, token: str, document_id: str, request_data: CreateDocumentFreeformInviteRequest) -> CreateDocumentFreeformInviteResponse:
         """
         Create document freeform invite.
@@ -563,3 +627,51 @@ class DocumentClientMixin(SignNowAPIClientBase):
             json_data=request_data.model_dump(exclude_none=True),
             validate_model=CreateDocumentEmbeddedViewResponse,
         )
+
+    def delete_field_invite(self, token: str, field_invite_id: str) -> DeleteFieldInviteResponse:
+        """Delete a field invite (step 1 of replace signer flow).
+
+        DELETE /field_invite/{field_invite_id}
+
+        Args:
+            token: Access token for authentication.
+            field_invite_id: ID of the field invite to delete.
+
+        Returns:
+            DeleteFieldInviteResponse with status='success'.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._delete(f"/field_invite/{field_invite_id}", headers=headers, validate_model=DeleteFieldInviteResponse)
+
+    def replace_field_invite(self, token: str, request_data: ReplaceFieldInviteRequest) -> ReplaceFieldInviteResponse:
+        """Replace a signer in a field invite (step 2 of replace signer flow).
+
+        POST /field_invite
+
+        Args:
+            token: Access token for authentication.
+            request_data: Replacement invite data with new email, role_id, and settings.
+
+        Returns:
+            ReplaceFieldInviteResponse with the new invite ID.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._post("/field_invite", headers=headers, json_data=request_data.model_dump(exclude_none=True), validate_model=ReplaceFieldInviteResponse)
+
+    def trigger_field_invite(self, token: str, document_id: str) -> TriggerFieldInviteResponse:
+        """Trigger (send) a field invite to the new signer (step 3 of replace signer flow).
+
+        POST /document/{document_id}/trigger_fieldinvite
+
+        Args:
+            token: Access token for authentication.
+            document_id: ID of the document to trigger the invite for.
+
+        Returns:
+            TriggerFieldInviteResponse with status='success'.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        return self._post(f"/document/{document_id}/trigger_fieldinvite", headers=headers, validate_model=TriggerFieldInviteResponse)

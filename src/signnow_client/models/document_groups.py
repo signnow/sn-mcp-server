@@ -4,6 +4,8 @@ SignNow API Data Models - Document Groups and Template Groups
 Pydantic models for SignNow API responses and requests related to document groups and template groups.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
@@ -244,6 +246,7 @@ class GetDocumentGroupResponse(BaseModel):
     id: str = Field(..., description="Document group ID")
     group_name: str = Field(..., description="Name of the document group")
     invite_id: str | None = Field(None, description="Invite ID for this group")
+    freeform_invite: DocumentGroupV2FreeformInvite | None = Field(None, description="Freeform invite info if present")
     documents: list[DocumentGroupDocument] = Field(..., description="List of documents in this group")
     originator_organization_settings: list[dict[str, Any]] = Field(..., description="Organization settings for the originator")
 
@@ -329,8 +332,8 @@ class DocumentGroupV2Data(BaseModel):
     pending_step_id: str | None = Field(None, description="ID of the pending step")
     state: str = Field(..., description="Current state of the document group (e.g., 'pending')")
     last_invite_id: str | None = Field(None, description="ID of the last invite")
-    freeform_invite: DocumentGroupV2FreeformInvite | None = Field(None, description="Freeform invite info, if any")
     documents: list[DocumentGroupV2Document] = Field(..., description="List of documents in the group")
+    freeform_invite: DocumentGroupV2FreeformInvite | None = Field(None, description="Freeform invite info if present")
 
 
 class GetDocumentGroupV2Response(BaseModel):
@@ -429,3 +432,37 @@ class CreateDocumentGroupEmbeddedViewResponse(BaseModel):
     """
 
     data: EmbeddedViewData = Field(..., description="Embedded view data")
+
+
+class UpdateDocGroupInviteEmail(BaseModel):
+    """Email settings for the updated recipient.
+
+    Used in POST /documentgroup/{id}/groupinvite/{invite_id}/invitestep/{step_id}/update.
+    """
+
+    email: str = Field(..., description="New signer's email address")
+    reminder: int | None = Field(None, description="Reminder days (0 = no reminder)")
+    expiration_days: int | None = Field(None, description="Days until invite expires")
+
+
+class UpdateDocGroupInviteActionAttributes(BaseModel):
+    """Per-document action attributes for invite update.
+
+    Used in POST /documentgroup/{id}/groupinvite/{invite_id}/invitestep/{step_id}/update.
+    """
+
+    document_id: str = Field(..., description="Document ID within the group")
+    allow_reassign: int | None = Field(None, description="Allow recipient to reassign: 0=no, 1=yes")
+    decline_by_signature: str | None = Field(None, description="Show decline button: '0'=no, '1'=yes")
+
+
+class UpdateDocGroupInviteStepRequest(BaseModel):
+    """Request for POST /documentgroup/{id}/groupinvite/{invite_id}/invitestep/{step_id}/update.
+
+    Either replaces invitees for a particular step or updates the invite attributes for a user.
+    """
+
+    user_to_update: str = Field(..., description="Email address of the current signer being replaced")
+    invite_email: UpdateDocGroupInviteEmail = Field(..., description="New signer email and notification settings")
+    update_invite_action_attributes: list[UpdateDocGroupInviteActionAttributes] = Field(..., description="Per-document action attributes to update")
+    replace_with_this_user: str = Field(..., description="Email address of the replacement signer")

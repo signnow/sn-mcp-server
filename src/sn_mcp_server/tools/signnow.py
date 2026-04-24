@@ -12,6 +12,7 @@ from pydantic import Field
 from signnow_client import SignNowAPIClient
 
 from ..token_provider import TokenProvider
+from .cancel_invite import _cancel_invite
 from .create_from_template import _create_from_template
 from .create_template import create_template as _create_template
 from .document import _get_document, _update_document_fields, _upload_document
@@ -33,6 +34,7 @@ from .list_contacts import _list_contacts
 from .list_documents import _list_document_groups
 from .list_templates import _list_all_templates
 from .models import (
+    CancelInviteResponse,
     ContactListResponse,
     CreateEmbeddedEditorResponse,
     CreateEmbeddedInviteResponse,
@@ -51,12 +53,14 @@ from .models import (
     TemplateSummaryList,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
+    UpdateInviteRecipientResponse,
     UploadDocumentResponse,
     ViewDocumentResponse,
 )
 from .reminder import _send_invite_reminder
 from .send_invite import _send_invite
 from .signing_link import _get_signing_link
+from .update_invite_recipient import _update_invite_recipient
 
 RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
 
@@ -1114,6 +1118,120 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
         return await _send_invite_reminder(client, token, entity_id, entity_type, email, subject, message, ctx=ctx)
+
+    @mcp.tool(
+        name="cancel_invite",
+        description="Cancel all active (pending) signing invites on a document or document group.",
+        annotations=ToolAnnotations(
+            title="Cancel signing invite",
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["invite", "cancel", "document", "document_group", "workflow"],
+    )
+    async def cancel_invite(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description=("Type of entity: 'document' or 'document_group' (optional). Auto-detected if not provided (tries document_group first). Pass explicitly to save one API call.")),
+        ] = None,
+        reason: Annotated[
+            str | None,
+            Field(description="Optional reason for cancellation"),
+        ] = None,
+    ) -> CancelInviteResponse:
+        """Cancel all active (pending) signing invites on a document or document group.
+
+        Auto-detects entity type when not provided by trying document_group first,
+        then document. Detects invite type (field vs freeform) automatically.
+
+        If all invites are already completed, returns status='completed'.
+        If no invite was ever sent, returns status='invite_not_sent'.
+        Otherwise cancels pending invites and returns status='cancelled'.
+
+        Args:
+            entity_id: ID of the document or document group.
+            entity_type: Optional discriminator ('document' or 'document_group').
+            reason: Optional cancellation reason forwarded to SignNow API.
+
+        Returns:
+            CancelInviteResponse with entity_id, entity_type, status, cancelled_invite_ids.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _cancel_invite(entity_id, entity_type, reason, token, client)
+
+    @mcp.tool(
+        name="update_invite_recipient",
+        description=(
+            "Replace the signing recipient on a pending field invite for a document or document group. "
+            "Finds the pending invite for the current signer and replaces it with a new signer. "
+            "For documents: deletes the old invite, creates a replacement, and triggers sending. "
+            "For document groups: updates the pending step(s) with the new signer information. "
+            "Only field invites are supported — freeform and embedded invites cannot be updated."
+        ),
+        annotations=ToolAnnotations(
+            title="Replace invite recipient",
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["invite", "update", "replace", "document", "document_group", "workflow"],
+    )
+    def update_invite_recipient(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document or document group")],
+        current_email: Annotated[str, Field(description="Email address of the current signer to replace")],
+        new_email: Annotated[str, Field(description="Email address of the new signer")],
+        entity_type: Annotated[
+            Literal["document", "document_group"] | None,
+            Field(description=("Type of entity: 'document' or 'document_group' (optional). Auto-detected if not provided (tries document_group first). Pass explicitly to save one API call.")),
+        ] = None,
+        role: Annotated[
+            str | None,
+            Field(description="Role name to match (for multi-role documents). If omitted, matches any role."),
+        ] = None,
+    ) -> UpdateInviteRecipientResponse:
+        """Replace the signing recipient on a pending field invite.
+
+        Supports both documents and document groups:
+
+        Documents:
+        1. Finds the pending/created field invite matching current_email (and optional role)
+        2. Deletes the old invite, creates a replacement for new_email
+        3. Triggers sending to the new signer
+
+        Document Groups:
+        1. Finds pending steps with actions matching current_email (and optional role)
+        2. Updates each step via /invitestep/{step_id}/update endpoint
+        3. Returns list of updated step IDs
+
+        Only field invites are supported. Freeform and embedded invites return
+        status='unsupported_invite_type'.
+
+        Args:
+            entity_id: Document or document group ID.
+            current_email: Email of the current signer to replace.
+            new_email: Email of the new signer.
+            entity_type: Optional entity type discriminator.
+            role: Optional role filter for multi-role documents/steps.
+
+        Returns:
+            UpdateInviteRecipientResponse with status, new_invite_id, email info, and updated_steps (for document groups).
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _update_invite_recipient(
+            entity_id=entity_id,
+            entity_type=entity_type,
+            current_email=current_email,
+            new_email=new_email,
+            role=role,
+            token=token,
+            client=client,
+        )
 
     @mcp.tool(
         name="view_document",

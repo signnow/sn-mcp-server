@@ -810,6 +810,54 @@ class InviteStatus(BaseModel):
     )
 
 
+class CancelledInvite(BaseModel):
+    """Single cancelled invite entry."""
+
+    id: str = Field(..., description="Cancelled invite ID")
+    invite_type: str = Field(..., description="Type of invite: 'field', 'freeform', or 'embedded'")
+
+
+class CancelInviteResponse(BaseModel):
+    """Response from cancel_invite tool."""
+
+    entity_id: str = Field(..., description="Document or document group ID")
+    entity_type: str = Field(..., description="Entity type: 'document' or 'document_group'")
+    status: str = Field(
+        ...,
+        description=("Result status: 'cancelled' (invites were cancelled), 'invite_not_sent' (no active invite found), 'completed' (all signers already completed)"),
+    )
+    cancelled_invite_ids: list[str] = Field(
+        default_factory=list,
+        description="List of cancelled invite IDs (empty when status is not 'cancelled')",
+    )
+    cancelled_invite_type: str | None = Field(None, description="Type of cancelled invites: 'field', 'freeform', or 'embedded' (populated only when status is 'cancelled')")
+
+
+class UpdateInviteRecipientResponse(BaseModel):
+    """Response from the update_invite_recipient tool."""
+
+    entity_id: str = Field(..., description="Document or document group ID")
+    entity_type: str = Field(..., description="Entity type: 'document' or 'document_group'")
+    status: str = Field(
+        ...,
+        description=(
+            "Result status: 'replaced' (invite recipient was replaced and resent), "
+            "'no_pending_invite' (no pending/created invite found for current_email), "
+            "'unsupported_invite_type' (freeform or embedded invites cannot be updated)"
+        ),
+    )
+    new_invite_id: str | None = Field(
+        None,
+        description="ID of the newly created invite (populated only when status is 'replaced')",
+    )
+    previous_email: str = Field(..., description="Email address of the replaced signer")
+    new_email: str = Field(..., description="Email address of the new signer")
+    updated_steps: list[str] | None = Field(
+        None,
+        description="List of step IDs that were updated (populated only for document_group with status 'replaced')",
+    )
+
+
 class DocumentDownloadLinkResponse(BaseModel):
     """Response model for document download link."""
 

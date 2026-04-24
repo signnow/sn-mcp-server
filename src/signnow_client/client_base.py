@@ -199,3 +199,30 @@ class SignNowAPIClientBase:
             raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in POST multipart request to {url}: {e}") from e
+
+    @overload
+    def _delete(self, url: str, headers: dict[str, str] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...
+    @overload
+    def _delete(self, url: str, headers: dict[str, str] | None = ..., validate_model: None = None) -> Any: ...  # noqa: ANN401
+    def _delete(self, url: str, headers: dict[str, str] | None = None, validate_model: type[BaseModel] | None = None) -> Any:  # noqa: ANN401
+        """Internal DELETE method with unified error handling and optional model validation"""
+        try:
+            response = self.http.delete(url, headers=headers)
+            response.raise_for_status()
+
+            if response.status_code == 204 or not response.content.strip():
+                return None
+
+            data = response.json()
+
+            if validate_model:
+                return validate_model.model_validate(data)
+            return data
+        except httpx.TimeoutException as e:
+            raise SignNowAPITimeoutError("SignNow API timeout") from e
+        except httpx.HTTPStatusError as e:
+            raise self._handle_http_error(e) from e
+        except json.JSONDecodeError as e:
+            raise SignNowAPIError(f"Error parsing SignNow API response: {e}") from e
+        except Exception as e:
+            raise SignNowAPIError(f"Unexpected error in DELETE request to {url}: {e}") from e
