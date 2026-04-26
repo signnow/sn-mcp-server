@@ -79,6 +79,8 @@ _V2_ONLY_TOOLS = {
     "send_invite_reminder",
     "view_document",
     "list_contacts",
+    "cancel_invite",
+    "update_invite_recipient",
 }
 
 # Compound tools removed in v2 — preserved only as v1.0 in signnow_v1.py

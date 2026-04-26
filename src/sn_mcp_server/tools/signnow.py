@@ -1136,6 +1136,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="cancel_invite",
+        version="2.0",
         description="Cancel all active (pending) signing invites on a document or document group.",
         annotations=ToolAnnotations(
             title="Cancel signing invite",
@@ -1180,6 +1181,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="update_invite_recipient",
+        version="2.0",
         description=(
             "Replace the signing recipient on a pending field invite for a document or document group. "
             "Finds the pending invite for the current signer and replaces it with a new signer. "
