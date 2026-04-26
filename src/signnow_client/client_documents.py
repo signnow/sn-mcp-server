@@ -44,6 +44,7 @@ from .models import (
     MergeDocumentsRequest,
     MergeDocumentsResponse,
     PrefillTextFieldsRequest,
+    RenameDocumentRequest,
     ReplaceFieldInviteRequest,
     ReplaceFieldInviteResponse,
     SendDocumentCopyByEmailRequest,
@@ -675,3 +676,17 @@ class DocumentClientMixin(SignNowAPIClientBase):
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
         return self._post(f"/document/{document_id}/trigger_fieldinvite", headers=headers, validate_model=TriggerFieldInviteResponse)
+
+    def rename_document(self, token: str, document_id: str, new_name: str) -> None:
+        """Rename a document or template.
+
+        PUT /document/{document_id}
+        Works for both regular documents and templates — they share the same endpoint.
+
+        Args:
+            token: Access token for authentication.
+            document_id: ID of the document or template to rename.
+            new_name: New name for the document or template.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        self._put(f"/document/{document_id}", headers=headers, json_data=RenameDocumentRequest(document_name=new_name).model_dump())

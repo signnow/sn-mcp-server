@@ -81,6 +81,7 @@ _V2_ONLY_TOOLS = {
     "list_contacts",
     "cancel_invite",
     "update_invite_recipient",
+    "rename_entity",
 }
 
 # Compound tools removed in v2 — preserved only as v1.0 in signnow_v1.py

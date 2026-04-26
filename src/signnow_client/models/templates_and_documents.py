@@ -1115,3 +1115,9 @@ class TriggerFieldInviteResponse(BaseModel):
     """Response from POST /document/{document_id}/trigger_fieldinvite."""
 
     status: str = Field(..., description="'success' on successful trigger")
+
+
+class RenameDocumentRequest(BaseModel):
+    """Request body for PUT /document/{document_id} to rename a document or template."""
+
+    document_name: str = Field(..., description="New name for the document or template")

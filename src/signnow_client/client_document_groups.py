@@ -48,6 +48,8 @@ from .models import (
     GetFieldInviteResponse,
     GetRecipientsResponse,
     ListDocumentGroupDocumentsResponse,
+    RenameDocumentGroupRequest,
+    RenameTemplateGroupRequest,
     SendEmailRequest,
     UpdateDocGroupInviteStepRequest,
 )
@@ -684,3 +686,29 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
             json_data=request_data.model_dump(exclude_none=True),
         )
         return True
+
+    def rename_document_group(self, token: str, document_group_id: str, new_name: str) -> None:
+        """Rename a document group.
+
+        PUT /v2/document-groups/{document_group_id}
+
+        Args:
+            token: Access token for authentication.
+            document_group_id: ID of the document group to rename.
+            new_name: New name for the document group.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        self._put(f"/v2/document-groups/{document_group_id}", headers=headers, json_data=RenameDocumentGroupRequest(group_name=new_name).model_dump())
+
+    def rename_template_group(self, token: str, template_group_id: str, new_name: str) -> None:
+        """Rename a template group (document group template).
+
+        PATCH /v2/document-group-templates/{doc_group_template_id}
+
+        Args:
+            token: Access token for authentication.
+            template_group_id: ID of the template group to rename.
+            new_name: New name for the template group.
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        self._patch(f"/v2/document-group-templates/{template_group_id}", headers=headers, json_data=RenameTemplateGroupRequest(template_group_name=new_name).model_dump())

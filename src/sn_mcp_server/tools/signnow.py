@@ -46,6 +46,7 @@ from .models import (
     EmbeddedInviteOrder,
     InviteOrder,
     InviteStatus,
+    RenameEntityResponse,
     SendInviteResponse,
     SendReminderResponse,
     SigningLinkResponse,
@@ -58,6 +59,7 @@ from .models import (
     ViewDocumentResponse,
 )
 from .reminder import _send_invite_reminder
+from .rename_entity import _rename_entity
 from .send_invite import _send_invite
 from .signing_link import _get_signing_link
 from .update_invite_recipient import _update_invite_recipient
@@ -1387,5 +1389,43 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ] = 15,
     ) -> ContactListResponse:
         return await _list_contacts_impl(query=query, per_page=per_page)
+
+    @mcp.tool(
+        name="rename_entity",
+        version="2.0",
+        description="Rename a document, document group, template, or template group.",
+        annotations=ToolAnnotations(
+            title="Rename entity",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "template", "template_group", "rename"],
+    )
+    def rename_entity(
+        entity_id: Annotated[str, Field(description="ID of the entity to rename")],
+        new_name: Annotated[str, Field(description="New name to apply")],
+        entity_type: Annotated[
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Entity type. Required for 'template_group' (no auto-detect); optional for others (document_group first, then document/template)."),
+        ] = None,
+    ) -> RenameEntityResponse:
+        """Rename a document, document group, template, or template group.
+
+        For template_group the entity_type must be provided explicitly — it cannot be auto-detected.
+        For all other types, entity_type is optional and auto-detected (document_group first, then
+        document vs template via the template flag on the document).
+
+        Args:
+            entity_id: ID of the entity to rename.
+            new_name: New name to apply.
+            entity_type: Entity type discriminator. Required only for template_group.
+
+        Returns:
+            RenameEntityResponse with entity_id, entity_type, and new_name.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _rename_entity(entity_id, new_name, entity_type, token, client)
 
     return

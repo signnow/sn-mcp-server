@@ -466,3 +466,15 @@ class UpdateDocGroupInviteStepRequest(BaseModel):
     invite_email: UpdateDocGroupInviteEmail = Field(..., description="New signer email and notification settings")
     update_invite_action_attributes: list[UpdateDocGroupInviteActionAttributes] = Field(..., description="Per-document action attributes to update")
     replace_with_this_user: str = Field(..., description="Email address of the replacement signer")
+
+
+class RenameDocumentGroupRequest(BaseModel):
+    """Request body for PUT /v2/document-groups/{document_group_id} to rename a document group."""
+
+    group_name: str = Field(..., description="New name for the document group")
+
+
+class RenameTemplateGroupRequest(BaseModel):
+    """Request body for PATCH /v2/document-group-templates/{id} to rename a template group."""
+
+    template_group_name: str = Field(..., description="New name for the template group")
