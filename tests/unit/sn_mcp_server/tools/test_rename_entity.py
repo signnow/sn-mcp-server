@@ -2,81 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from signnow_client.exceptions import SignNowAPIHTTPError
-from signnow_client.models.templates_and_documents import DocumentResponse
 from sn_mcp_server.tools.models import RenameEntityResponse
-from sn_mcp_server.tools.rename_entity import _auto_detect_entity_type, _rename_entity
+from sn_mcp_server.tools.rename_entity import _rename_entity
 
 FAKE_TOKEN = "test-token"  # noqa: S105
-
-
-class TestAutoDetectEntityType:
-    """Tests for _auto_detect_entity_type."""
-
-    @pytest.fixture
-    def mock_client(self) -> MagicMock:
-        return MagicMock()
-
-    def test_detects_document_group(self, mock_client: MagicMock) -> None:
-        """Returns 'document_group' when get_document_group_v2 succeeds."""
-        mock_client.get_document_group_v2.return_value = MagicMock()
-
-        result = _auto_detect_entity_type(mock_client, FAKE_TOKEN, "grp123")
-
-        assert result == "document_group"
-        mock_client.get_document_group_v2.assert_called_once_with(FAKE_TOKEN, "grp123")
-        mock_client.get_document.assert_not_called()
-
-    def test_detects_template_when_document_group_404(self, mock_client: MagicMock) -> None:
-        """Falls back to get_document and returns 'template' when document.template is True."""
-        not_found = SignNowAPIHTTPError("Not found", 404)
-        mock_client.get_document_group_v2.side_effect = not_found
-        mock_client.get_document.return_value = MagicMock(spec=DocumentResponse, template=True)
-
-        result = _auto_detect_entity_type(mock_client, FAKE_TOKEN, "tpl123")
-
-        assert result == "template"
-
-    def test_detects_document_when_template_flag_false(self, mock_client: MagicMock) -> None:
-        """Returns 'document' when document.template is False."""
-        not_found = SignNowAPIHTTPError("Not found", 404)
-        mock_client.get_document_group_v2.side_effect = not_found
-        mock_client.get_document.return_value = MagicMock(spec=DocumentResponse, template=False)
-
-        result = _auto_detect_entity_type(mock_client, FAKE_TOKEN, "doc123")
-
-        assert result == "document"
-
-    def test_raises_when_both_lookups_fail(self, mock_client: MagicMock) -> None:
-        """Raises ValueError when entity is not found as any type."""
-        not_found = SignNowAPIHTTPError("Not found", 404)
-        mock_client.get_document_group_v2.side_effect = not_found
-        mock_client.get_document.side_effect = not_found
-
-        with pytest.raises(ValueError, match="not found"):
-            _auto_detect_entity_type(mock_client, FAKE_TOKEN, "unknown_id")
-
-    def test_reraises_non_404_from_document_group(self, mock_client: MagicMock) -> None:
-        """Re-raises non-404 HTTP errors from document group lookup."""
-        server_error = SignNowAPIHTTPError("Server error", 500)
-        mock_client.get_document_group_v2.side_effect = server_error
-
-        with pytest.raises(SignNowAPIHTTPError):
-            _auto_detect_entity_type(mock_client, FAKE_TOKEN, "entity_id")
-
-    def test_reraises_non_404_from_document(self, mock_client: MagicMock) -> None:
-        """Re-raises non-404 HTTP errors from document lookup."""
-        not_found = SignNowAPIHTTPError("Not found", 404)
-        server_error = SignNowAPIHTTPError("Forbidden", 403)
-        mock_client.get_document_group_v2.side_effect = not_found
-        mock_client.get_document.side_effect = server_error
-
-        with pytest.raises(SignNowAPIHTTPError):
-            _auto_detect_entity_type(mock_client, FAKE_TOKEN, "entity_id")
+_UTILS_PATH = "sn_mcp_server.tools.rename_entity._detect_entity_type"
 
 
 class TestRenameEntity:
@@ -118,44 +53,37 @@ class TestRenameEntity:
         mock_client.rename_document.assert_called_once_with(FAKE_TOKEN, "tpl1", "New Template Name")
         assert result.entity_type == "template"
 
-    def test_auto_detect_document_group(self, mock_client: MagicMock) -> None:
-        """Auto-detects document_group when entity_type is None."""
-        mock_client.get_document_group_v2.return_value = MagicMock()
+    @pytest.mark.parametrize(
+        "detected_type,expected_client_method",
+        [
+            ("document_group", "rename_document_group"),
+            ("template_group", "rename_template_group"),
+            ("document", "rename_document"),
+            ("template", "rename_document"),
+        ],
+    )
+    def test_auto_detect_delegates_to_utils(
+        self,
+        mock_client: MagicMock,
+        detected_type: str,
+        expected_client_method: str,
+    ) -> None:
+        """Auto-detect (entity_type=None) uses _detect_entity_type from utils for all four types."""
+        with patch(_UTILS_PATH, return_value=detected_type) as mock_detect:
+            result = _rename_entity("id1", "New Name", None, FAKE_TOKEN, mock_client)
 
-        result = _rename_entity("grp1", "New Name", None, FAKE_TOKEN, mock_client)
-
-        mock_client.rename_document_group.assert_called_once()
-        assert result.entity_type == "document_group"
-
-    def test_auto_detect_template(self, mock_client: MagicMock) -> None:
-        """Auto-detects template when document.template=True."""
-        mock_client.get_document_group_v2.side_effect = SignNowAPIHTTPError("Not found", 404)
-        mock_client.get_document.return_value = MagicMock(spec=DocumentResponse, template=True)
-
-        result = _rename_entity("tpl1", "New Name", None, FAKE_TOKEN, mock_client)
-
-        mock_client.rename_document.assert_called_once_with(FAKE_TOKEN, "tpl1", "New Name")
-        assert result.entity_type == "template"
-
-    def test_auto_detect_document(self, mock_client: MagicMock) -> None:
-        """Auto-detects document when document.template=False."""
-        mock_client.get_document_group_v2.side_effect = SignNowAPIHTTPError("Not found", 404)
-        mock_client.get_document.return_value = MagicMock(spec=DocumentResponse, template=False)
-
-        result = _rename_entity("doc1", "New Name", None, FAKE_TOKEN, mock_client)
-
-        mock_client.rename_document.assert_called_once_with(FAKE_TOKEN, "doc1", "New Name")
-        assert result.entity_type == "document"
+        mock_detect.assert_called_once_with("id1", FAKE_TOKEN, mock_client)
+        getattr(mock_client, expected_client_method).assert_called_once()
+        assert result.entity_type == detected_type
 
     def test_invalid_entity_type_raises(self, mock_client: MagicMock) -> None:
         """Raises ValueError for unsupported entity_type."""
         with pytest.raises(ValueError, match="Invalid entity_type"):
             _rename_entity("id1", "New Name", "folder", FAKE_TOKEN, mock_client)  # type: ignore[arg-type]
 
-    def test_template_group_cannot_be_auto_detected(self, mock_client: MagicMock) -> None:
-        """Auto-detect falls back to ValueError when entity can't be found — template_group must be explicit."""
-        mock_client.get_document_group_v2.side_effect = SignNowAPIHTTPError("Not found", 404)
-        mock_client.get_document.side_effect = SignNowAPIHTTPError("Not found", 404)
-
-        with pytest.raises(ValueError, match="template_group"):
-            _rename_entity("dgt1", "New Name", None, FAKE_TOKEN, mock_client)
+    def test_auto_detect_propagates_not_found_error(self, mock_client: MagicMock) -> None:
+        """Propagates SignNowAPIHTTPError from _detect_entity_type when entity not found."""
+        not_found = SignNowAPIHTTPError("Not found", 404)
+        with patch(_UTILS_PATH, side_effect=not_found):
+            with pytest.raises(SignNowAPIHTTPError):
+                _rename_entity("bad_id", "Name", None, FAKE_TOKEN, mock_client)

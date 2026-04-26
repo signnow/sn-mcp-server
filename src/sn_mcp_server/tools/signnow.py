@@ -1408,19 +1408,18 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         new_name: Annotated[str, Field(description="New name to apply")],
         entity_type: Annotated[
             Literal["document", "document_group", "template", "template_group"] | None,
-            Field(description="Entity type. Required for 'template_group' (no auto-detect); optional for others (document_group first, then document/template)."),
+            Field(description="Entity type. Optional — all four types are auto-detected (document_group → template_group → template → document). Provide explicitly to skip detection."),
         ] = None,
     ) -> RenameEntityResponse:
         """Rename a document, document group, template, or template group.
 
-        For template_group the entity_type must be provided explicitly — it cannot be auto-detected.
-        For all other types, entity_type is optional and auto-detected (document_group first, then
-        document vs template via the template flag on the document).
+        When entity_type is omitted, the type is auto-detected via waterfall:
+        document_group → template_group → template → document.
 
         Args:
             entity_id: ID of the entity to rename.
             new_name: New name to apply.
-            entity_type: Entity type discriminator. Required only for template_group.
+            entity_type: Entity type discriminator. Optional — auto-detected when omitted.
 
         Returns:
             RenameEntityResponse with entity_id, entity_type, and new_name.
