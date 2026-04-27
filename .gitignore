@@ -19,3 +19,6 @@ eval-reports/
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Smoke harness (local-only, real-API exercise scripts)
+/scripts/smoke/
