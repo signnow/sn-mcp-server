@@ -16,3 +16,6 @@ tmp/
 
 # Eval harness outputs (report.json/md, transcripts/)
 eval-reports/
+
+# Local Claude Code settings
+.claude/settings.local.json
