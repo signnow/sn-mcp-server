@@ -1091,3 +1091,11 @@ class ContactListResponse(BaseModel):
         description="Matching contacts (empty list when no contacts match — not an error)",
     )
     count: int = Field(..., description="Number of contacts returned in this response")
+
+
+class RenameEntityResponse(BaseModel):
+    """Response from the rename_entity tool."""
+
+    entity_id: str = Field(..., description="ID of the renamed entity")
+    entity_type: str = Field(..., description="Type of the renamed entity: document, document_group, template, or template_group")
+    new_name: str = Field(..., description="New name that was applied")

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, HttpUrl
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, model_validator
 from typing_extensions import Self
 
 
@@ -153,12 +153,14 @@ class DocumentGroupTemplateRecipientAttributes(BaseModel):
     decline_redirect_uri: str | None = Field(None, description="URL after recipient declines document")
     close_redirect_uri: str | None = Field(None, description="URL after save progress or close")
 
-    def model_dump(self: Self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
-        """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
-        data = super().model_dump(**kwargs)
-        if (not self.redirect_uri or not self.redirect_uri.strip()) and "redirect_target" in data:
-            del data["redirect_target"]
-        return data
+    @model_validator(mode="after")
+    def _clear_redirect_target_without_uri(self) -> DocumentGroupTemplateRecipientAttributes:
+        # The SignNow API rejects requests where redirect_target is set but redirect_uri is missing.
+        # A custom model_dump override does not run when this model is serialized via the parent,
+        # so the field must be cleared on the instance.
+        if not (self.redirect_uri and self.redirect_uri.strip()):
+            self.redirect_target = None
+        return self
 
 
 class DocumentGroupTemplateRecipient(BaseModel):
@@ -466,3 +468,15 @@ class UpdateDocGroupInviteStepRequest(BaseModel):
     invite_email: UpdateDocGroupInviteEmail = Field(..., description="New signer email and notification settings")
     update_invite_action_attributes: list[UpdateDocGroupInviteActionAttributes] = Field(..., description="Per-document action attributes to update")
     replace_with_this_user: str = Field(..., description="Email address of the replacement signer")
+
+
+class RenameDocumentGroupRequest(BaseModel):
+    """Request body for PUT /v2/document-groups/{document_group_id} to rename a document group."""
+
+    group_name: str = Field(..., description="New name for the document group")
+
+
+class RenameTemplateGroupRequest(BaseModel):
+    """Request body for PATCH /v2/document-group-templates/{id} to rename a template group."""
+
+    template_group_name: str = Field(..., description="New name for the template group")

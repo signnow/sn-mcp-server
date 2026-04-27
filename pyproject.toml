@@ -99,6 +99,9 @@ extend-exclude = ["src/sn_mcp_server/_version.py"]
 # Introspects FastMCP's `@mcp.tool` decorator to capture registered tools;
 # the wrapper is a generic callable, so Any is the only accurate annotation.
 "tests/unit/sn_mcp_server/test_tool_response_shapes.py" = ["S101", "ANN401"]
+# Same reason as above: recording wrappers for mcp.tool interception require Any.
+"tests/unit/sn_mcp_server/test_tool_versions.py" = ["S101", "ANN401"]
+"tests/unit/sn_mcp_server/tools/test_signnow_v1.py" = ["S101", "ANN401"]
 "src/sn_mcp_server/auth.py" = ["S101"] # unreachable type-narrowing asserts; see auth.py:181,191,230
 # Pydantic field_validator(mode="before") helpers normalize raw API payloads of unknown shape;
 # Any is the correct input type — the helper's job is to narrow it to a concrete type.
