@@ -55,4 +55,3 @@ def _rename_entity(
         raise ValueError(f"Unsupported entity_type '{resolved_type}'")
 
     return RenameEntityResponse(entity_id=entity_id, entity_type=resolved_type, new_name=new_name)
-
