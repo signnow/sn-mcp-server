@@ -46,6 +46,7 @@ from .models import (
     EmbeddedInviteOrder,
     InviteOrder,
     InviteStatus,
+    RenameEntityResponse,
     SendInviteResponse,
     SendReminderResponse,
     SigningLinkResponse,
@@ -58,13 +59,10 @@ from .models import (
     ViewDocumentResponse,
 )
 from .reminder import _send_invite_reminder
+from .rename_entity import _rename_entity
 from .send_invite import _send_invite
 from .signing_link import _get_signing_link
 from .update_invite_recipient import _update_invite_recipient
-
-RESOURCE_PREFERRED_SUFFIX = "\n\nPreferred: use this as an MCP Resource (resources/read) when your client supports resources."
-
-TOOL_FALLBACK_SUFFIX = "\n\nNote: If your client supports MCP Resources, prefer the resource version of this endpoint; this tool exists as a compatibility fallback for tool-only clients."
 
 
 def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAPIClient]:
@@ -99,7 +97,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_all_templates",
-        description="Get simplified list of all templates and template groups with basic information" + TOOL_FALLBACK_SUFFIX,
+        version="1.0",
+        description="Get simplified list of all templates and template groups with basic information",
         annotations=ToolAnnotations(
             title="List templates and template groups",
             readOnlyHint=True,
@@ -135,25 +134,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         return await _list_all_templates_impl(ctx, limit=limit, offset=offset)
 
-    @mcp.resource(
-        "signnow://templates{?limit,offset}",
-        name="list_all_templates_resource",
-        description="Get simplified list of all templates and template groups with basic information" + RESOURCE_PREFERRED_SUFFIX,
-        tags=["template", "template_group", "list"],
-    )
-    async def list_all_templates_resource(
-        ctx: Context,
-        limit: Annotated[
-            int,
-            Field(ge=1, le=100, description="Maximum number of items to return (1-100, default 50)"),
-        ] = 50,
-        offset: Annotated[
-            int,
-            Field(ge=0, description="Number of items to skip for pagination (default 0)"),
-        ] = 0,
-    ) -> TemplateSummaryList:
-        return await _list_all_templates_impl(ctx, limit=limit, offset=offset)
-
     async def _list_documents_impl(
         ctx: Context,
         filter: Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None = None,
@@ -182,12 +162,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_documents",
+        version="1.0",
         description=(
             "Get simplified list of documents and document groups with basic information. "
             "Returns both documents and document groups in a unified format. "
             "Use this tool to fetch lists of documents by status, e.g. "
             "documents waiting for your signature (waiting-for-me) or expired documents "
-            "(expired_filter=expired). " + TOOL_FALLBACK_SUFFIX
+            "(expired_filter=expired). "
         ),
         annotations=ToolAnnotations(
             title="List documents and document groups",
@@ -255,60 +236,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             offset=offset,
         )
 
-    @mcp.resource(
-        "signnow://documents/{?filter,sortby,order,folder_id,expired_filter,limit,offset}",
-        name="list_documents_resource",
-        description=(
-            "Get simplified list of documents and document groups with basic information. "
-            "Returns both documents and document groups in a unified format. "
-            "Use this resource to fetch lists of documents by status, e.g. "
-            "documents waiting for your signature (waiting-for-me) or expired documents "
-            "(expired_filter=expired). " + RESOURCE_PREFERRED_SUFFIX
-        ),
-        tags=["document", "document_group", "list"],
-        mime_type="application/json",
-    )
-    async def list_documents_resource(
-        ctx: Context,
-        filter: Annotated[
-            Literal["signed", "pending", "waiting-for-me", "waiting-for-others", "unsent"] | None,
-            Field(description=("Filter by document group status (optional). Available values: signed, pending, waiting-for-me, waiting-for-others, unsent.")),
-        ] = None,
-        sortby: Annotated[
-            Literal["updated", "created", "document-name"] | None,
-            Field(description=("Sort by created date, updated date, or document name (optional). Available values: updated, created, document-name.")),
-        ] = None,
-        order: Annotated[
-            Literal["asc", "desc"] | None,
-            Field(description=("Order of sorting (optional, can be used only with sortby). Available values: asc, desc.")),
-        ] = None,
-        folder_id: Annotated[str | None, Field(description="Filter by folder ID (optional)")] = None,
-        expired_filter: Annotated[
-            Literal["all", "expired", "not-expired"],
-            Field(description=("Filter by invite expiredness (optional, default: all). Available values: all, expired, not-expired.")),
-        ] = "all",
-        limit: Annotated[
-            int,
-            Field(ge=1, le=100, description="Maximum number of items to return (1-100, default 50)"),
-        ] = 50,
-        offset: Annotated[
-            int,
-            Field(ge=0, description="Number of items to skip for pagination (default 0)"),
-        ] = 0,
-    ) -> SimplifiedDocumentGroupsResponse:
-        return await _list_documents_impl(
-            ctx,
-            filter=filter,
-            sortby=sortby,
-            order=order,
-            folder_id=folder_id,
-            expired_filter=expired_filter,
-            limit=limit,
-            offset=offset,
-        )
-
     @mcp.tool(
         name="send_invite",
+        version="2.0",
         description=(
             "Send invite to sign a document, document group, template, or template group. "
             "Supports both field invites (documents with roles/fields) and freeform invites "
@@ -419,6 +349,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_embedded_invite",
+        version="2.0",
         description=(
             "Create embedded invite for signing a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded invite."
@@ -477,6 +408,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_embedded_sending",
+        version="2.0",
         description=(
             "Create embedded sending for managing, editing, or sending invites for a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded sending. "
@@ -532,6 +464,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_embedded_editor",
+        version="2.0",
         description=(
             "Create embedded editor for editing a document, document group, template, or template group. "
             "For templates and template groups, automatically creates a document/group first, then creates the embedded editor."
@@ -583,6 +516,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_template",
+        version="2.0",
         description="Convert an existing document or document group into a reusable template",
         annotations=ToolAnnotations(
             title="Create template from document or document group",
@@ -628,6 +562,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="create_from_template",
+        version="1.0",
         description="Create a new document or document group from an existing template or template group",
         annotations=ToolAnnotations(
             title="Create from template",
@@ -667,13 +602,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_invite_status",
+        version="1.0",
         description=(
             "Get invite status for a document or document group. "
             "Supports field invites and freeform invites (field invite is preferred when both exist). "
             "For freeform document groups, uses the group documents list so signature_requests include signer emails when the API provides them. "
             "Returns invite_mode 'field' or 'freeform'."
-        )
-        + TOOL_FALLBACK_SUFFIX,
+        ),
         annotations=ToolAnnotations(
             title="Get invite status",
             readOnlyHint=True,
@@ -693,22 +628,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     ) -> InviteStatus:
         return _get_invite_status_impl(ctx, entity_id, entity_type)
 
-    @mcp.resource(
-        "signnow://invite-status/{entity_id}{?entity_type}",
-        name="get_invite_status_resource",
-        description=("Get invite status for a document or document group (field and freeform). See get_invite_status tool for behaviour.") + RESOURCE_PREFERRED_SUFFIX,
-        tags=["invite", "status", "document", "document_group", "workflow"],
-    )
-    def get_invite_status_resource(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
-        entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-    ) -> InviteStatus:
-        return _get_invite_status_impl(ctx, entity_id, entity_type)
-
     def _get_document_download_link_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> DocumentDownloadLinkResponse:
         token, client = _get_token_and_client(token_provider)
 
@@ -717,7 +636,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_document_download_link",
-        description="Get download link for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        version="1.0",
+        description="Get download link for a document or document group",
         annotations=ToolAnnotations(
             title="Get document download link",
             readOnlyHint=False,
@@ -749,22 +669,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         return _get_document_download_link_impl(ctx, entity_id, entity_type)
 
-    @mcp.resource(
-        "signnow://document-download-link/{entity_id}{?entity_type}",
-        name="get_document_download_link_resource",
-        description="Get download link for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
-        tags=["document", "document_group", "download", "link"],
-    )
-    def get_document_download_link_resource(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
-        entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-    ) -> DocumentDownloadLinkResponse:
-        return _get_document_download_link_impl(ctx, entity_id, entity_type)
-
     def _get_signing_link_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> SigningLinkResponse:
         token, client = _get_token_and_client(token_provider)
 
@@ -773,7 +677,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_signing_link",
-        description="Get signing link for a document or document group" + TOOL_FALLBACK_SUFFIX,
+        version="1.0",
+        description="Get signing link for a document or document group",
         annotations=ToolAnnotations(
             title="Get signing link",
             readOnlyHint=True,
@@ -802,22 +707,6 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         return _get_signing_link_impl(ctx, entity_id, entity_type)
 
-    @mcp.resource(
-        "signnow://signing-link/{entity_id}{?entity_type}",
-        name="get_signing_link_resource",
-        description="Get signing link for a document or document group" + RESOURCE_PREFERRED_SUFFIX,
-        tags=["document", "document_group", "sign", "link"],
-    )
-    def get_signing_link_resource(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document or document group")],
-        entity_type: Annotated[
-            Literal["document", "document_group"] | None,
-            Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
-        ] = None,
-    ) -> SigningLinkResponse:
-        return _get_signing_link_impl(ctx, entity_id, entity_type)
-
     def _get_document_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group", "template", "template_group"] | None) -> DocumentGroup:
         token, client = _get_token_and_client(token_provider)
 
@@ -826,6 +715,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="get_document",
+        version="2.0",
         description="Get full document, template, template group or document group information with field values",
         annotations=ToolAnnotations(
             title="Get document or group details",
@@ -866,24 +756,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         return _get_document_impl(ctx, entity_id, entity_type)
 
-    @mcp.resource(
-        "signnow://document/{entity_id}{?entity_type}",
-        name="get_document_resource",
-        description="Get full document, template, template group or document group information with field values" + RESOURCE_PREFERRED_SUFFIX,
-        tags=["document", "document_group", "template", "template_group", "get", "fields"],
-    )
-    def get_document_resource(
-        ctx: Context,
-        entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
-        entity_type: Annotated[
-            Literal["document", "document_group", "template", "template_group"] | None,
-            Field(description="Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional). If not provided, will be determined automatically"),
-        ] = None,
-    ) -> DocumentGroup:
-        return _get_document_impl(ctx, entity_id, entity_type)
-
     @mcp.tool(
         name="update_document_fields",
+        version="1.0",
         description="Update text fields in multiple documents (only individual documents, not document groups)",
         annotations=ToolAnnotations(
             title="Update document text fields",
@@ -940,6 +815,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="upload_document",
+        version="2.0",
         description=(
             "Upload a document to SignNow from a local file path, public URL, or MCP resource attachment. "
             "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
@@ -1064,6 +940,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="send_invite_reminder",
+        version="2.0",
         description=("Send a signing reminder to pending signers on a document or document group. "),
         annotations=ToolAnnotations(
             title="Send signing reminder",
@@ -1121,6 +998,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="cancel_invite",
+        version="2.0",
         description="Cancel all active (pending) signing invites on a document or document group.",
         annotations=ToolAnnotations(
             title="Cancel signing invite",
@@ -1165,6 +1043,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="update_invite_recipient",
+        version="2.0",
         description=(
             "Replace the signing recipient on a pending field invite for a document or document group. "
             "Finds the pending invite for the current signer and replaces it with a new signer. "
@@ -1235,6 +1114,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="view_document",
+        version="2.0",
         description=(
             "Generate a read-only embedded view link for a document or document group. "
             "To find an entity by name, first call list_documents or list_templates "
@@ -1315,7 +1195,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
 
     @mcp.tool(
         name="list_contacts",
-        description="Search CRM contacts by name, email, or phone. Use this tool before send_invite to resolve a recipient's email address by their name." + TOOL_FALLBACK_SUFFIX,
+        version="2.0",
+        description="Search CRM contacts by name, email, or phone. Use this tool before send_invite to resolve a recipient's email address by their name.",
         annotations=ToolAnnotations(
             title="List CRM contacts",
             readOnlyHint=True,
@@ -1349,24 +1230,41 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         return await _list_contacts_impl(query=query, per_page=per_page)
 
-    @mcp.resource(
-        "signnow://contacts{?query,per_page}",
-        name="list_contacts_resource",
-        description="Search CRM contacts by name, email, or phone. Use this resource before send_invite to resolve a recipient's email address by their name." + RESOURCE_PREFERRED_SUFFIX,
-        tags=["contacts", "crm", "list"],
-        mime_type="application/json",
+    @mcp.tool(
+        name="rename_entity",
+        version="2.0",
+        description="Rename a document, document group, template, or template group.",
+        annotations=ToolAnnotations(
+            title="Rename entity",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "template", "template_group", "rename"],
     )
-    async def list_contacts_resource(
-        ctx: Context,
-        query: Annotated[
-            str | None,
-            Field(description="Filter contacts by name, email, or phone (partial match). Omit to return the first per_page contacts."),
+    def rename_entity(
+        entity_id: Annotated[str, Field(description="ID of the entity to rename")],
+        new_name: Annotated[str, Field(description="New name to apply")],
+        entity_type: Annotated[
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Entity type. Optional — all four types are auto-detected (document_group → template_group → template → document). Provide explicitly to skip detection."),
         ] = None,
-        per_page: Annotated[
-            int,
-            Field(ge=1, le=100, description="Maximum number of contacts to return (1–100, default 15)"),
-        ] = 15,
-    ) -> ContactListResponse:
-        return await _list_contacts_impl(query=query, per_page=per_page)
+    ) -> RenameEntityResponse:
+        """Rename a document, document group, template, or template group.
+
+        When entity_type is omitted, the type is auto-detected via waterfall:
+        document_group → template_group → template → document.
+
+        Args:
+            entity_id: ID of the entity to rename.
+            new_name: New name to apply.
+            entity_type: Entity type discriminator. Optional — auto-detected when omitted.
+
+        Returns:
+            RenameEntityResponse with entity_id, entity_type, and new_name.
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _rename_entity(entity_id, new_name, entity_type, token, client)
 
     return

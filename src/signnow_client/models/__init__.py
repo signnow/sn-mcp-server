@@ -53,6 +53,8 @@ from .document_groups import (
     GetDocumentGroupTemplateResponse,
     GetDocumentGroupV2Response,
     ListDocumentGroupDocumentsResponse,
+    RenameDocumentGroupRequest,
+    RenameTemplateGroupRequest,
     TemplateShort,
     TemplateShortThumbnail,
     UnmappedDocument,
@@ -158,6 +160,7 @@ from .templates_and_documents import (
     MergeDocumentsResponse,
     PrefillTextField,
     PrefillTextFieldsRequest,
+    RenameDocumentRequest,
     ReplaceFieldInviteRequest,
     ReplaceFieldInviteResponse,
     SendDocumentCopyByEmailRequest,
@@ -225,6 +228,8 @@ __all__ = [
     "UpdateDocGroupInviteActionAttributes",
     "UpdateDocGroupInviteEmail",
     "UpdateDocGroupInviteStepRequest",
+    "RenameDocumentGroupRequest",
+    "RenameTemplateGroupRequest",
     # Other Models
     "DocumentDownloadLinkResponse",
     "DocumentRoleName",
@@ -332,4 +337,5 @@ __all__ = [
     "TriggerFieldInviteResponse",
     "UploadDocumentRequest",
     "UploadDocumentResponse",
+    "RenameDocumentRequest",
 ]

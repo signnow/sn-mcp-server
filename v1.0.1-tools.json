@@ -1,0 +1,552 @@
+{
+  "$schema": "v1.0.1 tool contracts",
+  "version": "1.0.1",
+  "tag": "https://github.com/signnow/sn-mcp-server/releases/tag/v1.0.1",
+  "source_file": "src/sn_mcp_server/tools/signnow.py",
+  "tools": [
+    {
+      "name": "list_all_templates",
+      "title": "List templates and template groups",
+      "description": "Get simplified list of all templates and template groups with basic information",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+      "tags": ["template", "template_group", "list"],
+      "input": {
+        "limit": { "type": "int", "required": false, "default": 50, "constraints": "ge=1, le=100", "description": "Maximum number of items to return (1-100, default 50)" },
+        "offset": { "type": "int", "required": false, "default": 0, "constraints": "ge=0", "description": "Number of items to skip for pagination (default 0)" }
+      },
+      "output": {
+        "model": "TemplateSummaryList",
+        "fields": {
+          "templates": { "type": "list[TemplateSummary]", "description": "List of template summaries" },
+          "total_count": { "type": "int", "description": "Total number of templates across all pages" },
+          "offset": { "type": "int", "default": 0, "description": "Number of items skipped" },
+          "limit": { "type": "int", "default": 50, "description": "Maximum number of items in this page" },
+          "has_more": { "type": "bool", "default": false, "description": "Whether more items exist beyond this page" }
+        },
+        "nested": {
+          "TemplateSummary": {
+            "id": { "type": "str", "description": "Template group ID" },
+            "name": { "type": "str", "description": "Template group name" },
+            "entity_type": { "type": "str", "description": "Type of entity: 'template' or 'template_group'" },
+            "folder_id": { "type": "str | null", "description": "Folder ID if stored in folder" },
+            "last_updated": { "type": "int", "description": "Unix timestamp of last update" },
+            "is_prepared": { "type": "bool", "description": "Whether the group is ready for sending" },
+            "roles": { "type": "list[str]", "description": "All unique roles from all templates in the group" }
+          }
+        }
+      }
+    },
+    {
+      "name": "list_documents",
+      "title": "List documents and document groups",
+      "description": "Get simplified list of documents and document groups with basic information. Returns both documents and document groups in a unified format.",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+      "tags": ["document", "document_group", "list"],
+      "input": {
+        "filter": { "type": "Literal['signed','pending','waiting-for-me','waiting-for-others','unsent'] | null", "required": false, "default": null, "description": "Filter by document group status (optional)" },
+        "sortby": { "type": "Literal['updated','created','document-name'] | null", "required": false, "default": null, "description": "Sort by created date, updated date, or document name (optional)" },
+        "order": { "type": "Literal['asc','desc'] | null", "required": false, "default": null, "description": "Order of sorting (optional, can be used only with sortby)" },
+        "folder_id": { "type": "str | null", "required": false, "default": null, "description": "Filter by folder ID (optional)" },
+        "expired_filter": { "type": "Literal['all','expired','not-expired']", "required": false, "default": "all", "description": "Filter by invite expiredness (optional, default: all)" },
+        "limit": { "type": "int", "required": false, "default": 50, "constraints": "ge=1, le=100", "description": "Maximum number of items to return (1-100, default 50)" },
+        "offset": { "type": "int", "required": false, "default": 0, "constraints": "ge=0", "description": "Number of items to skip for pagination (default 0)" }
+      },
+      "output": {
+        "model": "SimplifiedDocumentGroupsResponse",
+        "fields": {
+          "document_groups": { "type": "list[SimplifiedDocumentGroup]", "description": "List of document groups" },
+          "document_group_total_count": { "type": "int", "description": "Total number of document groups across all pages" },
+          "offset": { "type": "int", "default": 0, "description": "Number of items skipped" },
+          "limit": { "type": "int", "default": 50, "description": "Maximum number of items in this page" },
+          "has_more": { "type": "bool", "default": false, "description": "Whether more items exist beyond this page" }
+        },
+        "nested": {
+          "SimplifiedDocumentGroup": {
+            "last_updated": { "type": "int", "description": "Unix timestamp of the last update" },
+            "id": { "type": "str", "description": "Document group or document ID" },
+            "name": { "type": "str", "description": "Name of the document group or document" },
+            "entity_type": { "type": "str", "description": "Type of entity: 'document' or 'document_group'" },
+            "invite": { "type": "SimplifiedInvite | null", "description": "Unified invite info" },
+            "documents": { "type": "list[SimplifiedDocumentGroupDocument]", "description": "List of documents in this group" }
+          },
+          "SimplifiedDocumentGroupDocument": {
+            "id": { "type": "str", "description": "Document ID" },
+            "name": { "type": "str", "description": "Document name" },
+            "roles": { "type": "list[str]", "description": "Roles defined for this document" }
+          },
+          "SimplifiedInvite": {
+            "invite_id": { "type": "str | null", "description": "Invite ID if present" },
+            "status": { "type": "str", "description": "Unified invite status: pending, created, completed, declined, expired, unknown" },
+            "status_raw": { "type": "str | null", "description": "Raw group-level invite status as returned by SignNow" },
+            "expires_at": { "type": "int | null", "description": "Unified invite expiration timestamp" },
+            "expired": { "type": "bool", "default": false, "description": "Is invite expired" },
+            "participants": { "type": "list[SimplifiedInviteParticipant]", "description": "List of invite participants" }
+          },
+          "SimplifiedInviteParticipant": {
+            "email": { "type": "str | null", "description": "Participant email" },
+            "role": { "type": "str | null", "description": "Role (for document field_invites)" },
+            "action": { "type": "str | null", "description": "Action (for document-group invites)" },
+            "order": { "type": "int | null", "description": "Signing order if present" },
+            "status": { "type": "str | null", "description": "Raw participant status from API" },
+            "created": { "type": "int | null", "description": "Unix created timestamp" },
+            "updated": { "type": "int | null", "description": "Unix updated timestamp" },
+            "expires_at": { "type": "int | null", "description": "Unix expiration timestamp" },
+            "expired": { "type": "bool", "default": false, "description": "Is this participant expired" }
+          }
+        }
+      }
+    },
+    {
+      "name": "send_invite",
+      "title": "Send signing invite",
+      "description": "Send invite to sign a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: send_invite_from_template",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["send_invite", "document", "document_group", "sign", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "orders": { "type": "list[InviteOrder] | str | null", "required": false, "default": null, "description": "List of orders with recipients (can be a list or JSON string)" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" }
+      },
+      "output": {
+        "model": "SendInviteResponse",
+        "fields": {
+          "invite_id": { "type": "str", "description": "ID of the created invite" },
+          "invite_entity": { "type": "str", "description": "Type of invite entity: 'document' or 'document_group'" }
+        }
+      }
+    },
+    {
+      "name": "send_invite_from_template",
+      "title": "Create from template and send invite",
+      "description": "Create document/group from template and send invite immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: send_invite",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["template", "template_group", "document", "document_group", "send_invite", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the template or template group" },
+        "orders": { "type": "list[InviteOrder] | str", "required": true, "description": "List of orders with recipients for the invite (can be a list or JSON string)" },
+        "entity_type": { "type": "Literal['template','template_group'] | null", "required": false, "default": null, "description": "Type of entity: 'template' or 'template_group' (optional)" },
+        "name": { "type": "str | null", "required": false, "default": null, "description": "Optional name for the new document or document group" }
+      },
+      "output": {
+        "model": "SendInviteFromTemplateResponse",
+        "fields": {
+          "created_entity_id": { "type": "str", "description": "ID of the created document or document group" },
+          "created_entity_type": { "type": "str", "description": "Type of created entity: 'document' or 'document_group'" },
+          "created_entity_name": { "type": "str", "description": "Name of the created entity" },
+          "invite_id": { "type": "str", "description": "ID of the created invite" },
+          "invite_entity": { "type": "str", "description": "Type of invite entity: 'document' or 'document_group'" }
+        }
+      }
+    },
+    {
+      "name": "create_embedded_invite",
+      "title": "Create embedded signing invite",
+      "description": "Create embedded invite for signing a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_invite_from_template",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["send_invite", "document", "document_group", "sign", "embedded", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "orders": { "type": "list[EmbeddedInviteOrder] | str | null", "required": false, "default": null, "description": "List of orders with recipients (can be a list or JSON string)" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" }
+      },
+      "output": {
+        "model": "CreateEmbeddedInviteResponse",
+        "fields": {
+          "invite_id": { "type": "str", "description": "ID of the created embedded invite" },
+          "invite_entity": { "type": "str", "description": "Type of invite entity: 'document' or 'document_group'" },
+          "recipient_links": { "type": "list[dict[str, str]]", "description": "Array of objects with role and link for recipients with delivery_type='link'" }
+        }
+      }
+    },
+    {
+      "name": "create_embedded_invite_from_template",
+      "title": "Create from template and embed invite",
+      "description": "Create document/group from template and create embedded invite immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_invite",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the template or template group" },
+        "orders": { "type": "list[EmbeddedInviteOrder] | str | null", "required": false, "default": null, "description": "List of orders with recipients for the embedded invite (can be a list or JSON string)" },
+        "entity_type": { "type": "Literal['template','template_group'] | null", "required": false, "default": null, "description": "Type of entity: 'template' or 'template_group' (optional)" },
+        "name": { "type": "str | null", "required": false, "default": null, "description": "Optional name for the new document or document group" }
+      },
+      "output": {
+        "model": "CreateEmbeddedInviteFromTemplateResponse",
+        "fields": {
+          "created_entity_id": { "type": "str", "description": "ID of the created document or document group" },
+          "created_entity_type": { "type": "str", "description": "Type of created entity: 'document' or 'document_group'" },
+          "created_entity_name": { "type": "str", "description": "Name of the created entity" },
+          "invite_id": { "type": "str", "description": "ID of the created embedded invite" },
+          "invite_entity": { "type": "str", "description": "Type of invite entity: 'document' or 'document_group'" },
+          "recipient_links": { "type": "list[dict[str, str]]", "description": "Array of objects with role and link for recipients with delivery_type='link'" }
+        }
+      }
+    },
+    {
+      "name": "create_embedded_sending",
+      "title": "Create embedded sending link",
+      "description": "Create embedded sending for managing, editing, or sending invites for a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_sending_from_template",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["edit", "document", "document_group", "send_invite", "embedded", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" },
+        "redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect URI after completion" },
+        "redirect_target": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect target: 'self' (default), 'blank'" },
+        "link_expiration": { "type": "int | null", "required": false, "default": null, "constraints": "ge=14, le=45", "description": "Optional link expiration in days (14-45)" },
+        "type": { "type": "Literal['manage','edit','send-invite'] | null", "required": false, "default": "manage", "description": "Type of sending step: 'manage', 'edit', or 'send-invite'" }
+      },
+      "output": {
+        "model": "CreateEmbeddedSendingResponse",
+        "fields": {
+          "sending_entity": { "type": "str", "description": "Type of sending entity: 'document', 'document_group', or 'invite'" },
+          "sending_url": { "type": "str", "description": "URL for the embedded sending" }
+        }
+      }
+    },
+    {
+      "name": "create_embedded_sending_from_template",
+      "title": "Create from template and embed sending",
+      "description": "Create document/group from template and create embedded sending immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_sending",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["template", "template_group", "document", "document_group", "send_invite", "embedded", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the template or template group" },
+        "entity_type": { "type": "Literal['template','template_group'] | null", "required": false, "default": null, "description": "Type of entity: 'template' or 'template_group' (optional)" },
+        "name": { "type": "str | null", "required": false, "default": null, "description": "Optional name for the new document or document group" },
+        "redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect URI after completion" },
+        "redirect_target": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect target: 'self', 'blank', or 'self' (default)" },
+        "link_expiration": { "type": "int | null", "required": false, "default": null, "constraints": "ge=14, le=45", "description": "Optional link expiration in days (14-45)" },
+        "type": { "type": "Literal['manage','edit','send-invite'] | null", "required": false, "default": null, "description": "Type of sending step: 'manage', 'edit', or 'send-invite'" }
+      },
+      "output": {
+        "model": "CreateEmbeddedSendingFromTemplateResponse",
+        "fields": {
+          "created_entity_id": { "type": "str", "description": "ID of the created document or document group" },
+          "created_entity_type": { "type": "str", "description": "Type of created entity: 'document' or 'document_group'" },
+          "created_entity_name": { "type": "str", "description": "Name of the created entity" },
+          "sending_id": { "type": "str", "description": "ID of the created embedded sending" },
+          "sending_entity": { "type": "str", "description": "Type of sending entity: 'document', 'document_group', or 'invite'" },
+          "sending_url": { "type": "str", "description": "URL for the embedded sending" }
+        }
+      }
+    },
+    {
+      "name": "create_embedded_editor",
+      "title": "Create embedded editor link",
+      "description": "Create embedded editor for editing a document or document group. This tool is ONLY for documents and document groups. If you have template or template_group, use the alternative tool: create_embedded_editor_from_template",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["edit", "document", "document_group", "embedded"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" },
+        "redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect URI after completion" },
+        "redirect_target": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect target: 'self' (default), 'blank'" },
+        "link_expiration": { "type": "int | null", "required": false, "default": null, "constraints": "ge=15, le=45", "description": "Optional link expiration in minutes (15-45)" }
+      },
+      "output": {
+        "model": "CreateEmbeddedEditorResponse",
+        "fields": {
+          "editor_entity": { "type": "str", "description": "Type of editor entity: 'document' or 'document_group'" },
+          "editor_url": { "type": "str", "description": "URL for the embedded editor" }
+        }
+      }
+    },
+    {
+      "name": "create_embedded_editor_from_template",
+      "title": "Create from template and embed editor",
+      "description": "Create document/group from template and create embedded editor immediately. This tool is ONLY for templates and template groups. If you have document or document_group, use the alternative tool: create_embedded_editor",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["template", "template_group", "document", "document_group", "embedded_editor", "embedded", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the template or template group" },
+        "entity_type": { "type": "Literal['template','template_group'] | null", "required": false, "default": null, "description": "Type of entity: 'template' or 'template_group' (optional)" },
+        "name": { "type": "str | null", "required": false, "default": null, "description": "Name for the new document or document group" },
+        "redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect URI after completion" },
+        "redirect_target": { "type": "str | null", "required": false, "default": null, "description": "Optional redirect target: 'self' (default), 'blank'" },
+        "link_expiration": { "type": "int | null", "required": false, "default": null, "constraints": "ge=15, le=45", "description": "Optional link expiration in minutes (15-45)" }
+      },
+      "output": {
+        "model": "CreateEmbeddedEditorFromTemplateResponse",
+        "fields": {
+          "created_entity_id": { "type": "str", "description": "ID of the created document or document group" },
+          "created_entity_type": { "type": "str", "description": "Type of created entity: 'document' or 'document_group'" },
+          "created_entity_name": { "type": "str", "description": "Name of the created entity" },
+          "editor_id": { "type": "str", "description": "ID of the created embedded editor" },
+          "editor_entity": { "type": "str", "description": "Type of editor entity: 'document' or 'document_group'" },
+          "editor_url": { "type": "str", "description": "URL for the embedded editor" }
+        }
+      }
+    },
+    {
+      "name": "create_from_template",
+      "title": "Create from template",
+      "description": "Create a new document or document group from an existing template or template group",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["template", "template_group", "document", "document_group", "create", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the template or template group" },
+        "entity_type": { "type": "Literal['template','template_group'] | null", "required": false, "default": null, "description": "Type of entity: 'template' or 'template_group' (optional)" },
+        "name": { "type": "str | null", "required": false, "default": null, "description": "Optional name for the new document group or document (required for template groups)" }
+      },
+      "output": {
+        "model": "CreateFromTemplateResponse",
+        "fields": {
+          "entity_id": { "type": "str", "description": "ID of the created document or document group" },
+          "entity_type": { "type": "Literal['document','document_group']", "description": "Type of created entity: 'document' or 'document_group'" },
+          "name": { "type": "str", "description": "Name of the created entity" }
+        }
+      }
+    },
+    {
+      "name": "get_invite_status",
+      "title": "Get invite status",
+      "description": "Get invite status for a document or document group",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+      "tags": ["invite", "status", "document", "document_group", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" }
+      },
+      "output": {
+        "model": "InviteStatus",
+        "fields": {
+          "invite_id": { "type": "str", "description": "ID of the invite" },
+          "status": { "type": "str", "description": "Overall invite status: 'created', 'pending', 'fulfilled'" },
+          "steps": { "type": "list[DocumentGroupStatusStep]", "description": "List of steps in the invite" }
+        },
+        "nested": {
+          "DocumentGroupStatusStep": {
+            "status": { "type": "str", "description": "Step status: 'created', 'pending', 'fulfilled'" },
+            "order": { "type": "int", "description": "Step order number" },
+            "actions": { "type": "list[DocumentGroupStatusAction]", "description": "List of actions in this step" }
+          },
+          "DocumentGroupStatusAction": {
+            "action": { "type": "str", "description": "Action type: 'view', 'sign', 'approve'" },
+            "email": { "type": "str", "description": "Recipient's email address" },
+            "document_id": { "type": "str", "description": "ID of the document" },
+            "status": { "type": "str", "description": "Action status: 'created', 'pending', 'fulfilled'" },
+            "role": { "type": "str", "description": "Role name for this action" }
+          }
+        }
+      }
+    },
+    {
+      "name": "get_document_download_link",
+      "title": "Get document download link",
+      "description": "Get download link for a document or document group",
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": true },
+      "tags": ["document", "document_group", "download", "link"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" }
+      },
+      "output": {
+        "model": "DocumentDownloadLinkResponse",
+        "fields": {
+          "link": { "type": "str", "description": "Download link for the document" }
+        }
+      }
+    },
+    {
+      "name": "get_signing_link",
+      "title": "Get signing link",
+      "description": "Get signing link for a document or document group",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+      "tags": ["document", "document_group", "sign", "link"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document or document group" },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null, "description": "Type of entity: 'document' or 'document_group' (optional)" }
+      },
+      "output": {
+        "model": "SigningLinkResponse",
+        "fields": {
+          "link": { "type": "str", "description": "Signing link for the document or document group" }
+        }
+      }
+    },
+    {
+      "name": "get_document",
+      "title": "Get document or group details",
+      "description": "Get full document, template, template group or document group information with field values",
+      "annotations": { "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": true },
+      "tags": ["document", "document_group", "template", "template_group", "get", "fields"],
+      "input": {
+        "entity_id": { "type": "str", "required": true, "description": "ID of the document, template, template group or document group to retrieve" },
+        "entity_type": { "type": "Literal['document','document_group','template','template_group'] | null", "required": false, "default": null, "description": "Type of entity (optional). If not provided, will be determined automatically" }
+      },
+      "output": {
+        "model": "DocumentGroup",
+        "fields": {
+          "last_updated": { "type": "int", "description": "Unix timestamp of the last update" },
+          "entity_id": { "type": "str", "description": "Document group ID" },
+          "group_name": { "type": "str", "description": "Name of the document group" },
+          "entity_type": { "type": "str", "description": "Type of entity: 'document' or 'document_group'" },
+          "invite": { "type": "SimplifiedInvite | null", "description": "Unified invite info" },
+          "documents": { "type": "list[DocumentGroupDocument]", "description": "List of documents in this group" }
+        },
+        "nested": {
+          "DocumentGroupDocument": {
+            "id": { "type": "str", "description": "Document ID" },
+            "name": { "type": "str", "description": "Document name" },
+            "roles": { "type": "list[str]", "description": "Roles defined for this document" },
+            "fields": { "type": "list[DocumentField]", "default": [], "description": "Fields defined in this document" }
+          },
+          "DocumentField": {
+            "id": { "type": "str", "description": "Field ID" },
+            "type": { "type": "str", "description": "Field type" },
+            "role_id": { "type": "str", "description": "Role ID associated with this field" },
+            "value": { "type": "str", "description": "Field value" },
+            "name": { "type": "str", "description": "Field name" }
+          }
+        }
+      }
+    },
+    {
+      "name": "update_document_fields",
+      "title": "Update document text fields",
+      "description": "Update text fields in multiple documents (only individual documents, not document groups)",
+      "annotations": { "readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": true },
+      "tags": ["document", "fields", "update", "prefill"],
+      "input": {
+        "update_requests": {
+          "type": "list[UpdateDocumentFields]",
+          "required": true,
+          "description": "Array of document field update requests",
+          "item_schema": {
+            "document_id": { "type": "str", "required": true, "description": "ID of the document to update" },
+            "fields": {
+              "type": "list[FieldToUpdate]",
+              "required": true,
+              "description": "Array of fields to update with their new values",
+              "item_schema": {
+                "name": { "type": "str", "required": true, "description": "Name of the field to update" },
+                "value": { "type": "str", "required": true, "description": "New value for the field" }
+              }
+            }
+          }
+        }
+      },
+      "output": {
+        "model": "UpdateDocumentFieldsResponse",
+        "fields": {
+          "results": { "type": "list[UpdateDocumentFieldsResult]", "description": "Array of update results for each document" }
+        },
+        "nested": {
+          "UpdateDocumentFieldsResult": {
+            "document_id": { "type": "str", "description": "ID of the document that was updated" },
+            "updated": { "type": "bool", "description": "Whether the document fields were successfully updated" },
+            "reason": { "type": "str | null", "description": "Reason for failure if updated is false" }
+          }
+        }
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "list_all_templates_resource",
+      "uri": "signnow://templates{?limit,offset}",
+      "tags": ["template", "template_group", "list"],
+      "input": {
+        "limit": { "type": "int", "required": false, "default": 50, "constraints": "ge=1, le=100" },
+        "offset": { "type": "int", "required": false, "default": 0, "constraints": "ge=0" }
+      },
+      "output": "TemplateSummaryList"
+    },
+    {
+      "name": "list_documents_resource",
+      "uri": "signnow://documents/{?filter,sortby,order,folder_id,expired_filter,limit,offset}",
+      "tags": ["document", "document_group", "list"],
+      "mime_type": "application/json",
+      "input": {
+        "filter": { "type": "Literal['signed','pending','waiting-for-me','waiting-for-others','unsent'] | null", "required": false, "default": null },
+        "sortby": { "type": "Literal['updated','created','document-name'] | null", "required": false, "default": null },
+        "order": { "type": "Literal['asc','desc'] | null", "required": false, "default": null },
+        "folder_id": { "type": "str | null", "required": false, "default": null },
+        "expired_filter": { "type": "Literal['all','expired','not-expired']", "required": false, "default": "all" },
+        "limit": { "type": "int", "required": false, "default": 50, "constraints": "ge=1, le=100" },
+        "offset": { "type": "int", "required": false, "default": 0, "constraints": "ge=0" }
+      },
+      "output": "SimplifiedDocumentGroupsResponse"
+    },
+    {
+      "name": "get_invite_status_resource",
+      "uri": "signnow://invite-status/{entity_id}{?entity_type}",
+      "tags": ["invite", "status", "document", "document_group", "workflow"],
+      "input": {
+        "entity_id": { "type": "str", "required": true },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null }
+      },
+      "output": "InviteStatus"
+    },
+    {
+      "name": "get_document_download_link_resource",
+      "uri": "signnow://document-download-link/{entity_id}{?entity_type}",
+      "tags": ["document", "document_group", "download", "link"],
+      "input": {
+        "entity_id": { "type": "str", "required": true },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null }
+      },
+      "output": "DocumentDownloadLinkResponse"
+    },
+    {
+      "name": "get_signing_link_resource",
+      "uri": "signnow://signing-link/{entity_id}{?entity_type}",
+      "tags": ["document", "document_group", "sign", "link"],
+      "input": {
+        "entity_id": { "type": "str", "required": true },
+        "entity_type": { "type": "Literal['document','document_group'] | null", "required": false, "default": null }
+      },
+      "output": "SigningLinkResponse"
+    },
+    {
+      "name": "get_document_resource",
+      "uri": "signnow://document/{entity_id}{?entity_type}",
+      "tags": ["document", "document_group", "template", "template_group", "get", "fields"],
+      "input": {
+        "entity_id": { "type": "str", "required": true },
+        "entity_type": { "type": "Literal['document','document_group','template','template_group'] | null", "required": false, "default": null }
+      },
+      "output": "DocumentGroup"
+    }
+  ],
+  "shared_input_models": {
+    "InviteOrder": {
+      "order": { "type": "int", "required": true, "description": "Order number for this step" },
+      "recipients": { "type": "list[InviteRecipient]", "required": true, "description": "List of recipients for this order" }
+    },
+    "InviteRecipient": {
+      "email": { "type": "str", "required": true, "description": "Recipient's email address" },
+      "role": { "type": "str", "required": true, "description": "Recipient's role name in the document" },
+      "message": { "type": "str | null", "required": false, "default": null, "description": "Custom email message for the recipient" },
+      "subject": { "type": "str | null", "required": false, "default": null, "description": "Custom email subject for the recipient" },
+      "action": { "type": "str", "required": false, "default": "sign", "description": "Allowed action: 'view', 'sign', 'approve'" },
+      "redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Link that opens after completion" },
+      "redirect_target": { "type": "str | null", "required": false, "default": "blank", "description": "Redirect target: 'blank' for new tab, 'self' for same tab" },
+      "decline_redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "URL that opens after decline" },
+      "close_redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Link that opens when clicking 'Close' button" }
+    },
+    "EmbeddedInviteOrder": {
+      "order": { "type": "int", "required": true, "description": "Order number for this step" },
+      "recipients": { "type": "list[EmbeddedInviteRecipient]", "required": true, "description": "List of recipients for this order" }
+    },
+    "EmbeddedInviteRecipient": {
+      "email": { "type": "str", "required": true, "description": "Recipient's email address" },
+      "role": { "type": "str", "required": true, "description": "Recipient's role name in the document" },
+      "action": { "type": "str", "required": false, "default": "sign", "description": "Allowed action: 'view', 'sign', 'approve'" },
+      "auth_method": { "type": "str", "required": false, "default": "none", "description": "Authentication method: 'password', 'email', 'mfa', 'biometric', 'social', 'other', 'none'" },
+      "first_name": { "type": "str | null", "required": false, "default": null, "description": "Recipient's first name" },
+      "last_name": { "type": "str | null", "required": false, "default": null, "description": "Recipient's last name" },
+      "redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Link that opens after completion" },
+      "decline_redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "URL that opens after decline" },
+      "close_redirect_uri": { "type": "str | null", "required": false, "default": null, "description": "Link that opens when clicking 'Close' button" },
+      "redirect_target": { "type": "str | null", "required": false, "default": "self", "description": "Redirect target: 'blank' for new tab, 'self' for same tab" },
+      "subject": { "type": "str | null", "required": false, "default": null, "description": "Invite email subject (max 1000 chars)" },
+      "message": { "type": "str | null", "required": false, "default": null, "description": "Invite email message (max 5000 chars)" },
+      "delivery_type": { "type": "str | null", "required": false, "default": "link", "description": "Invite delivery method: 'email' or 'link'" }
+    }
+  },
+  "notes": {
+    "upload_document": "Tool exists in code but is commented out in v1.0.1 — not registered"
+  }
+}
