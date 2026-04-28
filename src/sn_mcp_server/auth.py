@@ -167,7 +167,9 @@ async def authorize(req: Request) -> RedirectResponse | JSONResponse:
     # server-side misconfiguration response rather than a silent bad redirect.
     client_id = signnow_config.client_id or ""
     base_url = _url(signnow_config.app_base, "authorize")
-    params: dict[str, str] = {"response_type": "code", "client_id": client_id, "redirect_uri": redirect_uri}
+    # SignNow requires scope in the authorization request
+    scope = q.get("scope", "*")
+    params: dict[str, str] = {"response_type": "code", "client_id": client_id, "redirect_uri": redirect_uri, "scope": scope}
     if state:
         params["state"] = state
     redirect_url = f"{base_url}?{urlencode(params)}"
