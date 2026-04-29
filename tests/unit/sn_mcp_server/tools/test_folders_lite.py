@@ -3,6 +3,7 @@ Unit tests for folders_lite models, especially discriminator logic.
 """
 
 from signnow_client.models.folders_lite import (
+    DocumentGroupInviteLite,
     DocumentGroupItemLite,
     DocumentGroupTemplateItemLite,
     DocumentItemLite,
@@ -293,6 +294,42 @@ class TestFoldersLiteDiscriminator:
         }
         doc = DocumentItemLite(**payload)
         assert doc.roles is None  # Empty list should be normalized to None
+
+    def test_document_group_invite_lite_null_id(self) -> None:
+        """Regression: SignNow API may return null for invite id — must not raise."""
+        invite = DocumentGroupInviteLite(id=None, email="signer@example.com", status="pending")
+        assert invite.id is None
+        assert invite.email == "signer@example.com"
+
+    def test_get_folder_by_id_response_lite_document_group_with_null_invite_id(self) -> None:
+        """Regression: folder response with document-group invites where id is null must parse without error."""
+        payload = {
+            "id": "folder1",
+            "name": "My Folder",
+            "user_id": "user1",
+            "created": 1234567890,
+            "documents": [
+                {
+                    "type": "document-group",
+                    "id": "dg1",
+                    "document_group_name": "Group 1",
+                    "user_id": "user1",
+                    "invites": [
+                        {"id": "invite1", "email": "a@example.com", "status": "pending"},
+                        {"id": None, "email": "b@example.com", "status": "pending"},
+                    ],
+                },
+            ],
+        }
+        response = GetFolderByIdResponseLite(**payload)
+        assert len(response.documents) == 1
+        dg = response.documents[0]
+        assert isinstance(dg, DocumentGroupItemLite)
+        invites = dg.invites
+        assert invites is not None
+        assert len(invites) == 2
+        assert invites[0].id == "invite1"
+        assert invites[1].id is None
 
 
 class TestNormalizeRoles:
