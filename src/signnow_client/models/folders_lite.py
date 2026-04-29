@@ -144,7 +144,7 @@ class FieldInviteLite(SNBaseModel):
 
 
 class DocumentGroupInviteLite(SNBaseModel):
-    id: str
+    id: str | None = None
     email: str | None = None
     document_id: str | None = None
     document_name: str | None = None
