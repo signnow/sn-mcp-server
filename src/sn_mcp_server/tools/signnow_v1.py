@@ -173,7 +173,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["send_invite", "document", "document_group", "sign", "workflow"],
     )
-    async def send_invite(
+    async def send_invite_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         orders: Annotated[
@@ -222,7 +222,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["send_invite", "document", "document_group", "sign", "embedded", "workflow"],
     )
-    async def create_embedded_invite(
+    async def create_embedded_invite_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         orders: Annotated[
@@ -279,7 +279,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["edit", "document", "document_group", "send_invite", "embedded", "workflow"],
     )
-    async def create_embedded_sending(
+    async def create_embedded_sending_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         entity_type: Annotated[
@@ -333,7 +333,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["edit", "document", "document_group", "embedded"],
     )
-    async def create_embedded_editor(
+    async def create_embedded_editor_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document or document group")],
         entity_type: Annotated[
@@ -377,7 +377,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["document", "document_group", "template", "template_group", "get", "fields"],
     )
-    def get_document(
+    def get_document_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
         entity_type: Annotated[
@@ -416,7 +416,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["template", "template_group", "send_invite", "workflow"],
     )
-    async def send_invite_from_template(
+    async def send_invite_from_template_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         orders: Annotated[
@@ -479,7 +479,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["template", "template_group", "send_invite", "embedded", "workflow"],
     )
-    async def create_embedded_sending_from_template(
+    async def create_embedded_sending_from_template_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         entity_type: Annotated[
@@ -546,7 +546,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["template", "template_group", "embedded_editor", "embedded", "workflow"],
     )
-    async def create_embedded_editor_from_template(
+    async def create_embedded_editor_from_template_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         entity_type: Annotated[
@@ -607,7 +607,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["template", "template_group", "send_invite", "embedded", "workflow"],
     )
-    async def create_embedded_invite_from_template(
+    async def create_embedded_invite_from_template_v1(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         orders: Annotated[
