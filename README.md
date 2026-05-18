@@ -418,6 +418,10 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`update_document_fields`** — Prefill text fields in individual documents.
 * **`upload_document`** — Upload a document from a local file path (`file_path`), public URL (`file_url`), or MCP resource attachment (`resource_uri`). For `file_path`, the resolved path must stay within the configured safe base directory (by default, the user's home directory); paths outside that base fail validation. Supported: PDF, DOC, DOCX, PNG, JPG, JPEG. Max 40 MB. Returns `document_id`, `filename`, `source`.
 * **`send_invite_reminder`** — Send a signing reminder to pending signers on a document or document group.
+* **`cancel_invite`** — Cancel all active (pending) signing invites on a document or document group. Auto-detects entity type and invite type (field vs freeform). Returns status: `cancelled`, `completed` (already done), or `invite_not_sent`.
+* **`update_invite_recipient`** — Replace the signing recipient on a pending field invite. Finds the pending invite for the current signer and swaps in a new email. Supports both documents and document groups. Only field invites — freeform/embedded are unsupported.
+* **`view_document`** — Generate a read-only embedded view link for a document or document group. In MCP Apps-compatible clients the document renders inline; in other hosts the link is returned as a clickable URL.
+* **`rename_entity`** — Rename a document, document group, template, or template group. Auto-detects entity type when not provided.
 * **`signnow_skills`** — Query the bundled SignNow skill library. Omit `skill_name` to list all available skills with descriptions; provide `skill_name` (e.g. `signnow101`) to fetch the full Markdown body. Use `signnow101` to learn SignNow entity types, invite types, and tool mappings.
   * List mode example: `{"skills": [{"name": "signnow101", "description": "SignNow 101 concepts reference... (description truncated for brevity)"}]}`
   * Fetch mode example: `{"name": "signnow101", "body": "# SignNow 101 — Concepts Reference\n..."}`
