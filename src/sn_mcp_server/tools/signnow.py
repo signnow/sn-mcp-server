@@ -1,4 +1,5 @@
 import asyncio
+import json
 import pathlib
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -7,7 +8,7 @@ from fastmcp import Context
 from fastmcp.resources import ResourceContent, ResourceResult
 from fastmcp.server.dependencies import get_http_headers
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, TypeAdapter
 
 from signnow_client import SignNowAPIClient
 
@@ -85,6 +86,78 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
 
     client = SignNowAPIClient(token_provider.signnow_config)
     return token, client
+
+
+def _normalize_order_field(raw: list[Any]) -> list[Any]:
+    """Ensure each element has an 'order' field, defaulting to position+1 if missing."""
+    for idx, item in enumerate(raw):
+        if isinstance(item, dict) and "order" not in item:
+            item["order"] = idx + 1
+    return raw
+
+
+def _parse_orders(orders: list[InviteOrder] | str | None) -> list[InviteOrder] | None:
+    """Parse invite orders from list or JSON string.
+
+    LLMs sometimes serialize `orders` as a JSON string instead of a native list.
+    This helper transparently coerces the string representation back into typed
+    InviteOrder objects so both forms are accepted by tool endpoints.
+
+    When `order` field is missing from an element, it defaults to position index + 1.
+
+    Args:
+        orders: List of InviteOrder objects, a JSON string, or None.
+
+    Returns:
+        Parsed list of InviteOrder objects, or None if input is None.
+
+    Raises:
+        ValueError: If JSON string cannot be parsed as list[InviteOrder].
+    """
+    if orders is None:
+        return None
+    if isinstance(orders, str):
+        try:
+            raw: Any = json.loads(orders)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid orders JSON string: {exc}") from exc
+        if isinstance(raw, list):
+            _normalize_order_field(raw)
+        adapter: TypeAdapter[list[InviteOrder]] = TypeAdapter(list[InviteOrder])
+        return adapter.validate_python(raw)
+    return orders
+
+
+def _parse_embedded_orders(orders: list[EmbeddedInviteOrder] | str | None) -> list[EmbeddedInviteOrder] | None:
+    """Parse embedded invite orders from list or JSON string.
+
+    LLMs sometimes serialize `orders` as a JSON string instead of a native list.
+    This helper transparently coerces the string representation back into typed
+    EmbeddedInviteOrder objects so both forms are accepted by tool endpoints.
+
+    When `order` field is missing from an element, it defaults to position index + 1.
+
+    Args:
+        orders: List of EmbeddedInviteOrder objects, a JSON string, or None.
+
+    Returns:
+        Parsed list of EmbeddedInviteOrder objects, or None if input is None.
+
+    Raises:
+        ValueError: If JSON string cannot be parsed as list[EmbeddedInviteOrder].
+    """
+    if orders is None:
+        return None
+    if isinstance(orders, str):
+        try:
+            raw: Any = json.loads(orders)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid orders JSON string: {exc}") from exc
+        if isinstance(raw, list):
+            _normalize_order_field(raw)
+        adapter: TypeAdapter[list[EmbeddedInviteOrder]] = TypeAdapter(list[EmbeddedInviteOrder])
+        return adapter.validate_python(raw)
+    return orders
 
 
 def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
@@ -263,9 +336,13 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         orders: Annotated[
-            list[InviteOrder] | None,
+            list[InviteOrder] | str | None,
             Field(
-                description=("List of orders with recipients. Required unless self_sign=True. When self_sign=True, omit orders — the tool fills in the current user as the sole recipient."),
+                description=(
+                    "List of orders with recipients (or a JSON string of the same). "
+                    "Required unless self_sign=True. When self_sign=True, omit orders "
+                    "— the tool fills in the current user as the sole recipient."
+                ),
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign"}]}],
                     [{"order": 1, "recipients": [{"email": "signer@example.com", "action": "sign"}]}],
@@ -338,14 +415,16 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
 
+        parsed_orders = _parse_orders(orders)
+
         if self_sign:
-            if orders:
+            if parsed_orders:
                 raise ValueError("orders must be empty when self_sign=True — the tool fills in the current user as the sole recipient")
         else:
-            if not orders:
+            if not parsed_orders:
                 raise ValueError("orders must contain at least one recipient order")
 
-        return await _send_invite(entity_id, entity_type, orders or [], token, client, name, ctx, self_sign=self_sign)
+        return await _send_invite(entity_id, entity_type, parsed_orders or [], token, client, name, ctx, self_sign=self_sign)
 
     @mcp.tool(
         name="create_embedded_invite",
@@ -367,9 +446,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the document, document group, template, or template group")],
         orders: Annotated[
-            list[EmbeddedInviteOrder],
+            list[EmbeddedInviteOrder] | str,
             Field(
-                description="List of orders with recipients.",
+                description="List of orders with recipients (or a JSON string of the same).",
                 examples=[
                     [{"order": 1, "recipients": [{"email": "user@example.com", "role": "Signer 1", "action": "sign", "auth_method": "none"}]}],
                 ],
@@ -401,10 +480,12 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
 
-        if not orders:
+        parsed_orders = _parse_embedded_orders(orders)
+
+        if not parsed_orders:
             raise ValueError("orders must contain at least one recipient order")
 
-        return await _create_embedded_invite(entity_id, entity_type, orders, token, client, name, ctx)
+        return await _create_embedded_invite(entity_id, entity_type, parsed_orders, token, client, name, ctx)
 
     @mcp.tool(
         name="create_embedded_sending",
