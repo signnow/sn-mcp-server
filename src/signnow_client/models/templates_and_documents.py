@@ -6,7 +6,7 @@ Pydantic models for SignNow API responses and requests related to templates and 
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
@@ -843,7 +843,10 @@ class CancelDocumentFreeformInviteRequest(BaseModel):
 class EmbeddedInviteAuthentication(BaseModel):
     """Authentication settings for embedded invite signer."""
 
-    type: str = Field(..., description="Authentication type: 'phone' or 'password'")
+    type: Literal["phone", "password"] = Field(
+        ...,
+        description="Authentication type. Only 'phone' or 'password' are allowed. Other values (e.g. 'email', 'mfa') are not supported for signer identity verification.",
+    )
     password: str | None = Field(None, description="Password for password authentication")
     method: str | None = Field(None, description="Method for phone authentication: 'sms' or 'phone_call'")
     phone: str | None = Field(None, description="Phone number for phone authentication")
