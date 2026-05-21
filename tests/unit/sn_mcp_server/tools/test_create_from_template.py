@@ -1,6 +1,8 @@
 """Unit tests for create_from_template module."""
 
-from unittest.mock import MagicMock
+import time
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -305,3 +307,84 @@ class TestCreateFromTemplate:
         result = _create_from_template("tg-name", None, None, "tok", mock_client)
 
         assert result.name == "Group Name From API"
+
+
+def _capture_create_from_template_tool() -> Any:
+    """Register the signnow tools and return the create_from_template tool function."""
+    from fastmcp import FastMCP
+
+    from sn_mcp_server.tools import signnow
+
+    mcp: Any = FastMCP("test-create-from-template")
+    captured: dict[str, Any] = {}
+    original_tool = mcp.tool
+
+    def recording_tool(*args: Any, **kwargs: Any) -> Any:
+        decorator = original_tool(*args, **kwargs)
+        tool_name: str = kwargs.get("name", "")
+
+        def wrap(fn: Any) -> Any:
+            captured[tool_name] = fn
+            return decorator(fn)
+
+        return wrap
+
+    mcp.tool = recording_tool
+    signnow.bind(mcp, None)
+    return captured["create_from_template"]
+
+
+class TestCreateFromTemplateMCPTool:
+    """Tests for the async MCP tool wrapper with progress reporting."""
+
+    @pytest.fixture
+    def captured_tool(self) -> Any:
+        return _capture_create_from_template_tool()
+
+    async def test_returns_result_without_progress_on_fast_call(self, captured_tool: Any) -> None:
+        """Fast inner call resolves before the polling interval: no progress reports emitted."""
+        ctx = AsyncMock()
+        expected = CreateFromTemplateResponse(entity_id="doc_1", entity_type="document", name="Doc One")
+
+        with (
+            patch("sn_mcp_server.tools.signnow._get_token_and_client", return_value=("tok", MagicMock())),
+            patch("sn_mcp_server.tools.signnow._create_from_template", return_value=expected),
+        ):
+            result = await captured_tool(ctx, "doc_1", "template", None)
+
+        assert result == expected
+        ctx.report_progress.assert_not_called()
+
+    async def test_reports_entity_agnostic_progress_when_call_is_slow(self, captured_tool: Any) -> None:
+        """Slow inner call triggers report_progress with an entity-agnostic message."""
+        ctx = AsyncMock()
+        expected = CreateFromTemplateResponse(entity_id="doc_2", entity_type="document", name="Doc Two")
+
+        def slow_inner(*args: Any, **kwargs: Any) -> CreateFromTemplateResponse:
+            time.sleep(0.12)
+            return expected
+
+        with (
+            patch("sn_mcp_server.tools.signnow._CREATE_FROM_TEMPLATE_PROGRESS_INTERVAL_SECONDS", 0.04),
+            patch("sn_mcp_server.tools.signnow._get_token_and_client", return_value=("tok", MagicMock())),
+            patch("sn_mcp_server.tools.signnow._create_from_template", side_effect=slow_inner),
+        ):
+            result = await captured_tool(ctx, "doc_2", "template", None)
+
+        assert result == expected
+        assert ctx.report_progress.await_count >= 1
+        first_call_kwargs = ctx.report_progress.await_args_list[0].kwargs
+        assert first_call_kwargs["progress"] == 1
+        assert "from template" in first_call_kwargs["message"].lower()
+        assert "document group" not in first_call_kwargs["message"].lower()
+
+    async def test_propagates_inner_exception(self, captured_tool: Any) -> None:
+        """Exception raised in the worker thread propagates to the caller."""
+        ctx = AsyncMock()
+
+        with (
+            patch("sn_mcp_server.tools.signnow._get_token_and_client", return_value=("tok", MagicMock())),
+            patch("sn_mcp_server.tools.signnow._create_from_template", side_effect=ValueError("boom")),
+            pytest.raises(ValueError, match="boom"),
+        ):
+            await captured_tool(ctx, "doc_3", "template", None)

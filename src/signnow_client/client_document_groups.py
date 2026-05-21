@@ -593,7 +593,7 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in edit_document_group_template_recipients request: {e}") from e
 
-    def create_document_group_from_template(self, token: str, unique_id: str, request_data: CreateDocumentGroupFromTemplateRequest) -> CreateDocumentGroupFromTemplateResponse:
+    def create_document_group_from_template(self, token: str, unique_id: str, request_data: CreateDocumentGroupFromTemplateRequest) -> CreateDocumentGroupFromTemplateResponse | None:
         """
         Create document group from template.
 
@@ -605,18 +605,20 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
             request_data: Request data with group name and optional settings
 
         Returns:
-            Validated CreateDocumentGroupFromTemplateResponse model with created group data
+            Validated CreateDocumentGroupFromTemplateResponse with created group data,
+            or None when the API accepts the request but returns an empty body (e.g. 202).
         """
 
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
-        return self._post(
+        result: CreateDocumentGroupFromTemplateResponse | None = self._post(
             f"/v2/document-group-templates/{unique_id}/document-group",
             headers=headers,
             json_data=request_data.model_dump(exclude_none=True),
             timeout=30.0,
             validate_model=CreateDocumentGroupFromTemplateResponse,
         )
+        return result
 
     def create_document_group_embedded_view(
         self,
