@@ -614,6 +614,7 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
             f"/v2/document-group-templates/{unique_id}/document-group",
             headers=headers,
             json_data=request_data.model_dump(exclude_none=True),
+            timeout=30.0,
             validate_model=CreateDocumentGroupFromTemplateResponse,
         )
 
