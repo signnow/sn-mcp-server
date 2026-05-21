@@ -176,6 +176,13 @@ class TestCreateDocumentGroupFromTemplate:
 
         assert result.entity_id == "grp_gid_789"
 
+    def test_raises_value_error_on_none_response(self, mock_client: MagicMock) -> None:
+        """Test that None response (202 empty body) raises ValueError with clear message."""
+        mock_client.create_document_group_from_template.return_value = None
+
+        with pytest.raises(ValueError, match="returned no data"):
+            _create_document_group_from_template(mock_client, "tok", "tg1", "My Group")
+
 
 class TestFindTemplateGroup:
     """Test cases for _find_template_group."""
