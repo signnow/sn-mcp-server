@@ -160,6 +160,9 @@ def _parse_embedded_orders(orders: list[EmbeddedInviteOrder] | str | None) -> li
     return orders
 
 
+_CREATE_FROM_TEMPLATE_PROGRESS_INTERVAL_SECONDS = 2.0
+
+
 def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     # Initialize token provider
     token_provider = TokenProvider()
@@ -654,7 +657,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         ),
         tags=["template", "template_group", "document", "document_group", "create", "workflow"],
     )
-    def create_from_template(
+    async def create_from_template(
         ctx: Context,
         entity_id: Annotated[str, Field(description="ID of the template or template group")],
         entity_type: Annotated[
@@ -675,7 +678,19 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         """
         token, client = _get_token_and_client(token_provider)
 
-        return _create_from_template(entity_id, entity_type, name, token, client)
+        task = asyncio.ensure_future(asyncio.to_thread(_create_from_template, entity_id, entity_type, name, token, client))
+        tick = 0
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=_CREATE_FROM_TEMPLATE_PROGRESS_INTERVAL_SECONDS)
+                if task in done:
+                    break
+                tick += 1
+                await ctx.report_progress(progress=tick, message="Creating from template, please wait…")
+        except BaseException:
+            task.cancel()
+            raise
+        return await task
 
     def _get_invite_status_impl(ctx: Context, entity_id: str, entity_type: Literal["document", "document_group"] | None) -> InviteStatus:
         token, client = _get_token_and_client(token_provider)

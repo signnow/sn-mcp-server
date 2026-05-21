@@ -117,13 +117,28 @@ class SignNowAPIClientBase:
             raise SignNowAPIError(f"Unexpected error in GET request to {url}: {e}") from e
 
     @overload
-    def _post(self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...
+    def _post(
+        self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., timeout: float | None = ..., *, validate_model: type[_ModelT]
+    ) -> _ModelT: ...  # noqa: E501
     @overload
-    def _post(self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., validate_model: None = None) -> Any: ...  # noqa: ANN401
-    def _post(self, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, json_data: dict[str, Any] | None = None, validate_model: type[BaseModel] | None = None) -> Any:  # noqa: ANN401
+    def _post(
+        self, url: str, headers: dict[str, str] | None = ..., data: dict[str, Any] | None = ..., json_data: dict[str, Any] | None = ..., timeout: float | None = ..., validate_model: None = None
+    ) -> Any: ...  # noqa: ANN401, E501
+    def _post(  # noqa: ANN401
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        timeout: float | None = None,
+        validate_model: type[BaseModel] | None = None,
+    ) -> Any:
         """Internal POST method with unified error handling and optional model validation"""
         try:
-            response = self.http.post(url, headers=headers, data=data, json=json_data)
+            extra: dict[str, Any] = {}
+            if timeout is not None:
+                extra["timeout"] = timeout
+            response = self.http.post(url, headers=headers, data=data, json=json_data, **extra)
             response.raise_for_status()
 
             # 204 No Content or empty body (e.g. 202 Accepted) — nothing to parse

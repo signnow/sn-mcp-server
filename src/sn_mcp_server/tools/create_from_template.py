@@ -47,10 +47,8 @@ def _create_document_group_from_template(client: SignNowAPIClient, token: str, e
     if not name:
         raise ValueError("name is required when creating document group from template group")
 
-    # Prepare request data
     request_data = CreateDocumentGroupFromTemplateRequest(group_name=name)
 
-    # Create document group from template group
     try:
         response = client.create_document_group_from_template(token, entity_id, request_data)
     except SignNowAPIHTTPError as exc:
@@ -58,7 +56,9 @@ def _create_document_group_from_template(client: SignNowAPIClient, token: str, e
             raise ValueError(f"Template group not found: {entity_id}") from None
         raise
 
-    # Extract document group ID from response data
+    if response is None:
+        raise ValueError(f"Template group '{entity_id}' creation accepted but returned no data")
+
     response_data = response.data
     if isinstance(response_data, dict) and "unique_id" in response_data:
         created_id = response_data["unique_id"]
