@@ -4,7 +4,7 @@ SignNow API Configuration
 Configuration settings for the SignNow API client.
 """
 
-from pydantic import AnyHttpUrl, Field, ValidationError, field_validator, model_validator
+from pydantic import AliasChoices, AnyHttpUrl, Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,7 @@ class SignNowConfig(BaseSettings):
     Required environment variables follow oneOf rule:
     - Option A (Password grant): SIGNNOW_USER_EMAIL, SIGNNOW_PASSWORD, SIGNNOW_API_BASIC_TOKEN
     - Option B (Client credentials): SIGNNOW_CLIENT_ID, SIGNNOW_CLIENT_SECRET
+    - Option C (Static token): SIGNNOW_ACCESS_TOKEN or SIGNNOW_API_KEY
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -30,6 +31,14 @@ class SignNowConfig(BaseSettings):
     # User credentials (for password grant) - optional; validated by oneOf rule
     user_email: str | None = Field(default=None, description="SignNow user email", alias="SIGNNOW_USER_EMAIL")
     password: str | None = Field(default=None, description="SignNow user password", alias="SIGNNOW_PASSWORD")
+
+    # Static access token — skips OAuth entirely; accepts SIGNNOW_ACCESS_TOKEN or SIGNNOW_API_KEY
+    access_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SIGNNOW_ACCESS_TOKEN", "SIGNNOW_API_KEY"),
+        serialization_alias="SIGNNOW_ACCESS_TOKEN",
+        description="SignNow access token (API key) — long-lived token, skips OAuth",
+    )
 
     # Default scope
     default_scope: str = Field(default="*", description="Default OAuth scope")
@@ -90,6 +99,14 @@ class SignNowConfig(BaseSettings):
             return None
         return v
 
+    @field_validator("access_token", mode="before")
+    @classmethod
+    def validate_access_token(cls: type["SignNowConfig"], v: str | None) -> str | None:
+        """Handle empty string for access_token"""
+        if v == "":
+            return None
+        return v
+
     @field_validator("default_scope", mode="before")
     @classmethod
     def validate_default_scope(cls: type["SignNowConfig"], v: str | None) -> str:
@@ -100,15 +117,17 @@ class SignNowConfig(BaseSettings):
 
     @model_validator(mode="after")
     def validate_one_of_credentials(self: "SignNowConfig") -> "SignNowConfig":
-        """Ensure that either password grant set or client credentials set is fully provided.
+        """Ensure that at least one complete credential set is provided.
 
         Option A (password grant): SIGNNOW_USER_EMAIL, SIGNNOW_PASSWORD, SIGNNOW_API_BASIC_TOKEN
         Option B (client credentials): SIGNNOW_CLIENT_ID, SIGNNOW_CLIENT_SECRET
+        Option C (static token): SIGNNOW_ACCESS_TOKEN or SIGNNOW_API_KEY
         """
         has_password_grant = bool(self.user_email and self.password and self.basic_token)
         has_client_credentials = bool(self.client_id and self.client_secret)
+        has_static_token = bool(self.access_token)
 
-        if not (has_password_grant or has_client_credentials):
+        if not (has_password_grant or has_client_credentials or has_static_token):
             # Build helpful error message similar to JSON Schema oneOf
             missing_a = [
                 name
@@ -130,19 +149,17 @@ class SignNowConfig(BaseSettings):
             detail = (
                 "oneOf credential sets must be provided; "
                 f"missing for Option A (password grant): {', '.join(missing_a) or 'none'}; "
-                f"missing for Option B (client credentials): {', '.join(missing_b) or 'none'}"
+                f"missing for Option B (client credentials): {', '.join(missing_b) or 'none'}; "
+                "missing for Option C (static token): SIGNNOW_ACCESS_TOKEN (or SIGNNOW_API_KEY)"
             )
-            # Pydantic's InitErrorDetails TypedDict doesn't declare "msg"; the message is
-            # derived from the error type. Passing it as ctx is how extra context reaches
-            # the final message. Keeping "msg" here for backwards-compatible error text.
             raise ValidationError.from_exception_data(
                 "SignNowConfig",
                 [
                     {
-                        "type": "missing",
+                        "type": "value_error",
                         "loc": ("oneOf",),
-                        "msg": detail,  # type: ignore[typeddict-unknown-key]
                         "input": None,
+                        "ctx": {"error": ValueError(detail)},
                     }
                 ],
             )
@@ -167,6 +184,7 @@ def _print_config_values(config: SignNowConfig) -> None:
         "SIGNNOW_CLIENT_SECRET",
         "SIGNNOW_API_BASIC_TOKEN",
         "SIGNNOW_PASSWORD",
+        "SIGNNOW_ACCESS_TOKEN",
     }
 
     # Use model_dump with by_alias=True to get values by their env var names

@@ -22,7 +22,11 @@ class TokenProvider:
         Returns:
             Access token string or None if unable to get token
         """
-        # First try to get token from config credentials
+        # Static token takes priority — no OAuth round-trip needed
+        if self.signnow_config.access_token:
+            return self.signnow_config.access_token
+
+        # Password grant: exchange credentials for a fresh token
         if self.has_config_credentials():
             return self._get_token_from_config()
 

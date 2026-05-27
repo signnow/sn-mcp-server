@@ -188,7 +188,17 @@ Copy `.env.example` → `.env` and fill in values. All settings are validated vi
 
 ### Authentication options
 
-**1) Username / Password (recommended for desktop dev flows)**
+**1) API Key / Access Token (simplest)**
+
+```
+SIGNNOW_ACCESS_TOKEN=<your_api_key>
+# or equivalently:
+SIGNNOW_API_KEY=<your_api_key>
+```
+
+[Generate an API key →](https://docs.signnow.com/docs/signnow/authentication#generate-an-api-key)
+
+**2) Username / Password**
 
 ```
 SIGNNOW_USER_EMAIL=<email>
@@ -196,7 +206,7 @@ SIGNNOW_PASSWORD=<password>
 SIGNNOW_API_BASIC_TOKEN=<base64 basic token>
 ```
 
-**2) OAuth 2.0 (for hosted/advanced scenarios)**
+**3) OAuth 2.0 (for hosted/advanced scenarios)**
 
 ```
 SIGNNOW_CLIENT_ID=<client_id>
@@ -212,9 +222,6 @@ SIGNNOW_CLIENT_SECRET=<client_secret>
 # SignNow endpoints (defaults shown)
 SIGNNOW_APP_BASE=https://app.signnow.com
 SIGNNOW_API_BASE=https://api.signnow.com
-
-# Optional direct API token (not required for normal use)
-SIGNNOW_TOKEN=<access_token>
 
 # OAuth server (if you enable OAuth mode)
 OAUTH_ISSUER=<your_issuer_url>

@@ -329,7 +329,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         annotations=ToolAnnotations(
             title="Send signing invite",
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
             openWorldHint=True,
         ),
@@ -439,7 +439,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         annotations=ToolAnnotations(
             title="Create embedded signing invite",
             readOnlyHint=False,
-            destructiveHint=False,
+            destructiveHint=True,
             idempotentHint=False,
             openWorldHint=True,
         ),
