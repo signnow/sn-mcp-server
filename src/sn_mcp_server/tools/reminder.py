@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import partial
 
 from fastmcp import Context
@@ -42,6 +42,9 @@ _RESEND_BACKOFF_SECONDS = 1.0
 # block the tool call for. A larger Retry-After means we stop retrying and record the
 # recipient as failed (the agent can retry the whole reminder later) rather than hang.
 _RESEND_MAX_RETRY_AFTER_SECONDS = 10.0
+# Clients commonly abort a tool call that goes silent for more than ~2s, so a multi-second
+# backoff is split into chunks no longer than this, with a progress heartbeat between them.
+_RESEND_KEEPALIVE_INTERVAL_SECONDS = 1.0
 
 
 def _resend_retry_delay(retry_after: float | None, attempt: int) -> float | None:
@@ -66,18 +69,65 @@ def _resend_retry_delay(retry_after: float | None, attempt: int) -> float | None
     return _RESEND_BACKOFF_SECONDS * (2.0 ** (attempt - 1))
 
 
-async def _resend_with_retry(send: Callable[[], object]) -> None:
+async def _report_resend_wait(ctx: Context, done: int, total: int, remaining: float, attempt: int) -> None:
+    """Emit a keepalive progress ping while backing off before a resend retry.
+
+    Called repeatedly during the wait (see `_backoff_sleep`) so the client gets a steady
+    heartbeat — a multi-second rate-limit wait would otherwise look like a stall, and many
+    clients abort it. Re-reports the current progress with a countdown message.
+
+    Args:
+        ctx: MCP Context for progress reporting.
+        done: Recipients fully processed so far (progress value, kept monotonic).
+        total: Total recipients in this loop.
+        remaining: Seconds left to wait, surfaced as a countdown in the message.
+        attempt: 1-based attempt number that just hit the rate limit.
+    """
+    await ctx.report_progress(
+        progress=done,
+        total=total,
+        message=f"Rate limited; retrying in {remaining:.0f}s (attempt {attempt + 1}/{_RESEND_MAX_ATTEMPTS})",
+    )
+
+
+async def _backoff_sleep(delay: float, attempt: int, on_wait: Callable[[float, int], Awaitable[None]] | None) -> None:
+    """Wait `delay` seconds, emitting a keepalive at least every `_RESEND_KEEPALIVE_INTERVAL_SECONDS`.
+
+    The sleep is split into chunks no longer than the keepalive interval; `on_wait` (when
+    given) is awaited at the start of the wait and after each chunk that leaves time
+    remaining. This keeps the client informed so it does not treat a multi-second wait as a
+    stall and abort it.
+
+    Args:
+        delay: Total seconds to wait.
+        attempt: 1-based attempt number that just failed (passed through to on_wait).
+        on_wait: Optional async heartbeat, awaited with (remaining_seconds, attempt).
+    """
+    remaining = delay
+    if on_wait is not None:
+        await on_wait(remaining, attempt)
+    while remaining > 0:
+        chunk = min(_RESEND_KEEPALIVE_INTERVAL_SECONDS, remaining)
+        await asyncio.sleep(chunk)
+        remaining -= chunk
+        if on_wait is not None and remaining > 0:
+            await on_wait(remaining, attempt)
+
+
+async def _resend_with_retry(send: Callable[[], object], on_wait: Callable[[float, int], Awaitable[None]] | None = None) -> None:
     """Invoke a resend callable, retrying on HTTP 429 with backoff.
 
-    On a 429 (rate limit) the call is retried up to `_RESEND_MAX_ATTEMPTS` times. The
-    wait between tries honors the server's Retry-After when present (see
-    `_resend_retry_delay`), otherwise uses exponential backoff. Any non-429
-    SignNowAPIError, a 429 on the final attempt, or a Retry-After longer than
-    `_RESEND_MAX_RETRY_AFTER_SECONDS` propagates to the caller, which records the
-    recipient as failed.
+    On a 429 (rate limit) the call is retried up to `_RESEND_MAX_ATTEMPTS` times. The wait
+    between tries honors the server's Retry-After when present (see `_resend_retry_delay`),
+    otherwise uses exponential backoff, and emits a keepalive throughout (see
+    `_backoff_sleep`). Any non-429 SignNowAPIError, a 429 on the final attempt, or a
+    Retry-After longer than `_RESEND_MAX_RETRY_AFTER_SECONDS` propagates to the caller,
+    which records the recipient as failed.
 
     Args:
         send: Zero-argument callable performing one resend (raises SignNowAPIError on error).
+        on_wait: Optional async heartbeat awaited during the backoff, called with
+            (remaining_seconds, attempt). Used to emit progress so the wait is not seen as a stall.
     """
     for attempt in range(1, _RESEND_MAX_ATTEMPTS + 1):
         try:
@@ -90,7 +140,7 @@ async def _resend_with_retry(send: Callable[[], object]) -> None:
             if delay is None:
                 # Server asked us to wait longer than we are willing to block — fail fast.
                 raise
-            await asyncio.sleep(delay)
+            await _backoff_sleep(delay, attempt, on_wait)
 
 
 async def _send_invite_reminder(
@@ -352,8 +402,9 @@ async def _remind_document_group(
     total = len(pending_emails)
     for idx, addr in enumerate(pending_emails, start=1):
         request_data = ResendDocumentGroupInvitesRequest(email=addr, client_timestamp=int(time.time()))
+        on_wait = partial(_report_resend_wait, ctx, idx - 1, total) if ctx is not None else None
         try:
-            await _resend_with_retry(partial(client.resend_document_group_invites, token, entity_id, group_invite_id, request_data))
+            await _resend_with_retry(partial(client.resend_document_group_invites, token, entity_id, group_invite_id, request_data), on_wait)
             reminded.append(ReminderRecipientResult(email=addr))
         except SignNowAPIError as err:
             failed.append(
@@ -405,8 +456,9 @@ async def _resend_field_invites(
     total = len(invites)
     for idx, (field_invite_id, addr) in enumerate(invites, start=1):
         request_data = ResendFieldInviteRequest(client_timestamp=int(time.time()))
+        on_wait = partial(_report_resend_wait, ctx, idx - 1, total) if ctx is not None else None
         try:
-            await _resend_with_retry(partial(client.resend_field_invite, token, field_invite_id, request_data))
+            await _resend_with_retry(partial(client.resend_field_invite, token, field_invite_id, request_data), on_wait)
             reminded.append(ReminderRecipientResult(email=addr, document_id=document_id))
         except SignNowAPIError as err:
             failed.append(

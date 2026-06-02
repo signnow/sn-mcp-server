@@ -694,7 +694,12 @@ class TestResendRateLimitRetry:
 
         assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
         assert client.resend_field_invite.call_count == 2
-        assert _no_sleep == [5.0]  # honored Retry-After, not the 1.0s exponential backoff
+        # Honored Retry-After in total (5s, not the 1.0s exponential backoff), split into
+        # chunks no longer than the keepalive interval.
+        from sn_mcp_server.tools.reminder import _RESEND_KEEPALIVE_INTERVAL_SECONDS
+
+        assert sum(_no_sleep) == pytest.approx(5.0)
+        assert _no_sleep and max(_no_sleep) <= _RESEND_KEEPALIVE_INTERVAL_SECONDS
 
     async def test_429_retry_after_at_cap_is_honored(self, _no_sleep: list[float]) -> None:
         """Retry-After exactly at the cap is still honored (boundary)."""
@@ -708,7 +713,7 @@ class TestResendRateLimitRetry:
         result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
 
         assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
-        assert _no_sleep == [_RESEND_MAX_RETRY_AFTER_SECONDS]
+        assert sum(_no_sleep) == pytest.approx(_RESEND_MAX_RETRY_AFTER_SECONDS)
 
     async def test_429_long_retry_after_fails_fast_without_waiting(self, _no_sleep: list[float]) -> None:
         """429 with a Retry-After above the cap → fail fast (no wait, no retry), recorded as failed."""
@@ -725,6 +730,27 @@ class TestResendRateLimitRetry:
         assert [r.email for r in result.failed] == ["alice@x.com"]
         assert client.resend_field_invite.call_count == 1
         assert _no_sleep == []  # never waited
+
+    async def test_429_wait_emits_periodic_keepalive_progress(self, _no_sleep: list[float]) -> None:
+        """A multi-second backoff is chunked and emits a periodic keepalive so clients don't abort the wait."""
+        from sn_mcp_server.tools.reminder import _RESEND_KEEPALIVE_INTERVAL_SECONDS
+
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = [_rate_limited(retry_after=5.0), None]
+
+        ctx = AsyncMock()
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None, ctx=ctx)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        # The 5s wait is honored in total, but no single silent gap exceeds the keepalive interval.
+        assert sum(_no_sleep) == pytest.approx(5.0)
+        assert _no_sleep and max(_no_sleep) <= _RESEND_KEEPALIVE_INTERVAL_SECONDS
+        # And the client gets several heartbeats during the wait, not just one.
+        waits = [m for m in (c.kwargs["message"] for c in ctx.report_progress.call_args_list) if "retrying in" in m.lower()]
+        assert len(waits) >= 2, f"expected periodic keepalives during the wait, got {waits}"
 
 
 class TestResendRetryDelay:
