@@ -1,11 +1,17 @@
 """
 Send invite reminder business logic for SignNow MCP server.
 
-Sends signing reminders to pending signers on documents and document groups.
-- Documents: POST /document/{id}/email2 (send document copy by email), batched by 5.
-- Document groups: POST /v2/document-groups/{id}/send-email (native group endpoint).
+Sends signing reminders to pending signers on documents and document groups by resending
+their pending invites — the same actions the SignNow web app fires from its "Send reminder"
+buttons:
+- Documents: PUT /fieldinvite/{field_invite_id}/resend, once per pending field invite.
+- Document groups: POST /documentgroup/{id}/groupinvite/{invite_id}/resendinvites, once per pending signer.
 
 Supports auto-detection of entity type (document_group tried first, document as fallback).
+
+The resend endpoints reuse each invite's original email template, so they take no custom
+subject/message. Those tool parameters are kept for input-contract stability but are not
+forwarded to the API.
 """
 
 from __future__ import annotations
@@ -16,8 +22,8 @@ from fastmcp import Context
 
 from signnow_client import SignNowAPIClient
 from signnow_client.exceptions import SignNowAPIError
-from signnow_client.models.document_groups import GetDocumentGroupV2Response
-from signnow_client.models.templates_and_documents import DocumentResponse, SendEmailRequest
+from signnow_client.models.document_groups import GetDocumentGroupV2Response, ResendDocumentGroupInvitesRequest
+from signnow_client.models.templates_and_documents import DocumentResponse, ResendFieldInviteRequest
 
 from .models import InviteStatusValues, ReminderRecipientResult, SendReminderResponse
 
@@ -37,9 +43,10 @@ async def _send_invite_reminder(
     """Send signing reminders to pending signers on a document or document group.
 
     Resolves entity type (auto-detects if not provided), determines pending signers,
-    and sends reminders:
-    - Documents: calls send_document_copy_by_email (POST /document/{id}/email2) in batches of 5.
-    - Document groups: calls send_document_group_email (POST /v2/document-groups/{id}/send-email) once.
+    and resends their invites:
+    - Documents: calls resend_field_invite (PUT /fieldinvite/{id}/resend) per pending field invite.
+    - Document groups: calls resend_document_group_invites
+      (POST /documentgroup/{id}/groupinvite/{invite_id}/resendinvites) per pending signer.
 
     Auto-detection order: document_group (v2) first (modern), document as legacy fallback.
     Non-404 API errors propagate immediately without attempting fallback.
@@ -55,8 +62,9 @@ async def _send_invite_reminder(
         entity_id: Document or document group ID.
         entity_type: 'document' | 'document_group' | None (auto-detect).
         email: Optional filter — remind only this recipient.
-        subject: Optional email subject for the reminder.
-        message: Optional email body for the reminder.
+        subject: Accepted for input-contract stability; the resend endpoints reuse the
+            invite's original email template, so this is not applied.
+        message: Accepted for input-contract stability; not applied (see subject).
         ctx: Optional MCP Context for progress reporting (None in unit tests).
 
     Returns:
@@ -66,6 +74,10 @@ async def _send_invite_reminder(
         ValueError: entity_type value is invalid, or entity not found during auto-detection (both 404).
         SignNowAPIError: Any API error when entity_type is explicit; non-404 errors during auto-detection.
     """
+    # subject/message are part of the tool's stable input contract but the resend endpoints
+    # reuse each invite's original email template, so they are intentionally not forwarded.
+    del subject, message
+
     if entity_type is not None and entity_type not in {"document", "document_group"}:
         raise ValueError(f"Invalid entity_type '{entity_type}'. Must be 'document' or 'document_group'.")
 
@@ -93,12 +105,12 @@ async def _send_invite_reminder(
     if entity_type == "document_group":
         if group_response is None:
             group_response = client.get_document_group_v2(token, entity_id)
-        return await _remind_document_group(client, token, entity_id, group_response, email, subject, message, ctx)
+        return await _remind_document_group(client, token, entity_id, group_response, email, ctx)
 
     # entity_type == "document" (legacy path)
     if doc_response is None:
         doc_response = client.get_document(token, entity_id)
-    return await _remind_document(client, token, entity_id, doc_response, email, subject, message, ctx)
+    return await _remind_document(client, token, entity_id, doc_response, email, ctx)
 
 
 async def _remind_document(
@@ -107,11 +119,11 @@ async def _remind_document(
     entity_id: str,
     doc_response: DocumentResponse,
     email: str | None,
-    subject: str | None,
-    message: str | None,
     ctx: Context | None,
 ) -> SendReminderResponse:
-    """Build and send reminders for a single document.
+    """Resend pending field invites for a single document.
+
+    Resends each pending field invite via PUT /fieldinvite/{id}/resend (one call per invite).
 
     Args:
         client: Authenticated SignNow API client.
@@ -119,14 +131,12 @@ async def _remind_document(
         entity_id: Document ID.
         doc_response: DocumentResponse from client.get_document().
         email: Optional single-recipient filter.
-        subject: Optional email subject.
-        message: Optional email body.
         ctx: Optional MCP Context for progress reporting.
 
     Returns:
         SendReminderResponse with entity_type='document'.
     """
-    pending_emails: list[str] = []
+    pending_invites: list[tuple[str, str]] = []  # (field_invite_id, signer_email)
     skipped: list[ReminderRecipientResult] = []
 
     for fi in doc_response.field_invites:
@@ -138,7 +148,7 @@ async def _remind_document(
             continue
 
         if is_pending:
-            pending_emails.append(fi.email)
+            pending_invites.append((fi.id, fi.email))
         else:
             skipped.append(
                 ReminderRecipientResult(
@@ -148,7 +158,12 @@ async def _remind_document(
                 )
             )
 
-    if email is not None and not pending_emails and not any(s.email == email for s in skipped):
+    # An email with at least one pending invite is reminded, so it must not also appear in
+    # skipped because of a separate non-pending invite for the same address.
+    pending_addresses = {addr for _, addr in pending_invites}
+    skipped = [s for s in skipped if s.email not in pending_addresses]
+
+    if email is not None and not pending_invites and not any(s.email == email for s in skipped):
         skipped.append(
             ReminderRecipientResult(
                 email=email,
@@ -157,7 +172,7 @@ async def _remind_document(
             )
         )
 
-    reminded, failed = await _send_in_batches(client, token, entity_id, pending_emails, subject, message, ctx)
+    reminded, failed = await _resend_field_invites(client, token, entity_id, pending_invites, ctx)
 
     return SendReminderResponse(
         entity_id=entity_id,
@@ -174,15 +189,14 @@ async def _remind_document_group(
     entity_id: str,
     group_response: GetDocumentGroupV2Response,
     email: str | None,
-    subject: str | None,
-    message: str | None,
     ctx: Context | None,
 ) -> SendReminderResponse:
-    """Build and send reminders for a document group via POST /v2/document-groups/{id}/send-email.
+    """Resend group invites for a document group via POST /documentgroup/{id}/groupinvite/{invite_id}/resendinvites.
 
-    Collects all pending signers across every document in the group. Uses the native
-    document-group send-email endpoint — a single API call for the entire group (no
-    per-document batching).
+    Collects all pending signers across every document in the group and resends the group
+    invite to each one (one call per pending signer). Requires an active group invite —
+    GetDocumentGroupV2Response.data.invite_id; if absent, all pending signers are reported
+    as failed.
 
     Args:
         client: Authenticated SignNow API client.
@@ -190,8 +204,6 @@ async def _remind_document_group(
         entity_id: Document group ID.
         group_response: GetDocumentGroupV2Response from client.get_document_group_v2().
         email: Optional single-recipient filter.
-        subject: Optional email subject (not used by send-email endpoint; reserved for future use).
-        message: Optional email body (not used by send-email endpoint; reserved for future use).
         ctx: Optional MCP Context for progress reporting.
 
     Returns:
@@ -222,6 +234,12 @@ async def _remind_document_group(
                     )
                 )
 
+    # A signer pending on any document is reminded once via the group-level resend, so a
+    # non-pending invite for the same signer on another document must not also land them in
+    # skipped — an email must never appear in both recipients_reminded and skipped.
+    pending_set = set(pending_emails)
+    skipped = [s for s in skipped if s.email not in pending_set]
+
     if not pending_emails:
         if email is not None:
             if email not in all_signer_emails:
@@ -247,35 +265,46 @@ async def _remind_document_group(
             skipped=skipped,
         )
 
-    # Build SendEmailRequest payload for the native group send-email endpoint.
-    request_data = SendEmailRequest(
-        to=[{"email": addr} for addr in pending_emails],
-        with_history=False,
-        client_timestamp=int(time.time()),
-    )
-
     reminded: list[ReminderRecipientResult] = []
     failed: list[ReminderRecipientResult] = []
 
-    try:
-        client.send_document_group_email(token, entity_id, request_data)
+    group_invite_id = group_response.data.invite_id
+    if group_invite_id is None:
+        # No active invite to resend — surface every pending signer as failed (retryable).
         for addr in pending_emails:
+            failed.append(
+                ReminderRecipientResult(
+                    email=addr,
+                    reason=f"no active invite to resend for document_group {entity_id}",
+                )
+            )
+        return SendReminderResponse(
+            entity_id=entity_id,
+            entity_type="document_group",
+            recipients_reminded=reminded,
+            skipped=skipped,
+            failed=failed,
+        )
+
+    total = len(pending_emails)
+    for idx, addr in enumerate(pending_emails, start=1):
+        request_data = ResendDocumentGroupInvitesRequest(email=addr, client_timestamp=int(time.time()))
+        try:
+            client.resend_document_group_invites(token, entity_id, group_invite_id, request_data)
             reminded.append(ReminderRecipientResult(email=addr))
-    except SignNowAPIError as err:
-        for addr in pending_emails:
+        except SignNowAPIError as err:
             failed.append(
                 ReminderRecipientResult(
                     email=addr,
                     reason=f"Failed to send reminder for document_group {entity_id}: {err}",
                 )
             )
-
-    if ctx is not None:
-        await ctx.report_progress(
-            progress=1,
-            total=1,
-            message="Sent group reminder",
-        )
+        if ctx is not None:
+            await ctx.report_progress(
+                progress=idx,
+                total=total,
+                message=f"Sent group reminder {idx}/{total}",
+            )
 
     return SendReminderResponse(
         entity_id=entity_id,
@@ -286,26 +315,22 @@ async def _remind_document_group(
     )
 
 
-async def _send_in_batches(
+async def _resend_field_invites(
     client: SignNowAPIClient,
     token: str,
     document_id: str,
-    emails: list[str],
-    subject: str | None,
-    message: str | None,
+    invites: list[tuple[str, str]],
     ctx: Context | None,
 ) -> tuple[list[ReminderRecipientResult], list[ReminderRecipientResult]]:
-    """Send reminder emails in batches of at most 5.
+    """Resend pending field invites one at a time via PUT /fieldinvite/{id}/resend.
 
-    Reports progress after each batch call when ctx is provided.
+    Reports progress after each call when ctx is provided.
 
     Args:
         client: Authenticated SignNow API client.
         token: Bearer access token.
-        document_id: Document ID to remind for.
-        emails: Full list of pending recipient emails.
-        subject: Optional email subject.
-        message: Optional email body.
+        document_id: Document ID the invites belong to.
+        invites: List of (field_invite_id, signer_email) for each pending invite.
         ctx: Optional MCP Context for progress reporting.
 
     Returns:
@@ -314,28 +339,24 @@ async def _send_in_batches(
     reminded: list[ReminderRecipientResult] = []
     failed: list[ReminderRecipientResult] = []
 
-    chunks = [emails[i : i + 5] for i in range(0, len(emails), 5)]
-    total = len(chunks)
-
-    for idx, chunk in enumerate(chunks, start=1):
+    total = len(invites)
+    for idx, (field_invite_id, addr) in enumerate(invites, start=1):
         try:
-            client.send_document_copy_by_email(token, document_id, chunk, message, subject)
-            for addr in chunk:
-                reminded.append(ReminderRecipientResult(email=addr, document_id=document_id))
+            client.resend_field_invite(token, field_invite_id, ResendFieldInviteRequest(client_timestamp=int(time.time())))
+            reminded.append(ReminderRecipientResult(email=addr, document_id=document_id))
         except SignNowAPIError as err:
-            for addr in chunk:
-                failed.append(
-                    ReminderRecipientResult(
-                        email=addr,
-                        document_id=document_id,
-                        reason=f"Failed to send reminder for document {document_id}: {err}",
-                    )
+            failed.append(
+                ReminderRecipientResult(
+                    email=addr,
+                    document_id=document_id,
+                    reason=f"Failed to send reminder for document {document_id}: {err}",
                 )
+            )
         if ctx is not None:
             await ctx.report_progress(
                 progress=idx,
                 total=total,
-                message=f"Sent reminder batch {idx}/{total}",
+                message=f"Sent reminder {idx}/{total}",
             )
 
     return reminded, failed

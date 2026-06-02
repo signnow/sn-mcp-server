@@ -1037,6 +1037,17 @@ class SendDocumentCopyByEmailResponse(BaseModel):
     status: str = Field(..., description="'success' on success")
 
 
+class ResendFieldInviteRequest(BaseModel):
+    """Request body for PUT /fieldinvite/{field_invite_id}/resend.
+
+    Resends a pending field invite — the signing reminder the SignNow web app fires
+    from the document "Send reminder" action. The endpoint reuses the invite's
+    original email template; it takes no custom subject/message.
+    """
+
+    client_timestamp: int = Field(..., description="Client unix timestamp (seconds) of the resend action")
+
+
 class CreateDocumentEmbeddedViewRequest(BaseModel):
     """Request model for creating a document embedded view link.
 

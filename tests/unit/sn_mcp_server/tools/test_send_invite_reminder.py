@@ -2,8 +2,8 @@
 Unit tests for reminder.py — send_invite_reminder business logic.
 
 Mocks SignNowAPIClient with MagicMock; ctx with AsyncMock.
-All sync client methods (get_document, get_document_group_v2, send_document_copy_by_email)
-return/raise values set in each test.
+All sync client methods (get_document, get_document_group_v2, resend_field_invite,
+resend_document_group_invites) return/raise values set in each test.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from signnow_client.models.document_groups import (
     DocumentGroupV2Document,
     DocumentGroupV2FieldInvite,
     GetDocumentGroupV2Response,
+    ResendDocumentGroupInvitesRequest,
 )
 from signnow_client.models.templates_and_documents import DocumentFieldInviteStatus, DocumentResponse
 from sn_mcp_server.tools.reminder import _send_invite_reminder
@@ -30,11 +31,12 @@ from sn_mcp_server.tools.reminder import _send_invite_reminder
 TOKEN = "unit-test-token"  # noqa: S105
 DOC_ID = "doc-abc"
 GRP_ID = "grp-xyz"
+GRP_INVITE_ID = "ginv-1"
 
 
-def _doc_fi(email: str, status: str = "pending") -> DocumentFieldInviteStatus:
-    """Minimal DocumentFieldInviteStatus for reminder.py (reads .email and .status)."""
-    return DocumentFieldInviteStatus.model_construct(email=email, status=status)
+def _doc_fi(email: str, status: str = "pending", fi_id: str | None = None) -> DocumentFieldInviteStatus:
+    """Minimal DocumentFieldInviteStatus for reminder.py (reads .id, .email, .status)."""
+    return DocumentFieldInviteStatus.model_construct(id=fi_id or f"fi-{email}", email=email, status=status)
 
 
 def _doc_resp(*field_invites: DocumentFieldInviteStatus) -> DocumentResponse:
@@ -52,9 +54,9 @@ def _grp_doc(doc_id: str, *field_invites: DocumentGroupV2FieldInvite) -> Documen
     return DocumentGroupV2Document.model_construct(id=doc_id, field_invites=list(field_invites))
 
 
-def _grp_resp(*documents: DocumentGroupV2Document) -> GetDocumentGroupV2Response:
-    """Minimal GetDocumentGroupV2Response for reminder.py (reads .data.documents)."""
-    data = DocumentGroupV2Data.model_construct(documents=list(documents))
+def _grp_resp(*documents: DocumentGroupV2Document, invite_id: str | None = GRP_INVITE_ID) -> GetDocumentGroupV2Response:
+    """Minimal GetDocumentGroupV2Response for reminder.py (reads .data.documents and .data.invite_id)."""
+    data = DocumentGroupV2Data.model_construct(documents=list(documents), invite_id=invite_id)
     return GetDocumentGroupV2Response.model_construct(data=data)
 
 
@@ -70,7 +72,7 @@ class TestRemindDocument:
         client = MagicMock()
         client.get_document.return_value = doc_resp
         if send_side_effect is not None:
-            client.send_document_copy_by_email.side_effect = send_side_effect
+            client.resend_field_invite.side_effect = send_side_effect
         return client
 
     async def test_one_pending_recipient_reminded(self) -> None:
@@ -87,20 +89,29 @@ class TestRemindDocument:
         assert result.entity_type == "document"
         assert result.entity_id == DOC_ID
 
-    async def test_seven_pending_sends_two_batches(self) -> None:
-        """7 pending recipients → send_document_copy_by_email called twice (5 + 2)."""
-        emails = [f"user{i}@x.com" for i in range(7)]
-        doc = _doc_resp(*[_doc_fi(e, "pending") for e in emails])
+    async def test_resend_called_per_pending_invite_with_field_invite_id(self) -> None:
+        """7 pending invites → resend_field_invite called once each, with the field invite id."""
+        invites = [(f"fi-{i}", f"user{i}@x.com") for i in range(7)]
+        doc = _doc_resp(*[_doc_fi(email, "pending", fi_id) for fi_id, email in invites])
         client = self._client(doc)
 
         result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
 
         assert len(result.recipients_reminded) == 7
-        assert client.send_document_copy_by_email.call_count == 2
-        first_batch = client.send_document_copy_by_email.call_args_list[0].args[2]
-        second_batch = client.send_document_copy_by_email.call_args_list[1].args[2]
-        assert len(first_batch) == 5
-        assert len(second_batch) == 2
+        assert client.resend_field_invite.call_count == 7
+        # Each call resends a specific field invite id (2nd positional arg).
+        called_ids = {c.args[1] for c in client.resend_field_invite.call_args_list}
+        assert called_ids == {fi_id for fi_id, _ in invites}
+
+    async def test_resend_payload_carries_client_timestamp(self) -> None:
+        """resend_field_invite gets a ResendFieldInviteRequest with an int client_timestamp."""
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-A"))
+        client = self._client(doc)
+
+        await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        request_data = client.resend_field_invite.call_args.args[2]
+        assert isinstance(request_data.client_timestamp, int)
 
     async def test_mix_pending_and_completed(self) -> None:
         """2 pending + 1 fulfilled → reminded=2, skipped=1."""
@@ -131,7 +142,7 @@ class TestRemindDocument:
 
         assert result.recipients_reminded == []
         assert len(result.skipped) == 2
-        client.send_document_copy_by_email.assert_not_called()
+        client.resend_field_invite.assert_not_called()
 
     async def test_email_filter_match_only_filtered_reminded(self) -> None:
         """email='bob@x.com' filter → only bob is reminded, alice is silently dropped."""
@@ -145,6 +156,7 @@ class TestRemindDocument:
 
         assert len(result.recipients_reminded) == 1
         assert result.recipients_reminded[0].email == "bob@x.com"
+        assert client.resend_field_invite.call_count == 1
 
     async def test_email_filter_no_pending_match_adds_skipped_entry(self) -> None:
         """email filter finds no pending invite → skipped entry with email in reason."""
@@ -169,7 +181,7 @@ class TestRemindDocument:
         assert result.skipped[0].email == "bob@x.com"
 
     async def test_api_failure_categorised_as_failed(self) -> None:
-        """send_document_copy_by_email raises SignNowAPIError → result.failed populated."""
+        """resend_field_invite raises SignNowAPIError → result.failed populated."""
         doc = _doc_resp(_doc_fi("alice@x.com", "pending"))
         err = SignNowAPIError("gateway error", status_code=502)
         client = self._client(doc, send_side_effect=err)
@@ -180,6 +192,36 @@ class TestRemindDocument:
         assert len(result.failed) == 1
         assert result.failed[0].email == "alice@x.com"
         assert DOC_ID in (result.failed[0].reason or "")
+
+    async def test_partial_failure_splits_reminded_and_failed(self) -> None:
+        """Mixed resend outcomes → first reminded, second failed; loop does not abort early."""
+        doc = _doc_resp(
+            _doc_fi("ok@x.com", "pending", "fi-ok"),
+            _doc_fi("bad@x.com", "pending", "fi-bad"),
+        )
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = [None, SignNowAPIError("boom", status_code=502)]
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["ok@x.com"]
+        assert [r.email for r in result.failed] == ["bad@x.com"]
+        assert DOC_ID in (result.failed[0].reason or "")
+
+    async def test_same_email_pending_and_completed_not_in_skipped(self) -> None:
+        """Same address on a pending and a fulfilled invite → reminded only, never in skipped."""
+        doc = _doc_resp(
+            _doc_fi("alice@x.com", "pending", "fi-1"),
+            _doc_fi("alice@x.com", "fulfilled", "fi-2"),
+        )
+        client = self._client(doc)
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        assert all(s.email != "alice@x.com" for s in result.skipped), f"alice wrongly in skipped: {result.skipped}"
+        assert client.resend_field_invite.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -194,11 +236,11 @@ class TestRemindDocumentGroup:
         client = MagicMock()
         client.get_document_group_v2.return_value = grp_resp
         if send_side_effect is not None:
-            client.send_document_group_email.side_effect = send_side_effect
+            client.resend_document_group_invites.side_effect = send_side_effect
         return client
 
     async def test_pending_signers_across_docs_all_reminded(self) -> None:
-        """Pending signers across multiple docs → all reminded via group send-email."""
+        """Pending signers across multiple docs → resend called once per signer with group + invite id."""
         grp = _grp_resp(
             _grp_doc("doc1", _grp_fi("signer1@x.com", "pending")),
             _grp_doc("doc2", _grp_fi("signer2@x.com", "pending")),
@@ -211,10 +253,26 @@ class TestRemindDocumentGroup:
         assert "signer1@x.com" in reminded_emails
         assert "signer2@x.com" in reminded_emails
         assert result.entity_type == "document_group"
-        # send_document_group_email called once with group ID (not per-doc email2)
-        client.send_document_group_email.assert_called_once()
-        call_args = client.send_document_group_email.call_args
-        assert call_args.args[1] == GRP_ID
+        # resend_document_group_invites called once per pending signer with (token, group_id, invite_id, request).
+        assert client.resend_document_group_invites.call_count == 2
+        for call in client.resend_document_group_invites.call_args_list:
+            assert call.args[1] == GRP_ID
+            assert call.args[2] == GRP_INVITE_ID
+
+    async def test_missing_group_invite_id_marks_pending_as_failed(self) -> None:
+        """No active group invite (data.invite_id is None) → pending signers reported as failed, no send call."""
+        grp = _grp_resp(
+            _grp_doc("doc1", _grp_fi("signer1@x.com", "pending")),
+            invite_id=None,
+        )
+        client = self._client(grp)
+
+        result = await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None)
+
+        assert result.recipients_reminded == []
+        assert len(result.failed) == 1
+        assert result.failed[0].email == "signer1@x.com"
+        client.resend_document_group_invites.assert_not_called()
 
     async def test_mixed_pending_and_fulfilled_across_docs(self) -> None:
         """Pending on doc1, fulfilled on doc2 → only pending reminded, fulfilled skipped."""
@@ -244,10 +302,10 @@ class TestRemindDocumentGroup:
         assert len(result.skipped) >= 1
         skipped_emails = {r.email for r in result.skipped}
         assert "done@x.com" in skipped_emails
-        client.send_document_group_email.assert_not_called()
+        client.resend_document_group_invites.assert_not_called()
 
     async def test_email_filter_sends_only_matched_signer(self) -> None:
-        """email='bob@x.com' → only bob reminded via send-email."""
+        """email='bob@x.com' → only bob reminded via resend."""
         grp = _grp_resp(
             _grp_doc("doc1", _grp_fi("alice@x.com", "pending"), _grp_fi("bob@x.com", "pending")),
         )
@@ -258,6 +316,7 @@ class TestRemindDocumentGroup:
         reminded_emails = {r.email for r in result.recipients_reminded}
         assert "bob@x.com" in reminded_emails
         assert "alice@x.com" not in reminded_emails
+        assert client.resend_document_group_invites.call_count == 1
 
     async def test_email_filter_no_match_adds_skipped_with_reason(self) -> None:
         """email filter finds no signer → skipped entry contains the unmatched email."""
@@ -299,7 +358,7 @@ class TestRemindDocumentGroup:
         assert any("unknown@x.com" in (r.reason or "") for r in result.skipped)
 
     async def test_api_failure_categorised_as_failed(self) -> None:
-        """send_document_group_email raises SignNowAPIError → result.failed populated."""
+        """resend_document_group_invites raises SignNowAPIError → result.failed populated."""
         grp = _grp_resp(
             _grp_doc("doc1", _grp_fi("alice@x.com", "pending")),
         )
@@ -313,8 +372,8 @@ class TestRemindDocumentGroup:
         assert result.failed[0].email == "alice@x.com"
         assert GRP_ID in (result.failed[0].reason or "")
 
-    async def test_send_email_request_payload_structure(self) -> None:
-        """Verify send_document_group_email called with correct SendEmailRequest fields."""
+    async def test_resend_request_payload_structure(self) -> None:
+        """Verify resend_document_group_invites called with a ResendDocumentGroupInvitesRequest per signer."""
         grp = _grp_resp(
             _grp_doc("doc1", _grp_fi("alice@x.com", "pending"), _grp_fi("bob@x.com", "pending")),
         )
@@ -322,13 +381,52 @@ class TestRemindDocumentGroup:
 
         await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None)
 
-        # Verify the SendEmailRequest passed to the client
-        call_args = client.send_document_group_email.call_args
-        request_data = call_args.args[2]  # 3rd positional arg: request_data
-        # Should have to=[{"email": "alice@x.com"}, {"email": "bob@x.com"}]
-        assert len(request_data.to) == 2
-        to_emails = {r["email"] for r in request_data.to}
-        assert to_emails == {"alice@x.com", "bob@x.com"}
+        payloads = [c.args[3] for c in client.resend_document_group_invites.call_args_list]
+        assert all(isinstance(p, ResendDocumentGroupInvitesRequest) for p in payloads)
+        assert {p.email for p in payloads} == {"alice@x.com", "bob@x.com"}
+        assert all(isinstance(p.client_timestamp, int) for p in payloads)
+
+    async def test_same_signer_pending_in_multiple_docs_deduped(self) -> None:
+        """Same signer pending across two docs → exactly one resend, one reminded entry."""
+        grp = _grp_resp(
+            _grp_doc("doc1", _grp_fi("repeat@x.com", "pending")),
+            _grp_doc("doc2", _grp_fi("repeat@x.com", "pending")),
+        )
+        client = self._client(grp)
+
+        result = await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None)
+
+        assert client.resend_document_group_invites.call_count == 1
+        assert [r.email for r in result.recipients_reminded] == ["repeat@x.com"]
+
+    async def test_same_signer_pending_and_completed_across_docs_not_skipped(self) -> None:
+        """Signer pending on doc1 but fulfilled on doc2 → reminded once, never in skipped (no double-bucket)."""
+        grp = _grp_resp(
+            _grp_doc("doc1", _grp_fi("alice@x.com", "pending")),
+            _grp_doc("doc2", _grp_fi("alice@x.com", "fulfilled")),
+        )
+        client = self._client(grp)
+
+        result = await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        assert all(s.email != "alice@x.com" for s in result.skipped), f"alice wrongly in skipped: {result.skipped}"
+        assert client.resend_document_group_invites.call_count == 1
+
+    async def test_partial_failure_splits_reminded_and_failed(self) -> None:
+        """Mixed resend outcomes across signers → first reminded, second failed; loop continues."""
+        grp = _grp_resp(
+            _grp_doc("doc1", _grp_fi("ok@x.com", "pending"), _grp_fi("bad@x.com", "pending")),
+        )
+        client = MagicMock()
+        client.get_document_group_v2.return_value = grp
+        client.resend_document_group_invites.side_effect = [None, SignNowAPIError("boom", status_code=502)]
+
+        result = await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["ok@x.com"]
+        assert [r.email for r in result.failed] == ["bad@x.com"]
+        assert GRP_ID in (result.failed[0].reason or "")
 
 
 # ---------------------------------------------------------------------------
@@ -409,12 +507,11 @@ class TestInputValidation:
 
 
 class TestProgressReporting:
-    """Tests for ctx.report_progress calls during batched email2 sends."""
+    """Tests for ctx.report_progress calls during per-invite resends."""
 
-    async def test_progress_called_once_per_batch(self) -> None:
-        """7 emails → 2 batches → ctx.report_progress called twice with correct total."""
-        emails = [f"user{i}@x.com" for i in range(7)]
-        doc = _doc_resp(*[_doc_fi(e, "pending") for e in emails])
+    async def test_progress_reported_once_per_field_invite(self) -> None:
+        """7 pending invites → ctx.report_progress called 7 times with total=7."""
+        doc = _doc_resp(*[_doc_fi(f"user{i}@x.com", "pending") for i in range(7)])
         client = MagicMock()
         client.get_document.return_value = doc
 
@@ -423,15 +520,13 @@ class TestProgressReporting:
         result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None, ctx=ctx)
 
         assert len(result.recipients_reminded) == 7
-        assert ctx.report_progress.call_count == 2
-        # Both calls should pass total=2
+        assert ctx.report_progress.call_count == 7
         for progress_call in ctx.report_progress.call_args_list:
-            assert progress_call.kwargs["total"] == 2
+            assert progress_call.kwargs["total"] == 7
 
-    async def test_single_batch_reports_once(self) -> None:
-        """3 emails → 1 batch → ctx.report_progress called exactly once."""
-        emails = [f"user{i}@x.com" for i in range(3)]
-        doc = _doc_resp(*[_doc_fi(e, "pending") for e in emails])
+    async def test_single_pending_reports_once(self) -> None:
+        """1 pending invite → ctx.report_progress called exactly once."""
+        doc = _doc_resp(_doc_fi("only@x.com", "pending"))
         client = MagicMock()
         client.get_document.return_value = doc
 
@@ -443,7 +538,7 @@ class TestProgressReporting:
         assert ctx.report_progress.call_args.kwargs["total"] == 1
 
     async def test_no_pending_no_progress_calls(self) -> None:
-        """No pending invites → no send batches → ctx.report_progress never called."""
+        """No pending invites → no resend calls → ctx.report_progress never called."""
         doc = _doc_resp(_doc_fi("done@x.com", "fulfilled"))
         client = MagicMock()
         client.get_document.return_value = doc
@@ -454,8 +549,8 @@ class TestProgressReporting:
 
         ctx.report_progress.assert_not_called()
 
-    async def test_group_send_email_reports_progress_once(self) -> None:
-        """Document group send-email → ctx.report_progress called once (single API call)."""
+    async def test_group_resend_reports_progress_per_signer(self) -> None:
+        """Document group with 2 pending signers → ctx.report_progress called twice (one per resend)."""
         grp = _grp_resp(
             _grp_doc("doc1", _grp_fi("alice@x.com", "pending"), _grp_fi("bob@x.com", "pending")),
         )
@@ -467,8 +562,9 @@ class TestProgressReporting:
         result = await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None, ctx=ctx)
 
         assert len(result.recipients_reminded) == 2
-        assert ctx.report_progress.call_count == 1
-        assert ctx.report_progress.call_args.kwargs["total"] == 1
+        assert ctx.report_progress.call_count == 2
+        for progress_call in ctx.report_progress.call_args_list:
+            assert progress_call.kwargs["total"] == 2
 
     async def test_group_no_pending_no_progress_calls(self) -> None:
         """Document group with no pending invites → no send call, no progress report."""

@@ -47,6 +47,7 @@ from .models import (
     RenameDocumentRequest,
     ReplaceFieldInviteRequest,
     ReplaceFieldInviteResponse,
+    ResendFieldInviteRequest,
     SendDocumentCopyByEmailRequest,
     SendDocumentCopyByEmailResponse,
     TriggerFieldInviteResponse,
@@ -595,6 +596,29 @@ class DocumentClientMixin(SignNowAPIClientBase):
             json_data=request_data.model_dump(),
             validate_model=SendDocumentCopyByEmailResponse,
         )
+
+    def resend_field_invite(self, token: str, field_invite_id: str, request_data: ResendFieldInviteRequest) -> bool:
+        """Resend a pending field invite (signing reminder).
+
+        Fires PUT /fieldinvite/{field_invite_id}/resend — the endpoint the SignNow web app
+        uses for the document "Send reminder" action. The invite must still be pending; the
+        original email template is reused (no custom subject/message).
+
+        Args:
+            token: Bearer access token.
+            field_invite_id: ID of the field invite to resend (from DocumentFieldInviteStatus.id).
+            request_data: Resend payload (client_timestamp).
+
+        Returns:
+            True on success (2xx).
+
+        Raises:
+            SignNowAPIError: On API error (invite not found, not pending, forbidden, etc.).
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._put(f"/fieldinvite/{field_invite_id}/resend", headers=headers, json_data=request_data.model_dump())
+        return True
 
     def create_document_embedded_view(
         self,

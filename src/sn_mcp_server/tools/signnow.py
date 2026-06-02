@@ -1069,9 +1069,9 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Auto-detects entity type by trying GET /documentgroup/{id} (v2) first (modern),
         then GET /document/{id} as legacy fallback. Non-404 errors propagate immediately.
 
-        For documents: sends a copy via POST /document/{id}/email2 to each pending signer.
-        For document groups: uses POST /v2/document-groups/{id}/send-email to notify all
-        pending signers across all documents in the group.
+        For documents: resends each pending field invite via PUT /fieldinvite/{id}/resend.
+        For document groups: resends the group invite to each pending signer via
+        POST /documentgroup/{id}/groupinvite/{invite_id}/resendinvites.
 
         Skips signers whose invite is already completed or cancelled (reported in 'skipped').
         API failures are reported in 'failed' and can be retried.
