@@ -58,9 +58,11 @@ repos:
 
       - id: import-linter
         name: import-linter (architectural boundaries)
-        # PYTHONPATH=src so import-linter analyses THIS repo's packages, not the
-        # globally-installed sn-mcp-server-internal project (shared sn_mcp_server name).
-        entry: env PYTHONPATH=src lint-imports --config pyproject.toml
+        # Wrapper prepends src/ to sys.path so import-linter analyses THIS repo's packages,
+        # not the globally-installed sn-mcp-server-internal project (shared sn_mcp_server
+        # name). A plain `env PYTHONPATH=src` needs a POSIX `env` binary and breaks on native
+        # Windows shells; the in-process Python runner is cross-platform.
+        entry: python scripts/lint_imports.py
         language: system
         pass_filenames: false
         stages: [pre-push]
