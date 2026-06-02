@@ -3,7 +3,7 @@
     "id": "grp1",
     "name": "Test Document Group",
     "created": 1700000000,
-    "invite_id": null,
+    "invite_id": "ginv1",
     "pending_step_id": null,
     "state": "pending",
     "last_invite_id": null,

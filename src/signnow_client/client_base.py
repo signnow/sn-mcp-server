@@ -5,6 +5,7 @@ Base client class with common HTTP methods and error handling.
 """
 
 import json
+import math
 from types import TracebackType
 from typing import Any, TypeVar, overload
 
@@ -23,6 +24,30 @@ from .exceptions import (
 )
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse a Retry-After header into a backoff delay in seconds.
+
+    Handles the delta-seconds form (e.g. "120"), which is what SignNow's rate limiter
+    returns. The HTTP-date form is not interpreted (yields None, so the caller falls back
+    to its own backoff). Absent, empty, or non-numeric values also yield None.
+
+    Args:
+        value: Raw Retry-After header value, or None when the header is absent.
+
+    Returns:
+        Non-negative delay in seconds, or None when no usable delta-seconds value is present.
+    """
+    if value is None:
+        return None
+    try:
+        seconds = float(value.strip())
+    except ValueError:
+        return None
+    if not math.isfinite(seconds):
+        return None
+    return max(seconds, 0.0)
 
 
 class SignNowAPIClientBase:
@@ -81,16 +106,22 @@ class SignNowAPIClientBase:
             error_message = str(e)
 
         # Map status codes to specific exception types
+        error: SignNowAPIError
         if status_code in (401, 403):
-            return SignNowAPIAuthenticationError(error_message, status_code, response_data)
+            error = SignNowAPIAuthenticationError(error_message, status_code, response_data)
         elif status_code == 404:
-            return SignNowAPINotFoundError(error_message, status_code, response_data)
+            error = SignNowAPINotFoundError(error_message, status_code, response_data)
         elif status_code == 429:
-            return SignNowAPIRateLimitError(error_message, status_code, response_data)
+            error = SignNowAPIRateLimitError(error_message, status_code, response_data)
         elif status_code >= 500:
-            return SignNowAPIServerError(error_message, status_code, response_data)
+            error = SignNowAPIServerError(error_message, status_code, response_data)
         else:
-            return SignNowAPIHTTPError(error_message, status_code, response_data)
+            error = SignNowAPIHTTPError(error_message, status_code, response_data)
+
+        # Surface the server's Retry-After (e.g. on 429/503) so rate-limit-aware callers
+        # can honor the requested backoff instead of guessing.
+        error.retry_after = _parse_retry_after(e.response.headers.get("Retry-After"))
+        return error
 
     @overload
     def _get(self, url: str, headers: dict[str, str] | None = ..., params: dict[str, Any] | None = ..., *, validate_model: type[_ModelT]) -> _ModelT: ...

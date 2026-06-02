@@ -1064,20 +1064,24 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
             ),
         ] = None,
-        subject: Annotated[str | None, Field(description="Custom email subject for the reminder.")] = None,
-        message: Annotated[str | None, Field(description="Custom message body for the reminder.")] = None,
+        subject: Annotated[str | None, Field(description="Ignored — resend reuses the invite's original email template, so a custom subject is not applied. Compatibility only.")] = None,
+        message: Annotated[str | None, Field(description="Ignored — resend reuses the invite's original email template, so a custom message is not applied. Compatibility only.")] = None,
     ) -> SendReminderResponse:
         """Send a signing reminder to pending signers on a document or document group.
 
         Auto-detects entity type by trying GET /documentgroup/{id} (v2) first (modern),
         then GET /document/{id} as legacy fallback. Non-404 errors propagate immediately.
 
-        For documents: sends a copy via POST /document/{id}/email2 to each pending signer.
-        For document groups: uses POST /v2/document-groups/{id}/send-email to notify all
-        pending signers across all documents in the group.
+        For documents: resends each pending field invite via PUT /fieldinvite/{id}/resend.
+        For document groups: resends the group invite to each pending signer via
+        POST /documentgroup/{id}/groupinvite/{invite_id}/resendinvites.
 
         Skips signers whose invite is already completed or cancelled (reported in 'skipped').
         API failures are reported in 'failed' and can be retried.
+
+        The resend reuses each invite's original email template, so 'subject' and 'message'
+        are accepted for backward compatibility but NOT applied — do not rely on them to
+        customize the reminder.
 
         Tip: if entity_type is known, pass it explicitly to avoid an extra auto-detection GET.
         Tip: use list_documents first to discover document IDs by name or criteria.
@@ -1086,8 +1090,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             entity_id: Document ID or document group ID.
             entity_type: Optional discriminator ('document' or 'document_group').
             email: Optional — target a single recipient.
-            subject: Optional custom email subject.
-            message: Optional custom message body.
+            subject: Ignored — resend reuses the original template. Accepted for compatibility only.
+            message: Ignored — resend reuses the original template. Accepted for compatibility only.
 
         Returns:
             SendReminderResponse with entity_id, entity_type, recipients_reminded, skipped, failed.

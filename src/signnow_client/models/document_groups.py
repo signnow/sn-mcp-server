@@ -470,6 +470,18 @@ class UpdateDocGroupInviteStepRequest(BaseModel):
     replace_with_this_user: str = Field(..., description="Email address of the replacement signer")
 
 
+class ResendDocumentGroupInvitesRequest(BaseModel):
+    """Request body for POST /documentgroup/{id}/groupinvite/{invite_id}/resendinvites.
+
+    Resends the group invite (signing reminder) to a single recipient — the action the
+    SignNow web app fires from the document-group "Send reminder" button. One recipient
+    per call; the caller loops over pending signers.
+    """
+
+    email: str = Field(..., description="Recipient email to resend the group invite to")
+    client_timestamp: int = Field(..., description="Client unix timestamp (seconds) of the resend action")
+
+
 class RenameDocumentGroupRequest(BaseModel):
     """Request body for PUT /v2/document-groups/{document_group_id} to rename a document group."""
 

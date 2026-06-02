@@ -50,6 +50,7 @@ from .models import (
     ListDocumentGroupDocumentsResponse,
     RenameDocumentGroupRequest,
     RenameTemplateGroupRequest,
+    ResendDocumentGroupInvitesRequest,
     SendEmailRequest,
     UpdateDocGroupInviteStepRequest,
 )
@@ -399,6 +400,40 @@ class DocumentGroupClientMixin(SignNowAPIClientBase):
         headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
 
         self._post(f"/v2/document-groups/{document_group_id}/send-email", headers=headers, json_data=request_data.model_dump(exclude_none=True))
+        return True
+
+    def resend_document_group_invites(
+        self,
+        token: str,
+        document_group_id: str,
+        group_invite_id: str,
+        request_data: ResendDocumentGroupInvitesRequest,
+    ) -> bool:
+        """Resend a document group invite (signing reminder) to a single recipient.
+
+        Fires POST /documentgroup/{document_group_id}/groupinvite/{group_invite_id}/resendinvites —
+        the endpoint the SignNow web app uses for the document-group "Send reminder" action.
+        One recipient per call; the caller loops over pending signers.
+
+        Args:
+            token: Access token for authentication.
+            document_group_id: ID of the document group.
+            group_invite_id: Current group invite ID (from GetDocumentGroupV2Response.data.invite_id).
+            request_data: Resend payload (recipient email + client_timestamp).
+
+        Returns:
+            True on success (2xx).
+
+        Raises:
+            SignNowAPIError: On API error (no active invite, recipient not pending, forbidden, etc.).
+        """
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        self._post(
+            f"/documentgroup/{document_group_id}/groupinvite/{group_invite_id}/resendinvites",
+            headers=headers,
+            json_data=request_data.model_dump(),
+        )
         return True
 
     def get_document_group_recipients(self, token: str, document_group_id: str) -> GetRecipientsResponse:

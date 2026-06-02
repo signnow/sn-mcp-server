@@ -35,10 +35,9 @@ class TestSendInviteReminderDocument:
         """Document with 1 pending invite → signer reminded, result correctly populated."""
         # ARRANGE
         doc_fixture = load_fixture("get_document__with_pending_invite")
-        email2_fixture = load_fixture("post_email2__success")
 
         mock_api.get(f"/document/{DOC_ID}").respond(200, json=doc_fixture)
-        mock_api.post(f"/document/{DOC_ID}/email2").respond(200, json=email2_fixture)
+        mock_api.put("/fieldinvite/fi1/resend").respond(200)
 
         # ACT
         result = await _send_invite_reminder(
@@ -102,7 +101,7 @@ class TestSendInviteReminderAutoDetect:
         grp_fixture = load_fixture("get_document_group_v2__with_pending_invite")
 
         mock_api.get(f"/v2/document-groups/{GRP_ID}").respond(200, json=grp_fixture)
-        mock_api.post(f"/v2/document-groups/{GRP_ID}/send-email").respond(204)
+        mock_api.post(f"/documentgroup/{GRP_ID}/groupinvite/ginv1/resendinvites").respond(200)
 
         # ACT
         result = await _send_invite_reminder(
@@ -131,12 +130,11 @@ class TestSendInviteReminderAutoDetect:
         """entity_type=None → group 404 → falls back to document → entity_type='document'."""
         # ARRANGE
         doc_fixture = load_fixture("get_document__with_pending_invite")
-        email2_fixture = load_fixture("post_email2__success")
         error_fixture = load_fixture("error__document_not_found")
 
         mock_api.get(f"/v2/document-groups/{DOC_ID}").respond(404, json=error_fixture)
         mock_api.get(f"/document/{DOC_ID}").respond(200, json=doc_fixture)
-        mock_api.post(f"/document/{DOC_ID}/email2").respond(200, json=email2_fixture)
+        mock_api.put("/fieldinvite/fi1/resend").respond(200)
 
         # ACT
         result = await _send_invite_reminder(
@@ -169,7 +167,7 @@ class TestSendInviteReminderDocumentGroup:
         grp_fixture = load_fixture("get_document_group_v2__with_pending_invite")
 
         mock_api.get(f"/v2/document-groups/{GRP_ID}").respond(200, json=grp_fixture)
-        mock_api.post(f"/v2/document-groups/{GRP_ID}/send-email").respond(204)
+        mock_api.post(f"/documentgroup/{GRP_ID}/groupinvite/ginv1/resendinvites").respond(200)
 
         # ACT
         result = await _send_invite_reminder(
