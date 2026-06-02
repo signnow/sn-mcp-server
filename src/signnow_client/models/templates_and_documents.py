@@ -71,6 +71,7 @@ class DocumentField(BaseModel):
     field_request_canceled: str | None = Field(None, description="Field request canceled")
     template_field_id: str | None = Field(None, description="Template field ID")
     field_id: str | None = Field(..., description="Field ID")
+    field_request_id: str | None = Field(None, description="Field request ID — the id PUT /fieldinvite/{id}/resend expects for a signing reminder (field_invites[].id is NOT resendable)")
 
 
 class DocumentRole(BaseModel):

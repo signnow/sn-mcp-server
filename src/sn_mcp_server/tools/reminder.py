@@ -249,7 +249,16 @@ async def _remind_document(
     Returns:
         SendReminderResponse with entity_type='document'.
     """
-    pending_invites: list[tuple[str, str]] = []  # (field_invite_id, signer_email)
+    # PUT /fieldinvite/{id}/resend expects the field REQUEST id, not field_invites[].id —
+    # resending the latter is rejected with 400 "could not resend". The request id lives on
+    # the document's fields (any field belonging to the signer's role carries a usable one),
+    # so map each role to one of its field_request_ids and resend that.
+    request_id_by_role: dict[str, str] = {}
+    for field in doc_response.fields:
+        if field.field_request_id and field.role_id not in request_id_by_role:
+            request_id_by_role[field.role_id] = field.field_request_id
+
+    pending_invites: list[tuple[str, str]] = []  # (field_request_id, signer_email)
     skipped: list[ReminderRecipientResult] = []
 
     for fi in doc_response.field_invites:
@@ -261,7 +270,9 @@ async def _remind_document(
             continue
 
         if is_pending:
-            pending_invites.append((fi.id, fi.email))
+            # Fall back to the (non-resendable) invite id only if no field request id is
+            # found — that path fails fast and is surfaced per-recipient in `failed`.
+            pending_invites.append((request_id_by_role.get(fi.role_id, fi.id), fi.email))
         else:
             skipped.append(
                 ReminderRecipientResult(
@@ -444,7 +455,7 @@ async def _resend_field_invites(
         client: Authenticated SignNow API client.
         token: Bearer access token.
         document_id: Document ID the invites belong to.
-        invites: List of (field_invite_id, signer_email) for each pending invite.
+        invites: List of (field_request_id, signer_email) for each pending invite.
         ctx: Optional MCP Context for progress reporting.
 
     Returns:
@@ -454,11 +465,11 @@ async def _resend_field_invites(
     failed: list[ReminderRecipientResult] = []
 
     total = len(invites)
-    for idx, (field_invite_id, addr) in enumerate(invites, start=1):
+    for idx, (request_id, addr) in enumerate(invites, start=1):
         request_data = ResendFieldInviteRequest(client_timestamp=int(time.time()))
         on_wait = partial(_report_resend_wait, ctx, idx - 1, total) if ctx is not None else None
         try:
-            await _resend_with_retry(partial(client.resend_field_invite, token, field_invite_id, request_data), on_wait)
+            await _resend_with_retry(partial(client.resend_field_invite, token, request_id, request_data), on_wait)
             reminded.append(ReminderRecipientResult(email=addr, document_id=document_id))
         except SignNowAPIError as err:
             failed.append(

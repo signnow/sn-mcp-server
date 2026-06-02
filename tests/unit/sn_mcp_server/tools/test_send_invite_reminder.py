@@ -20,7 +20,7 @@ from signnow_client.models.document_groups import (
     GetDocumentGroupV2Response,
     ResendDocumentGroupInvitesRequest,
 )
-from signnow_client.models.templates_and_documents import DocumentFieldInviteStatus, DocumentResponse
+from signnow_client.models.templates_and_documents import DocumentField, DocumentFieldInviteStatus, DocumentResponse
 from sn_mcp_server.tools.reminder import _send_invite_reminder
 
 # ---------------------------------------------------------------------------
@@ -34,14 +34,19 @@ GRP_ID = "grp-xyz"
 GRP_INVITE_ID = "ginv-1"
 
 
-def _doc_fi(email: str, status: str = "pending", fi_id: str | None = None) -> DocumentFieldInviteStatus:
-    """Minimal DocumentFieldInviteStatus for reminder.py (reads .id, .email, .status)."""
-    return DocumentFieldInviteStatus.model_construct(id=fi_id or f"fi-{email}", email=email, status=status)
+def _doc_fi(email: str, status: str = "pending", fi_id: str | None = None, role_id: str | None = None) -> DocumentFieldInviteStatus:
+    """Minimal DocumentFieldInviteStatus for reminder.py (reads .id, .email, .status, .role_id)."""
+    return DocumentFieldInviteStatus.model_construct(id=fi_id or f"fi-{email}", email=email, status=status, role_id=role_id or f"role-{email}")
 
 
-def _doc_resp(*field_invites: DocumentFieldInviteStatus) -> DocumentResponse:
-    """Minimal DocumentResponse for reminder.py (reads .field_invites)."""
-    return DocumentResponse.model_construct(field_invites=list(field_invites))
+def _doc_field(role_id: str, field_request_id: str) -> DocumentField:
+    """Minimal DocumentField for reminder.py (reads .role_id, .field_request_id)."""
+    return DocumentField.model_construct(role_id=role_id, field_request_id=field_request_id)
+
+
+def _doc_resp(*field_invites: DocumentFieldInviteStatus, fields: list[DocumentField] | None = None) -> DocumentResponse:
+    """Minimal DocumentResponse for reminder.py (reads .field_invites and .fields)."""
+    return DocumentResponse.model_construct(field_invites=list(field_invites), fields=list(fields or []))
 
 
 def _grp_fi(signer_email: str, status: str = "pending") -> DocumentGroupV2FieldInvite:
@@ -112,6 +117,24 @@ class TestRemindDocument:
 
         request_data = client.resend_field_invite.call_args.args[2]
         assert isinstance(request_data.client_timestamp, int)
+
+    async def test_resend_targets_field_request_id_not_field_invite_id(self) -> None:
+        """Resend must use fields[].field_request_id (matched by role_id), not field_invites[].id.
+
+        SignNow's PUT /fieldinvite/{id}/resend rejects field_invites[].id with 400
+        'could not resend'; the resendable id is the field request id on the document fields.
+        """
+        doc = _doc_resp(
+            _doc_fi("alice@x.com", "pending", fi_id="fi-alice", role_id="role-A"),
+            fields=[_doc_field("role-A", "req-alice")],
+        )
+        client = self._client(doc)
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        # 2nd positional arg to resend_field_invite is the id; it must be the field request id.
+        assert client.resend_field_invite.call_args.args[1] == "req-alice"
 
     async def test_mix_pending_and_completed(self) -> None:
         """2 pending + 1 fulfilled → reminded=2, skipped=1."""
