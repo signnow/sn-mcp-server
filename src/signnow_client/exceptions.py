@@ -10,11 +10,15 @@ from typing import Any
 class SignNowAPIError(Exception):
     """Base exception for SignNow API errors"""
 
-    def __init__(self, message: str, status_code: int | None = None, response_data: dict[str, Any] | None = None) -> None:
+    def __init__(self, message: str, status_code: int | None = None, response_data: dict[str, Any] | None = None, retry_after: float | None = None) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
         self.response_data = response_data or {}
+        # Parsed Retry-After delay in seconds (from the response header), when the server
+        # asked the caller to back off. None when no usable Retry-After was present. Set by
+        # the client's error handler; callers honoring rate limits read it directly.
+        self.retry_after = retry_after
 
     def __str__(self) -> str:
         if self.status_code:

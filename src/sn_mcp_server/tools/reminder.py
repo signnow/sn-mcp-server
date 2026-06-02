@@ -34,19 +34,47 @@ _PENDING_STATUSES = {InviteStatusValues.PENDING, InviteStatusValues.CREATED}
 
 # SignNow rate-limits resends (HTTP 429 "Too Many Attempts"). Bulk reminder loops resend
 # once per pending invite/signer in quick succession, so a 429 can hit partway through.
-# Retry only the rate-limited call with exponential backoff; other errors fail fast.
+# Retry only the rate-limited call; other errors fail fast.
 _RESEND_RATE_LIMIT_STATUS = 429
 _RESEND_MAX_ATTEMPTS = 3
 _RESEND_BACKOFF_SECONDS = 1.0
+# When SignNow sends a Retry-After we honor it — but only if the wait is short enough to
+# block the tool call for. A larger Retry-After means we stop retrying and record the
+# recipient as failed (the agent can retry the whole reminder later) rather than hang.
+_RESEND_MAX_RETRY_AFTER_SECONDS = 10.0
+
+
+def _resend_retry_delay(retry_after: float | None, attempt: int) -> float | None:
+    """Seconds to wait before the next resend retry, or None to stop retrying.
+
+    Honors the server's Retry-After when present and within
+    `_RESEND_MAX_RETRY_AFTER_SECONDS`; a larger Retry-After returns None so the caller
+    gives up rather than block the tool call. Without a Retry-After, falls back to
+    exponential backoff (`_RESEND_BACKOFF_SECONDS * 2**(attempt-1)`).
+
+    Args:
+        retry_after: Server-requested backoff in seconds (SignNowAPIError.retry_after), or None.
+        attempt: 1-based attempt number that just failed, for the backoff curve.
+
+    Returns:
+        Non-negative delay in seconds, or None to stop retrying.
+    """
+    if retry_after is not None:
+        if retry_after > _RESEND_MAX_RETRY_AFTER_SECONDS:
+            return None
+        return max(retry_after, 0.0)
+    return _RESEND_BACKOFF_SECONDS * (2.0 ** (attempt - 1))
 
 
 async def _resend_with_retry(send: Callable[[], object]) -> None:
-    """Invoke a resend callable, retrying on HTTP 429 with exponential backoff.
+    """Invoke a resend callable, retrying on HTTP 429 with backoff.
 
-    On a 429 (rate limit) the call is retried up to `_RESEND_MAX_ATTEMPTS` times,
-    sleeping `_RESEND_BACKOFF_SECONDS * 2**(attempt-1)` between tries. Any non-429
-    SignNowAPIError — or a 429 on the final attempt — propagates to the caller, which
-    records the recipient as failed.
+    On a 429 (rate limit) the call is retried up to `_RESEND_MAX_ATTEMPTS` times. The
+    wait between tries honors the server's Retry-After when present (see
+    `_resend_retry_delay`), otherwise uses exponential backoff. Any non-429
+    SignNowAPIError, a 429 on the final attempt, or a Retry-After longer than
+    `_RESEND_MAX_RETRY_AFTER_SECONDS` propagates to the caller, which records the
+    recipient as failed.
 
     Args:
         send: Zero-argument callable performing one resend (raises SignNowAPIError on error).
@@ -56,10 +84,13 @@ async def _resend_with_retry(send: Callable[[], object]) -> None:
             send()
             return
         except SignNowAPIError as err:
-            if err.status_code == _RESEND_RATE_LIMIT_STATUS and attempt < _RESEND_MAX_ATTEMPTS:
-                await asyncio.sleep(_RESEND_BACKOFF_SECONDS * (2 ** (attempt - 1)))
-                continue
-            raise
+            if err.status_code != _RESEND_RATE_LIMIT_STATUS or attempt >= _RESEND_MAX_ATTEMPTS:
+                raise
+            delay = _resend_retry_delay(err.retry_after, attempt)
+            if delay is None:
+                # Server asked us to wait longer than we are willing to block — fail fast.
+                raise
+            await asyncio.sleep(delay)
 
 
 async def _send_invite_reminder(
@@ -200,7 +231,7 @@ async def _remind_document(
             ReminderRecipientResult(
                 email=email,
                 document_id=entity_id,
-                reason=f"no pending invite found for {email} on document {entity_id}",
+                reason=f"no invite found for {email} on document {entity_id}",
             )
         )
 
@@ -278,7 +309,7 @@ async def _remind_document_group(
                 skipped.append(
                     ReminderRecipientResult(
                         email=email,
-                        reason=f"no pending invite found for {email} in document_group {entity_id}",
+                        reason=f"no invite found for {email} in document_group {entity_id}",
                     )
                 )
             elif not any(s.email == email for s in skipped):
@@ -335,7 +366,7 @@ async def _remind_document_group(
             await ctx.report_progress(
                 progress=idx,
                 total=total,
-                message=f"Sent group reminder {idx}/{total}",
+                message=f"Processed group reminder {idx}/{total}",
             )
 
     return SendReminderResponse(
@@ -389,7 +420,7 @@ async def _resend_field_invites(
             await ctx.report_progress(
                 progress=idx,
                 total=total,
-                message=f"Sent reminder {idx}/{total}",
+                message=f"Processed reminder {idx}/{total}",
             )
 
     return reminded, failed

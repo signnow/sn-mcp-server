@@ -88,3 +88,45 @@ class TestResendFieldInvite:
 
         assert route.called
         assert exc_info.value.status_code == 404
+
+    def test_429_parses_retry_after_header(
+        self,
+        client: SignNowAPIClient,
+        mock_api: respx.MockRouter,
+        token: str,
+    ) -> None:
+        """429 with a numeric Retry-After header → error.retry_after holds the delay in seconds."""
+        # ARRANGE
+        mock_api.put("/fieldinvite/fi_001/resend").respond(429, headers={"Retry-After": "7"}, json={"error": "Too Many Attempts."})
+
+        # ACT & ASSERT
+        with pytest.raises(SignNowAPIError) as exc_info:
+            client.resend_field_invite(
+                token=token,
+                field_invite_id="fi_001",
+                request_data=ResendFieldInviteRequest(client_timestamp=1780388421),
+            )
+
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.retry_after == 7.0
+
+    def test_error_without_retry_after_header_leaves_it_none(
+        self,
+        client: SignNowAPIClient,
+        mock_api: respx.MockRouter,
+        token: str,
+    ) -> None:
+        """A 429 with no Retry-After header → error.retry_after is None (caller falls back to backoff)."""
+        # ARRANGE
+        mock_api.put("/fieldinvite/fi_001/resend").respond(429, json={"error": "Too Many Attempts."})
+
+        # ACT & ASSERT
+        with pytest.raises(SignNowAPIError) as exc_info:
+            client.resend_field_invite(
+                token=token,
+                field_invite_id="fi_001",
+                request_data=ResendFieldInviteRequest(client_timestamp=1780388421),
+            )
+
+        assert exc_info.value.status_code == 429
+        assert exc_info.value.retry_after is None

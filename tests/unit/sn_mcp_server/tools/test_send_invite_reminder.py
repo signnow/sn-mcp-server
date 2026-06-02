@@ -580,27 +580,53 @@ class TestProgressReporting:
 
         ctx.report_progress.assert_not_called()
 
+    async def test_progress_message_neutral_when_resend_fails(self) -> None:
+        """A failed resend must not produce a progress message claiming the reminder was 'Sent'."""
+        doc = _doc_resp(
+            _doc_fi("ok@x.com", "pending", "fi-ok"),
+            _doc_fi("bad@x.com", "pending", "fi-bad"),
+        )
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = [None, SignNowAPIError("boom", status_code=502)]
+
+        ctx = AsyncMock()
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None, ctx=ctx)
+
+        assert [r.email for r in result.failed] == ["bad@x.com"]
+        messages = [c.kwargs["message"] for c in ctx.report_progress.call_args_list]
+        assert messages, "expected progress to be reported for each invite"
+        assert all("Sent" not in m for m in messages), f"progress falsely claims a send on failure: {messages}"
+
 
 # ---------------------------------------------------------------------------
 # Tests: HTTP 429 rate-limit retry on resend
 # ---------------------------------------------------------------------------
 
 
-def _rate_limited(message: str = "Too Many Attempts.") -> SignNowAPIError:
-    return SignNowAPIError(message, status_code=429)
+def _rate_limited(message: str = "Too Many Attempts.", retry_after: float | None = None) -> SignNowAPIError:
+    return SignNowAPIError(message, status_code=429, retry_after=retry_after)
 
 
 class TestResendRateLimitRetry:
     """resend is retried on HTTP 429 (Too Many Attempts) with backoff; other errors fail fast."""
 
     @pytest.fixture(autouse=True)
-    def _no_sleep(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Make backoff sleeps instant so retry tests stay fast."""
+    def _no_sleep(self, monkeypatch: pytest.MonkeyPatch) -> list[float]:
+        """Make backoff sleeps instant (keeps retry tests fast) and record the delays.
 
-        async def _instant(*_a: object, **_k: object) -> None:
+        Returned list captures every awaited delay so a test can assert the wait honored
+        Retry-After rather than exponential backoff. Request it by name to inspect it.
+        """
+        calls: list[float] = []
+
+        async def _instant(delay: float = 0.0, *_a: object, **_k: object) -> None:
+            calls.append(delay)
             return None
 
         monkeypatch.setattr("sn_mcp_server.tools.reminder.asyncio.sleep", _instant)
+        return calls
 
     async def test_document_resend_retries_on_429_then_succeeds(self) -> None:
         """First resend hits 429, retry succeeds → recipient reminded, not failed."""
@@ -656,3 +682,69 @@ class TestResendRateLimitRetry:
         assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
         assert result.failed == []
         assert client.resend_document_group_invites.call_count == 2
+
+    async def test_429_short_retry_after_is_honored_then_succeeds(self, _no_sleep: list[float]) -> None:
+        """429 with a short Retry-After → waits exactly that long (not exponential backoff), then succeeds."""
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = [_rate_limited(retry_after=5.0), None]
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        assert client.resend_field_invite.call_count == 2
+        assert _no_sleep == [5.0]  # honored Retry-After, not the 1.0s exponential backoff
+
+    async def test_429_retry_after_at_cap_is_honored(self, _no_sleep: list[float]) -> None:
+        """Retry-After exactly at the cap is still honored (boundary)."""
+        from sn_mcp_server.tools.reminder import _RESEND_MAX_RETRY_AFTER_SECONDS
+
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = [_rate_limited(retry_after=_RESEND_MAX_RETRY_AFTER_SECONDS), None]
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        assert _no_sleep == [_RESEND_MAX_RETRY_AFTER_SECONDS]
+
+    async def test_429_long_retry_after_fails_fast_without_waiting(self, _no_sleep: list[float]) -> None:
+        """429 with a Retry-After above the cap → fail fast (no wait, no retry), recorded as failed."""
+        from sn_mcp_server.tools.reminder import _RESEND_MAX_RETRY_AFTER_SECONDS
+
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = _rate_limited(retry_after=_RESEND_MAX_RETRY_AFTER_SECONDS + 1)
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert result.recipients_reminded == []
+        assert [r.email for r in result.failed] == ["alice@x.com"]
+        assert client.resend_field_invite.call_count == 1
+        assert _no_sleep == []  # never waited
+
+
+class TestResendRetryDelay:
+    """Pure-logic checks for _resend_retry_delay (Retry-After honoring vs exponential backoff)."""
+
+    @pytest.mark.parametrize(
+        ("retry_after", "attempt", "expected"),
+        [
+            (None, 1, 1.0),  # no header → exponential backoff
+            (None, 2, 2.0),
+            (None, 3, 4.0),
+            (5.0, 1, 5.0),  # short Retry-After honored, ignores attempt
+            (0.0, 1, 0.0),  # zero is honored as-is
+            (-3.0, 1, 0.0),  # negative clamped to 0
+            (10.0, 1, 10.0),  # exactly at cap → honored
+            (10.5, 1, None),  # above cap → stop retrying
+            (60.0, 2, None),
+        ],
+    )
+    def test_delay(self, retry_after: float | None, attempt: int, expected: float | None) -> None:
+        from sn_mcp_server.tools.reminder import _resend_retry_delay
+
+        assert _resend_retry_delay(retry_after, attempt) == expected
