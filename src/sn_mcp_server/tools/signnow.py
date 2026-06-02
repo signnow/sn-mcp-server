@@ -12,7 +12,7 @@ from pydantic import Field, TypeAdapter
 
 from signnow_client import SignNowAPIClient
 
-from ..token_provider import TokenProvider
+from ..token_provider import SIGNNOW_ACCESS_TOKEN_HEADER, TokenProvider
 from .cancel_invite import _cancel_invite
 from .create_from_template import _create_from_template
 from .create_template import create_template as _create_template
@@ -78,7 +78,10 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
     Raises:
         ValueError: If no access token is available
     """
-    headers = get_http_headers(include={"authorization"})
+    # `x-signnow-access-token` is not in get_http_headers()'s default exclude set,
+    # so it already passes through; listed here to document the contract at the
+    # auth seam and stay robust if it's ever added to the exclude set.
+    headers = get_http_headers(include={"authorization", SIGNNOW_ACCESS_TOKEN_HEADER})
     token = token_provider.get_access_token(headers)
 
     if not token:

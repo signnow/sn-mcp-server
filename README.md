@@ -216,6 +216,25 @@ SIGNNOW_CLIENT_SECRET=<client_secret>
 
 > When running via some desktop clients, only user/password may be supported.
 
+#### Per-request access token (HTTP transport)
+
+For multi-tenant / proxy deployments, a wrapping backend can attach the **raw SignNow
+access token per request** via a dedicated HTTP header — no env config, and without
+reusing `Authorization` (which carries the MCP/OAuth bearer):
+
+```
+X-SignNow-Access-Token: <raw SignNow access_token>
+```
+
+- Value is the **raw token** — no `Bearer ` prefix.
+- Resolved per request; nothing is cached or stored (stateless).
+- **Precedence:** an env-configured `SIGNNOW_ACCESS_TOKEN` (Option 1) still wins. To use
+  the header as a true per-request credential, do **not** also set `SIGNNOW_ACCESS_TOKEN`
+  — otherwise every request collapses to the env token. The header outranks a generic
+  `Authorization: Bearer`.
+- HTTP transport only (`sn-mcp http`). It is **not** exposed as a tool argument, so the
+  token never enters the model's context or conversation logs. Send over HTTPS.
+
 ### SignNow & OAuth settings
 
 ```

@@ -3,6 +3,13 @@ from signnow_client.config import load_signnow_config
 
 from .config import load_settings
 
+# Dedicated per-request header carrying the RAW SignNow access token.
+# Kept distinct from `Authorization` — which carries the MCP-issued/OAuth-proxy
+# bearer (the "MCP JWT") — so a programmatic caller can supply a SignNow token
+# per request without colliding with the MCP auth layer. Read lowercased:
+# both get_http_headers() and dict(request.headers) normalise names to lowercase.
+SIGNNOW_ACCESS_TOKEN_HEADER = "x-signnow-access-token"  # noqa: S105 — HTTP header NAME, not a secret value
+
 
 class TokenProvider:
     """Automatically provides access tokens from config credentials or authorization headers"""
@@ -61,6 +68,14 @@ class TokenProvider:
         """Extract token from request headers, checking multiple possible locations"""
         if not headers:
             return None
+
+        # Dedicated SignNow token header wins over the generic Authorization
+        # bearer: Authorization may carry the MCP JWT (not a SignNow token), so an
+        # explicit X-SignNow-Access-Token is the unambiguous per-request override.
+        # Value is the RAW token — no "Bearer " prefix to strip.
+        signnow_token = (headers.get(SIGNNOW_ACCESS_TOKEN_HEADER) or "").strip()
+        if signnow_token:
+            return signnow_token
 
         # Try authorization header first
         auth_header = headers.get("authorization", "")
