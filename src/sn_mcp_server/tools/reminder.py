@@ -16,7 +16,10 @@ forwarded to the API.
 
 from __future__ import annotations
 
+import asyncio
 import time
+from collections.abc import Callable
+from functools import partial
 
 from fastmcp import Context
 
@@ -28,6 +31,35 @@ from signnow_client.models.templates_and_documents import DocumentResponse, Rese
 from .models import InviteStatusValues, ReminderRecipientResult, SendReminderResponse
 
 _PENDING_STATUSES = {InviteStatusValues.PENDING, InviteStatusValues.CREATED}
+
+# SignNow rate-limits resends (HTTP 429 "Too Many Attempts"). Bulk reminder loops resend
+# once per pending invite/signer in quick succession, so a 429 can hit partway through.
+# Retry only the rate-limited call with exponential backoff; other errors fail fast.
+_RESEND_RATE_LIMIT_STATUS = 429
+_RESEND_MAX_ATTEMPTS = 3
+_RESEND_BACKOFF_SECONDS = 1.0
+
+
+async def _resend_with_retry(send: Callable[[], object]) -> None:
+    """Invoke a resend callable, retrying on HTTP 429 with exponential backoff.
+
+    On a 429 (rate limit) the call is retried up to `_RESEND_MAX_ATTEMPTS` times,
+    sleeping `_RESEND_BACKOFF_SECONDS * 2**(attempt-1)` between tries. Any non-429
+    SignNowAPIError — or a 429 on the final attempt — propagates to the caller, which
+    records the recipient as failed.
+
+    Args:
+        send: Zero-argument callable performing one resend (raises SignNowAPIError on error).
+    """
+    for attempt in range(1, _RESEND_MAX_ATTEMPTS + 1):
+        try:
+            send()
+            return
+        except SignNowAPIError as err:
+            if err.status_code == _RESEND_RATE_LIMIT_STATUS and attempt < _RESEND_MAX_ATTEMPTS:
+                await asyncio.sleep(_RESEND_BACKOFF_SECONDS * (2 ** (attempt - 1)))
+                continue
+            raise
 
 
 async def _send_invite_reminder(
@@ -290,7 +322,7 @@ async def _remind_document_group(
     for idx, addr in enumerate(pending_emails, start=1):
         request_data = ResendDocumentGroupInvitesRequest(email=addr, client_timestamp=int(time.time()))
         try:
-            client.resend_document_group_invites(token, entity_id, group_invite_id, request_data)
+            await _resend_with_retry(partial(client.resend_document_group_invites, token, entity_id, group_invite_id, request_data))
             reminded.append(ReminderRecipientResult(email=addr))
         except SignNowAPIError as err:
             failed.append(
@@ -341,8 +373,9 @@ async def _resend_field_invites(
 
     total = len(invites)
     for idx, (field_invite_id, addr) in enumerate(invites, start=1):
+        request_data = ResendFieldInviteRequest(client_timestamp=int(time.time()))
         try:
-            client.resend_field_invite(token, field_invite_id, ResendFieldInviteRequest(client_timestamp=int(time.time())))
+            await _resend_with_retry(partial(client.resend_field_invite, token, field_invite_id, request_data))
             reminded.append(ReminderRecipientResult(email=addr, document_id=document_id))
         except SignNowAPIError as err:
             failed.append(

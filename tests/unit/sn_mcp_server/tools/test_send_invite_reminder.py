@@ -579,3 +579,80 @@ class TestProgressReporting:
         await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None, ctx=ctx)
 
         ctx.report_progress.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests: HTTP 429 rate-limit retry on resend
+# ---------------------------------------------------------------------------
+
+
+def _rate_limited(message: str = "Too Many Attempts.") -> SignNowAPIError:
+    return SignNowAPIError(message, status_code=429)
+
+
+class TestResendRateLimitRetry:
+    """resend is retried on HTTP 429 (Too Many Attempts) with backoff; other errors fail fast."""
+
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Make backoff sleeps instant so retry tests stay fast."""
+
+        async def _instant(*_a: object, **_k: object) -> None:
+            return None
+
+        monkeypatch.setattr("sn_mcp_server.tools.reminder.asyncio.sleep", _instant)
+
+    async def test_document_resend_retries_on_429_then_succeeds(self) -> None:
+        """First resend hits 429, retry succeeds → recipient reminded, not failed."""
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = [_rate_limited(), None]
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        assert result.failed == []
+        assert client.resend_field_invite.call_count == 2
+
+    async def test_document_resend_429_exhausted_marks_failed(self) -> None:
+        """Persistent 429 across all attempts → recipient failed; call retried _RESEND_MAX_ATTEMPTS times."""
+        from sn_mcp_server.tools.reminder import _RESEND_MAX_ATTEMPTS
+
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = _rate_limited()
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert result.recipients_reminded == []
+        assert len(result.failed) == 1
+        assert result.failed[0].email == "alice@x.com"
+        assert "Too Many Attempts" in (result.failed[0].reason or "")
+        assert client.resend_field_invite.call_count == _RESEND_MAX_ATTEMPTS
+
+    async def test_non_429_error_is_not_retried(self) -> None:
+        """A non-429 error fails immediately without retry."""
+        doc = _doc_resp(_doc_fi("alice@x.com", "pending", "fi-1"))
+        client = MagicMock()
+        client.get_document.return_value = doc
+        client.resend_field_invite.side_effect = SignNowAPIError("server error", status_code=500)
+
+        result = await _send_invite_reminder(client, TOKEN, DOC_ID, "document", None, None, None)
+
+        assert len(result.failed) == 1
+        assert client.resend_field_invite.call_count == 1
+
+    async def test_group_resend_retries_on_429_then_succeeds(self) -> None:
+        """Group resend hits 429 then succeeds on retry → signer reminded."""
+        grp = _grp_resp(_grp_doc("doc1", _grp_fi("alice@x.com", "pending")))
+        client = MagicMock()
+        client.get_document_group_v2.return_value = grp
+        client.resend_document_group_invites.side_effect = [_rate_limited(), None]
+
+        result = await _send_invite_reminder(client, TOKEN, GRP_ID, "document_group", None, None, None)
+
+        assert [r.email for r in result.recipients_reminded] == ["alice@x.com"]
+        assert result.failed == []
+        assert client.resend_document_group_invites.call_count == 2
