@@ -1061,8 +1061,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
             ),
         ] = None,
-        subject: Annotated[str | None, Field(description="Custom email subject for the reminder.")] = None,
-        message: Annotated[str | None, Field(description="Custom message body for the reminder.")] = None,
+        subject: Annotated[str | None, Field(description="Ignored — resend reuses the invite's original email template, so a custom subject is not applied. Compatibility only.")] = None,
+        message: Annotated[str | None, Field(description="Ignored — resend reuses the invite's original email template, so a custom message is not applied. Compatibility only.")] = None,
     ) -> SendReminderResponse:
         """Send a signing reminder to pending signers on a document or document group.
 
@@ -1076,6 +1076,10 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         Skips signers whose invite is already completed or cancelled (reported in 'skipped').
         API failures are reported in 'failed' and can be retried.
 
+        The resend reuses each invite's original email template, so 'subject' and 'message'
+        are accepted for backward compatibility but NOT applied — do not rely on them to
+        customize the reminder.
+
         Tip: if entity_type is known, pass it explicitly to avoid an extra auto-detection GET.
         Tip: use list_documents first to discover document IDs by name or criteria.
 
@@ -1083,8 +1087,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             entity_id: Document ID or document group ID.
             entity_type: Optional discriminator ('document' or 'document_group').
             email: Optional — target a single recipient.
-            subject: Optional custom email subject.
-            message: Optional custom message body.
+            subject: Ignored — resend reuses the original template. Accepted for compatibility only.
+            message: Ignored — resend reuses the original template. Accepted for compatibility only.
 
         Returns:
             SendReminderResponse with entity_id, entity_type, recipients_reminded, skipped, failed.
