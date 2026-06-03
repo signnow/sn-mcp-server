@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from signnow_client.exceptions import SignNowAPINotFoundError
 from sn_mcp_server.tools.embedded_invite import (
@@ -189,3 +190,25 @@ class TestCreateEmbeddedInvite:
         result = await _create_embedded_invite("tg_auto", None, [_make_order()], "tok", mock_client, name="My Group")
 
         assert result.created_entity_type == "document_group"
+
+
+class TestEmbeddedInviteRecipientValidation:
+    """Test cases for EmbeddedInviteRecipient enum field validation."""
+
+    @pytest.mark.parametrize(
+        ("field", "allowed"),
+        [
+            ("action", "'view', 'sign' or 'approve'"),
+            ("auth_method", "'password', 'email', 'mfa', 'biometric', 'social', 'other' or 'none'"),
+            ("redirect_target", "'blank' or 'self'"),
+            ("delivery_type", "'email' or 'link'"),
+        ],
+    )
+    def test_invalid_value_error_lists_allowed_values(self, field: str, allowed: str) -> None:
+        """Invalid enum value raises ValidationError that names the field and its allowed values."""
+        with pytest.raises(ValidationError) as exc_info:
+            EmbeddedInviteRecipient(email="signer@example.com", role="Signer", **{field: "bogus"})
+
+        error_text = str(exc_info.value)
+        assert field in error_text
+        assert allowed in error_text
