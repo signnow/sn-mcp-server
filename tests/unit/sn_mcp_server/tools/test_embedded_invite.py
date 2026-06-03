@@ -198,17 +198,21 @@ class TestEmbeddedInviteRecipientValidation:
     @pytest.mark.parametrize(
         ("field", "allowed"),
         [
-            ("action", "'view', 'sign' or 'approve'"),
-            ("auth_method", "'password', 'email', 'mfa', 'biometric', 'social', 'other' or 'none'"),
-            ("redirect_target", "'blank' or 'self'"),
-            ("delivery_type", "'email' or 'link'"),
+            ("action", ("view", "sign", "approve")),
+            ("auth_method", ("password", "email", "mfa", "biometric", "social", "other", "none")),
+            ("redirect_target", ("blank", "self")),
+            ("delivery_type", ("email", "link")),
         ],
     )
-    def test_invalid_value_error_lists_allowed_values(self, field: str, allowed: str) -> None:
+    def test_invalid_value_error_lists_allowed_values(self, field: str, allowed: tuple[str, ...]) -> None:
         """Invalid enum value raises ValidationError that names the field and its allowed values."""
         with pytest.raises(ValidationError) as exc_info:
             EmbeddedInviteRecipient(email="signer@example.com", role="Signer", **{field: "bogus"})
 
-        error_text = str(exc_info.value)
-        assert field in error_text
-        assert allowed in error_text
+        errors = exc_info.value.errors()
+        assert len(errors) == 1
+        error = errors[0]
+        assert error["type"] == "literal_error"
+        assert error["loc"] == (field,)
+        for value in allowed:
+            assert f"'{value}'" in error["msg"]
