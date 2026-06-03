@@ -663,17 +663,17 @@ class EmbeddedInviteRecipient(BaseModel):
 
     email: str = Field(..., description="Recipient's email address")
     role: str = Field(..., description="Recipient's role name in the document")
-    action: str = Field(default="sign", description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
-    auth_method: str = Field("none", description="Authentication method in integrated app: 'password', 'email', 'mfa', 'biometric', 'social', 'other', 'none'")
+    action: Literal["view", "sign", "approve"] = Field(default="sign", description="Allowed action with a document. Possible values: 'view', 'sign', 'approve'")
+    auth_method: Literal["password", "email", "mfa", "biometric", "social", "other", "none"] = Field("none", description="Authentication method in integrated app")
     first_name: str | None = Field(None, description="Recipient's first name")
     last_name: str | None = Field(None, description="Recipient's last name")
     redirect_uri: str | None = Field(None, description="Link that opens after completion")
     decline_redirect_uri: str | None = Field(None, description="URL that opens after decline")
     close_redirect_uri: str | None = Field(None, description="Link that opens when clicking 'Close' button")
-    redirect_target: str | None = Field("self", description="Redirect target: 'blank' for new tab, 'self' for same tab")
+    redirect_target: Literal["blank", "self"] | None = Field("self", description="Redirect target: 'blank' for new tab, 'self' for same tab")
     subject: str | None = Field(None, description="Invite email subject (max 1000 chars)")
     message: str | None = Field(None, description="Invite email message (max 5000 chars)")
-    delivery_type: str | None = Field("link", description="Invite delivery method: 'email' or 'link', use 'link' if you wand to get a link to sign. If you want to send an email, use 'email'")
+    delivery_type: Literal["email", "link"] | None = Field("link", description="Invite delivery method: use 'link' if you want to get a link to sign, use 'email' to send an email")
 
     def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         """Override model_dump to exclude redirect_target if redirect_uri is not provided."""
