@@ -85,3 +85,19 @@ class TestGetFolderById:
         assert client.last_get is not None
         # order defaults to "desc" and entity_type to "document-all"; no others.
         assert client.last_get["params"] == {"order": "desc", "entity_type": "document-all"}
+
+
+class TestGetFolderTree:
+    def test_requests_full_hierarchy_from_v1_folder(self) -> None:
+        """Hits /v1/folder with the paired subfolder flags (1/0) that unlock full nesting."""
+        client = _DummyClient()
+        client.get_folder_tree("ftok")
+        assert client.last_get is not None
+        assert client.last_get["url"] == "/v1/folder"
+        assert client.last_get["headers"]["Authorization"] == "Bearer ftok"
+        # subfolder-data and include_documents_subfolders must be sent together as 1/0.
+        assert client.last_get["params"] == {
+            "subfolder-data": 1,
+            "include_documents_subfolders": 1,
+            "with_team_documents": "true",
+        }

@@ -207,6 +207,30 @@ class OtherClientMixin(SignNowAPIClientBase):
 
         return self._get(f"/folder/{folder_id}", headers=headers, params=params, validate_model=GetFolderByIdResponseLite)
 
+    def get_folder_tree(self, token: str) -> GetFoldersResponseLite:
+        """Get the full nested folder hierarchy for a user in a single call.
+
+        Plain ``get_folders`` returns only the root and its top-level folders. The
+        ``/v1/folder`` root endpoint, given ``subfolder-data=1`` together with
+        ``include_documents_subfolders=1`` (the API requires both, and they are 1/0
+        flags), returns every descendant recursively via the ``sub_folders`` field —
+        including team folder subfolders, which the plain ``/user/folder`` tree omits.
+
+        Args:
+            token: Access token for authentication
+
+        Returns:
+            GetFoldersResponseLite whose ``folders`` carry nested ``sub_folders``
+        """
+
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params: dict[str, Any] = {
+            "subfolder-data": 1,
+            "include_documents_subfolders": 1,
+            "with_team_documents": "true",
+        }
+        return self._get("/v1/folder", headers=headers, params=params, validate_model=GetFoldersResponseLite)
+
     def get_user_info(self, token: str) -> User:
         """
         Get user information from SignNow API.

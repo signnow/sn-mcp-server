@@ -810,7 +810,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         token, client = _get_token_and_client(token_provider)
 
         # Initialize client and use the imported function from document module
-        return _get_document(client, token, entity_id, entity_type)
+        return _get_document(client, token, entity_id, entity_type, resolve_folder_names=True)
 
     @mcp.tool(
         name="get_document",

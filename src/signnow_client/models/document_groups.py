@@ -329,6 +329,7 @@ class DocumentGroupV2Data(BaseModel):
 
     id: str = Field(..., description="Document group ID")
     name: str = Field(..., description="Document group name")
+    folder_id: str | None = Field(None, description="ID of the folder the document group is stored in")
     created: int = Field(..., description="Unix timestamp when group was created")
     invite_id: str | None = Field(None, description="Current invite ID")
     pending_step_id: str | None = Field(None, description="ID of the pending step")
@@ -389,6 +390,7 @@ class GetDocumentGroupTemplateResponse(BaseModel):
 
     id: str = Field(..., description="Document group template ID")
     group_name: str = Field(..., description="Name of the template group")
+    folder_id: str | None = Field(None, description="ID of the folder the template group is stored in")
     templates: list[TemplateShort] = Field(..., description="List of templates in this group")
 
 
