@@ -303,7 +303,7 @@ class TestSendInviteSelfSign:
         assert result.invite_entity == "document"
         assert result.link is not None
         assert SELF_SIGN_DOC_ID in result.link
-        assert token in result.link  # link embeds access token
+        assert token not in result.link  # link must not embed the access token
 
         # ASSERT — request body: to == from == primary_email from the user fixture.
         body = json.loads(invite_route.calls[0].request.content)

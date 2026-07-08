@@ -270,7 +270,6 @@ Tools that operate on both documents and document groups use a try/except ladder
 | `auth.py` module scope | Lazy initialization | Config load + RSA keygen + client creation at import time | High — side effects on import, hard to test |
 | `auth.py` `REGISTERED_CLIENTS` | Stateless server | Mutable module-level dict (declared but unused) | Low — dead code, principle violation |
 | `tools/signnow.py` `get_http_headers` | Transport-agnostic tools | Imports from `fastmcp.server.dependencies` | Medium — couples orchestration to transport |
-| `signing_link.py` | Secure token handling | Access token in URL query string | Medium — security concern |
 | `tools/__init__.py` `cfg` param | Config propagation | Accepted but never used in `bind()` | Low — dead parameter |
 | Entity detection order | Consistent order across tools | `get_document` tries document first, others try group first | Medium — inconsistent behavior |
 | Both `/sse` and `/mcp` | Single transport per endpoint | Legacy and modern transports both active | Low — backwards compat |
