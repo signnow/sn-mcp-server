@@ -69,7 +69,7 @@ class TestGetSigningLinkInviteCheck:
         with patch("sn_mcp_server.tools.signing_link._get_document", return_value=dg):
             result = _get_signing_link("doc1", "document", FAKE_TOKEN, client)
 
-        assert result.link == f"{APP_BASE}/webapp/document/doc1?access_token={FAKE_TOKEN}"
+        assert result.link == f"{APP_BASE}/webapp/document/doc1"
 
     def test_document_with_only_freeform_invite_returns_link(self) -> None:
         """Document whose only invite is freeform (requests[]) still produces a link."""
@@ -79,7 +79,7 @@ class TestGetSigningLinkInviteCheck:
         with patch("sn_mcp_server.tools.signing_link._get_document", return_value=dg):
             result = _get_signing_link("doc1", "document", FAKE_TOKEN, client)
 
-        assert result.link == f"{APP_BASE}/webapp/document/doc1?access_token={FAKE_TOKEN}"
+        assert result.link == f"{APP_BASE}/webapp/document/doc1"
 
     def test_document_group_with_only_freeform_invite_returns_link(self) -> None:
         """Document group whose only invite is freeform_invite still produces a link."""
@@ -90,8 +90,23 @@ class TestGetSigningLinkInviteCheck:
             result = _get_signing_link("grp1", "document_group", FAKE_TOKEN, client)
 
         assert "document_group_id=grp1" in result.link
-        assert f"access_token={FAKE_TOKEN}" in result.link
         assert result.link.endswith("&unwrap")
+
+    def test_links_do_not_leak_access_token(self) -> None:
+        """Neither the document nor the document_group link may embed the access token."""
+        client = _make_client()
+        doc = _make_document_group(entity_type="document", invite=SimplifiedInvite(invite_id="inv1"))
+        grp = _make_document_group(entity_id="grp1", entity_type="document_group", freeform_invite_id="freeform-xyz")
+
+        with patch("sn_mcp_server.tools.signing_link._get_document", return_value=doc):
+            doc_link = _get_signing_link("doc1", "document", FAKE_TOKEN, client).link
+        with patch("sn_mcp_server.tools.signing_link._get_document", return_value=grp):
+            grp_link = _get_signing_link("grp1", "document_group", FAKE_TOKEN, client).link
+
+        assert "access_token" not in doc_link
+        assert FAKE_TOKEN not in doc_link
+        assert "access_token" not in grp_link
+        assert FAKE_TOKEN not in grp_link
 
     def test_document_group_with_classic_invite_returns_link(self) -> None:
         """Document group with a classic invite produces the documentgroup signing URL."""

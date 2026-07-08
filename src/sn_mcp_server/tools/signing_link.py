@@ -39,9 +39,9 @@ def _get_signing_link(entity_id: str, entity_type: Literal["document", "document
     resolved_entity_id = document_group.entity_id
 
     if document_group.entity_type == "document_group":
-        query = urlencode({"document_group_id": resolved_entity_id, "access_token": token})
+        query = urlencode({"document_group_id": resolved_entity_id})
         link = f"{app_base}/webapp/documentgroup/signing?{query}&unwrap"
     else:
-        link = f"{app_base}/webapp/document/{resolved_entity_id}?access_token={token}"
+        link = f"{app_base}/webapp/document/{resolved_entity_id}"
 
     return SigningLinkResponse(link=link)
