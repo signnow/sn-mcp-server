@@ -327,7 +327,10 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Set self_sign=True (and omit orders) to sign the document yourself — the tool "
             "resolves the current user's email and populates SendInviteResponse.link with a "
             "direct signing link. The 'link' field is also populated when a freeform "
-            "recipient's email matches the authenticated user's primary email."
+            "recipient's email matches the authenticated user's primary email. "
+            "The entity's state may have changed in the SignNow editor since you last looked — "
+            "re-read the current state first and build this request from the current roles/fields, "
+            "not from earlier in the conversation."
         ),
         annotations=ToolAnnotations(
             title="Send signing invite",
@@ -437,7 +440,10 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         version="2.0",
         description=(
             "Create embedded invite for signing a document, document group, template, or template group. "
-            "For templates and template groups, automatically creates a document/group first, then creates the embedded invite."
+            "For templates and template groups, automatically creates a document/group first, then creates the embedded invite. "
+            "The entity's state may have changed in the SignNow editor since you last looked — "
+            "re-read the current state first and build this request from the current roles/fields, "
+            "not from earlier in the conversation."
         ),
         annotations=ToolAnnotations(
             title="Create embedded signing invite",
@@ -815,7 +821,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="get_document",
         version="2.0",
-        description="Get full document, template, template group or document group information with field values",
+        description=(
+            "Get full document, template, template group or document group information with field values. "
+            "Always returns the current server-side state; call it again to pick up edits made "
+            "in the SignNow editor after an earlier fetch."
+        ),
         annotations=ToolAnnotations(
             title="Get document or group details",
             readOnlyHint=True,
@@ -1102,7 +1112,12 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="cancel_invite",
         version="2.0",
-        description="Cancel all active (pending) signing invites on a document or document group.",
+        description=(
+            "Cancel all active (pending) signing invites on a document or document group. "
+            "The entity's state may have changed in the SignNow editor since you last looked — "
+            "re-read the current state first to confirm the current invite state, "
+            "not what you saw earlier in the conversation."
+        ),
         annotations=ToolAnnotations(
             title="Cancel signing invite",
             readOnlyHint=False,
@@ -1152,7 +1167,10 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "Finds the pending invite for the current signer and replaces it with a new signer. "
             "For documents: deletes the old invite, creates a replacement, and triggers sending. "
             "For document groups: updates the pending step(s) with the new signer information. "
-            "Only field invites are supported — freeform and embedded invites cannot be updated."
+            "Only field invites are supported — freeform and embedded invites cannot be updated. "
+            "The entity's state may have changed in the SignNow editor since you last looked — "
+            "re-read the current state first and build this request from the current roles/recipients, "
+            "not from earlier in the conversation."
         ),
         annotations=ToolAnnotations(
             title="Replace invite recipient",
