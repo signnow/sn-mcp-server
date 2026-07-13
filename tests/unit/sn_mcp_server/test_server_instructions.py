@@ -9,6 +9,7 @@ the conversation.
 from __future__ import annotations
 
 from typing import cast
+from unittest.mock import patch
 
 from sn_mcp_server.config import Settings
 from sn_mcp_server.server import SERVER_INSTRUCTIONS, create_server
@@ -19,7 +20,12 @@ class _StubCfg:
 
 
 def _instructions() -> str:
-    server = create_server(cast(Settings, _StubCfg()))
+    # These tests target the instructions wiring/content only. Patch
+    # register_tools to a no-op so create_server() does not trigger full tool
+    # registration (and its TokenProvider/config-loading side effects) — the
+    # instructions string is set on the FastMCP constructor regardless.
+    with patch("sn_mcp_server.server.register_tools"):
+        server = create_server(cast(Settings, _StubCfg()))
     assert server.instructions is not None
     return server.instructions
 

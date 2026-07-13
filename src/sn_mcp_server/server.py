@@ -9,8 +9,9 @@ from .tools import register_tools
 # document state lives on the server and can change outside the conversation
 # (users edit documents in the SignNow editor mid-chat), so the model must not
 # reuse state it fetched earlier when performing a write action — it must
-# re-fetch via get_document first. Write actions are described by behaviour, not
-# by tool name, so adding a new write tool later needs no edit here.
+# re-fetch the current state first. Both the write actions and the read are
+# described by behaviour, not by tool name, so adding a new write tool later
+# needs no edit here.
 SERVER_INSTRUCTIONS: str = (
     "SignNow entity state — documents, document groups, templates, and template "
     "groups — lives on the server and can change outside this conversation at "

@@ -82,7 +82,9 @@ def test_get_document_description_notes_live_state() -> None:
     This is the anchor the abstract 're-read the current state' guidance relies
     on, so its self-description must keep signalling freshness.
     """
-    text = _DESCRIPTIONS[("get_document", "2.0")].lower()
+    key = ("get_document", "2.0")
+    assert key in _DESCRIPTIONS, f"{key} not registered."
+    text = _DESCRIPTIONS[key].lower()
     assert "current" in text or "editor" in text
 
 
@@ -92,5 +94,7 @@ def test_readonly_tool_has_no_freshness_clause() -> None:
     Keeps the re-fetch nudge scoped to write actions and avoids provoking
     redundant reads on browse flows (risk §7).
     """
-    text = _DESCRIPTIONS[("list_documents", "1.0")].lower()
+    key = ("list_documents", "1.0")
+    assert key in _DESCRIPTIONS, f"{key} not registered."
+    text = _DESCRIPTIONS[key].lower()
     assert "may have changed in the signnow editor" not in text
