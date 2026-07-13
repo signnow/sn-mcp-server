@@ -16,7 +16,7 @@ from ..token_provider import SIGNNOW_ACCESS_TOKEN_HEADER, TokenProvider
 from .cancel_invite import _cancel_invite
 from .create_from_template import _create_from_template
 from .create_template import create_template as _create_template
-from .document import _get_document, _update_document_fields, _upload_document
+from .document import _get_document, _update_document_fields, _upload_document, _upload_template
 from .document_download_link import _get_document_download_link
 from .document_view import _VIEWER_HTML, VIEWER_RESOURCE_URI, _view_document
 from .embedded_editor import (
@@ -57,6 +57,7 @@ from .models import (
     UpdateDocumentFieldsResponse,
     UpdateInviteRecipientResponse,
     UploadDocumentResponse,
+    UploadTemplateResponse,
     ViewDocumentResponse,
 )
 from .reminder import _send_invite_reminder
@@ -89,6 +90,43 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
 
     client = SignNowAPIClient(token_provider.signnow_config)
     return token, client
+
+
+async def _resolve_upload_resource(ctx: Context, resource_uri: str | None, filename: str | None) -> tuple[bytes | None, str | None]:
+    """Read an MCP resource attachment for upload_document/upload_template.
+
+    No-op (returns ``(None, filename)``) when ``resource_uri`` is None — the caller is using
+    file_path or file_url instead. Otherwise reads the resource, validates it carries binary
+    content, and infers ``filename`` from the URI when the caller didn't supply one.
+
+    Returns:
+        Tuple of (resource_bytes, effective_filename).
+
+    Raises:
+        ValueError: resource_uri is empty, the resource has no/text content, or filename
+                    cannot be inferred and was not provided.
+    """
+    if resource_uri is None:
+        return None, filename
+
+    # L-5: Validate resource_uri is not empty/whitespace
+    if not resource_uri.strip():
+        raise ValueError("resource_uri must not be empty. Provide a valid MCP resource URI.")
+    result: ResourceResult = await ctx.read_resource(resource_uri)
+    # H-1: Guard against empty contents list
+    if not result.contents:
+        raise ValueError(f"Resource at {resource_uri!r} returned no content. Ensure the URI points to a valid binary file.")
+    first: ResourceContent = result.contents[0]
+    if not isinstance(first.content, bytes):
+        raise ValueError(f"Resource at {resource_uri} returned text, expected binary file content. Ensure the resource provides raw file bytes.")
+    resource_bytes = first.content
+    if filename is None:
+        parsed_name = pathlib.PurePosixPath(urlparse(str(resource_uri)).path).name
+        # M-5: Raise explicit error when filename cannot be inferred from URI
+        if not parsed_name:
+            raise ValueError(f"Cannot infer filename from resource URI {resource_uri!r}. Provide the 'filename' parameter explicitly.")
+        filename = parsed_name
+    return resource_bytes, filename
 
 
 def _normalize_order_field(raw: list[Any]) -> list[Any]:
@@ -921,8 +959,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "On success the response includes a 'next_steps' array (prepare invite / send for signing / self-sign) "
             "and an 'agent_guidance' string — present those options to the user and wait for them to choose "
             "before calling any follow-up tool. "
-            "NOTE: For URL uploads, the returned filename is locally inferred and may differ from "
-            "how SignNow names the document."
+            "NOTE: For URL uploads without an explicit filename, the returned filename is locally inferred "
+            "and may differ from how SignNow names the document; pass filename to set the name explicitly."
         ),
         annotations=ToolAnnotations(
             title="Upload document",
@@ -1006,29 +1044,114 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         if provided == 0:
             raise ValueError("Provide one of: resource_uri, file_path, or file_url")
 
-        resource_bytes: bytes | None = None
-        if resource_uri is not None:
-            # L-5: Validate resource_uri is not empty/whitespace
-            if not resource_uri.strip():
-                raise ValueError("resource_uri must not be empty. Provide a valid MCP resource URI.")
-            result: ResourceResult = await ctx.read_resource(resource_uri)
-            # H-1: Guard against empty contents list
-            if not result.contents:
-                raise ValueError(f"Resource at {resource_uri!r} returned no content. Ensure the URI points to a valid binary file.")
-            first: ResourceContent = result.contents[0]
-            if not isinstance(first.content, bytes):
-                raise ValueError(f"Resource at {resource_uri} returned text, expected binary file content. Ensure the resource provides raw file bytes.")
-            resource_bytes = first.content
-            if filename is None:
-                parsed_name = pathlib.PurePosixPath(urlparse(str(resource_uri)).path).name
-                # M-5: Raise explicit error when filename cannot be inferred from URI
-                if not parsed_name:
-                    raise ValueError(f"Cannot infer filename from resource URI {resource_uri!r}. Provide the 'filename' parameter explicitly.")
-                filename = parsed_name
+        resource_bytes, filename = await _resolve_upload_resource(ctx, resource_uri, filename)
 
         # H-3: Run synchronous _upload_document off the async event loop
         return await asyncio.to_thread(
             _upload_document,
+            client=client,
+            token=token,
+            resource_bytes=resource_bytes,
+            file_path=file_path,
+            file_url=file_url,
+            filename=filename,
+        )
+
+    @mcp.tool(
+        name="upload_template",
+        version="2.0",
+        description=(
+            "Upload a file to SignNow as a reusable template from a local file path, public URL, or MCP resource attachment. "
+            "A template is a blueprint you clone into documents to send for signing (via create_from_template). "
+            "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
+            "On success the response includes a 'next_steps' array (create a document from the template / edit its "
+            "fields and roles) and an 'agent_guidance' string — present those options to the user and wait for them "
+            "to choose before calling any follow-up tool. "
+            "NOTE: For URL uploads without an explicit filename, the returned filename is locally inferred "
+            "and may differ from how SignNow names the template; pass filename to set the name explicitly."
+        ),
+        annotations=ToolAnnotations(
+            title="Upload template",
+            readOnlyHint=False,
+            destructiveHint=False,
+            idempotentHint=False,
+            openWorldHint=True,
+        ),
+        tags=["template", "upload", "file"],
+    )
+    async def upload_template(
+        ctx: Context,
+        resource_uri: Annotated[
+            str | None,
+            Field(
+                description=("MCP resource URI of an attached file (preferred when your client supports resource attachments). Provide exactly one of resource_uri, file_path, or file_url."),
+            ),
+        ] = None,
+        file_path: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Absolute or ~-relative path to a local file to upload. "
+                    "The resolved path must be within the safe upload base directory "
+                    "(SAFE_UPLOAD_BASE, defaulting to your home directory); "
+                    "paths outside that base (e.g. /tmp/foo.pdf) will be rejected. "
+                    "Supported: .pdf, .doc, .docx, .png, .jpg, .jpeg. "
+                    "Provide exactly one of resource_uri, file_path, or file_url."
+                ),
+            ),
+        ] = None,
+        file_url: Annotated[
+            str | None,
+            Field(
+                description=("Publicly accessible URL to the file to upload. SignNow will fetch the file from this URL. Provide exactly one of resource_uri, file_path, or file_url."),
+            ),
+        ] = None,
+        filename: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Optional custom name for the template as it will appear in SignNow. "
+                    "If omitted, the name is derived from the file path, URL, or resource URI. "
+                    "Required when using resource_uri and the filename cannot be inferred."
+                ),
+            ),
+        ] = None,
+    ) -> UploadTemplateResponse:
+        """Upload a file to SignNow as a reusable template.
+
+        Provide exactly one of: resource_uri, file_path, or file_url.
+        Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB.
+
+        Preferred source order:
+        1. resource_uri — if the user @-attached a file in their MCP client
+        2. file_path — if the user provided a local path
+        3. file_url — if the user provided a public URL
+
+        After upload, present the returned next_steps to the user:
+        1. Create a document from this template (create_from_template)
+        2. Edit the template's fields and roles (create_embedded_editor)
+
+        Args:
+            ctx: FastMCP context (injected)
+            resource_uri: MCP resource URI from an attached file
+            file_path: Local file path (absolute or ~-relative)
+            file_url: Public URL to the file
+            filename: Optional custom template name in SignNow
+        """
+        token, client = _get_token_and_client(token_provider)
+
+        # Validate mutually-exclusive source inputs before any I/O
+        provided = sum(x is not None for x in (resource_uri, file_path, file_url))
+        if provided > 1:
+            raise ValueError("Provide exactly one of resource_uri, file_path, or file_url — not multiple")
+        if provided == 0:
+            raise ValueError("Provide one of: resource_uri, file_path, or file_url")
+
+        resource_bytes, filename = await _resolve_upload_resource(ctx, resource_uri, filename)
+
+        # Run synchronous _upload_template off the async event loop
+        return await asyncio.to_thread(
+            _upload_template,
             client=client,
             token=token,
             resource_bytes=resource_bytes,

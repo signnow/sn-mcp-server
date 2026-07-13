@@ -932,16 +932,16 @@ class SuggestedStep(BaseModel):
     )
 
 
-class UploadDocumentResponse(BaseModel):
-    """Response model for uploading document."""
+class _UploadResponseBase(BaseModel):
+    """Shared response fields for the upload_document and upload_template tools."""
 
-    document_id: str = Field(..., description="ID of the uploaded document in SignNow")
     filename: str | None = Field(
         ...,
         description=(
             "Name of the uploaded file. For 'local_file' and 'resource' sources this matches "
-            "the name sent to SignNow. For 'url' source this is locally inferred from the URL "
-            "and may differ from how SignNow actually names the document."
+            "the name sent to SignNow. For 'url' source an explicitly provided filename is sent "
+            "to SignNow as the entity name; when omitted, this value is locally inferred from "
+            "the URL and may differ from how SignNow actually names the entity."
         ),
     )
     source: Literal["local_file", "url", "resource"] = Field(
@@ -963,6 +963,18 @@ class UploadDocumentResponse(BaseModel):
             "signnow_skills(skill_name='signnow101') if more context is needed."
         ),
     )
+
+
+class UploadDocumentResponse(_UploadResponseBase):
+    """Response model for uploading document."""
+
+    document_id: str = Field(..., description="ID of the uploaded document in SignNow")
+
+
+class UploadTemplateResponse(_UploadResponseBase):
+    """Response model for uploading a document as a reusable template."""
+
+    template_id: str = Field(..., description="ID of the uploaded template in SignNow")
 
 
 class FieldToUpdate(BaseModel):

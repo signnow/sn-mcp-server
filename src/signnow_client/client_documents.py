@@ -58,20 +58,23 @@ from .models import (
 class DocumentClientMixin(SignNowAPIClientBase):
     """Mixin class for document and template related methods"""
 
-    def upload_document(self, token: str, file_content: bytes, filename: str, check_fields: bool = True) -> UploadDocumentResponse:
+    def upload_document(self, token: str, file_content: bytes, filename: str, check_fields: bool = True, make_template: bool = False) -> UploadDocumentResponse:
         """
         Upload a document to SignNow.
 
         This endpoint uploads a document file to SignNow and returns the document ID.
+        With ``make_template=True`` SignNow stores the upload as a reusable template
+        instead of a regular document (the returned ID is then a template ID).
 
         Args:
             token: Access token for authentication
             file_content: Document file content as bytes
             filename: Name of the file to upload
             check_fields: Whether to check for fields in the document (default: True)
+            make_template: Store the upload as a reusable template (default: False)
 
         Returns:
-            Validated UploadDocumentResponse model with the uploaded document ID
+            Validated UploadDocumentResponse model with the uploaded entity ID
         """
 
         headers = {"Authorization": f"Bearer {token}"}
@@ -79,6 +82,10 @@ class DocumentClientMixin(SignNowAPIClientBase):
         files = {"file": (filename, file_content, "application/octet-stream")}
 
         data = {"check_fields": "true" if check_fields else "false"}
+        # The API reads make_template with PHP's !empty() — the string "false" would be
+        # truthy and silently create a template. Omit the field entirely when False.
+        if make_template:
+            data["make_template"] = "true"
 
         return self._post_multipart("/document", headers=headers, files=files, data=data, validate_model=UploadDocumentResponse)
 

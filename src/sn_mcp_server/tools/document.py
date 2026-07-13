@@ -29,6 +29,7 @@ from .models import (
     UpdateDocumentFieldsResponse,
     UpdateDocumentFieldsResult,
     UploadDocumentResponse,
+    UploadTemplateResponse,
 )
 
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"})
@@ -38,6 +39,12 @@ SAFE_UPLOAD_BASE: pathlib.Path = pathlib.Path.home().resolve()
 _UPLOAD_AGENT_GUIDANCE: str = (
     "Upload succeeded. Present the next_steps options to the user and ask them which one they want "
     "before calling any follow-up tool. Do not auto-pick a step. If you need more context on SignNow "
+    "concepts or flow, call signnow_skills(skill_name='signnow101')."
+)
+
+_UPLOAD_TEMPLATE_AGENT_GUIDANCE: str = (
+    "Template upload succeeded. Present the next_steps options to the user and ask them which one they "
+    "want before calling any follow-up tool. Do not auto-pick a step. If you need more context on SignNow "
     "concepts or flow, call signnow_skills(skill_name='signnow101')."
 )
 
@@ -69,6 +76,22 @@ def _build_upload_next_steps(document_id: str) -> list[SuggestedStep]:
     ]
 
 
+def _build_template_upload_next_steps(template_id: str) -> list[SuggestedStep]:
+    """Build the standard post-upload suggestions for a newly created template."""
+    return [
+        SuggestedStep(
+            intent="Create a document from this template",
+            description=("Generate a ready-to-send document copy from the template, then send it for signature. Use this when the template is finished and the user wants to use it."),
+            tool="create_from_template",
+        ),
+        SuggestedStep(
+            intent="Edit the template's fields and roles",
+            description=("Open the template in SignNow to add or adjust fields and roles before generating documents from it. Use this when the template still needs signer fields set up."),
+            tool="create_embedded_editor",
+        ),
+    ]
+
+
 def _validate_extension(filename: str) -> None:
     """Validate filename has a supported extension.
 
@@ -81,16 +104,81 @@ def _validate_extension(filename: str) -> None:
         raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
 
 
-def _upload_document(
+def _resolve_resource_upload(resource_bytes: bytes, filename: str | None) -> tuple[bytes, str]:
+    """Validate pre-read MCP resource bytes for a multipart upload.
+
+    Returns (file_content, effective_filename). Raises ValueError on missing filename,
+    unsupported extension, or oversized content.
+    """
+    if filename is None:
+        raise ValueError("filename is required when uploading from a resource URI")
+    _validate_extension(filename)
+    if len(resource_bytes) > MAX_FILE_SIZE_BYTES:
+        raise ValueError(f"File too large ({len(resource_bytes)} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes (40 MB)")
+    return resource_bytes, filename
+
+
+def _resolve_local_file_upload(file_path: str, filename: str | None) -> tuple[bytes, str]:
+    """Validate and read a local file for a multipart upload.
+
+    Enforces home-directory containment (path traversal / symlink escape), existence,
+    file type, and size. Returns (file_content, effective_filename).
+    """
+    path = pathlib.Path(file_path).expanduser().resolve()
+    # C-1/C-2: Directory containment — prevent path traversal and symlink attacks
+    try:
+        path.relative_to(SAFE_UPLOAD_BASE)
+    except ValueError:
+        raise ValueError(f"file_path must be within the home directory ({SAFE_UPLOAD_BASE}). Resolved path '{path}' is outside the allowed root.") from None
+    if not path.exists():
+        raise ValueError(f"File not found: {path}")
+    if not path.is_file():
+        raise ValueError(f"Path is not a file: {path}")
+    _validate_extension(path.name if not filename else filename)
+    # H-4: Read first, then check size to eliminate TOCTOU race
+    file_content = path.read_bytes()
+    if len(file_content) > MAX_FILE_SIZE_BYTES:
+        raise ValueError(f"File too large ({len(file_content):,} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES:,} bytes (40 MB)")
+    effective_filename = filename if filename else path.name
+    return file_content, effective_filename
+
+
+def _validate_url_upload(file_url: str, filename: str | None) -> str | None:
+    """Validate a public file URL for a server-side (SignNow-fetches) upload.
+
+    Checks scheme and hostname. A caller-provided filename is transmitted to SignNow as the
+    document/template name, so it is validated with the same strict rule as the other upload
+    paths (extension required). A filename inferred from the URL path is never transmitted —
+    SignNow names the entity from the URL path / Content-Disposition — so it is checked
+    leniently and may lack an extension.
+    """
+    parsed = urlparse(file_url)
+    if parsed.scheme not in {"https", "http"}:
+        raise ValueError(f"URL must use http or https (got '{parsed.scheme}')")
+    if not parsed.netloc:
+        raise ValueError(f"URL must include a hostname: {file_url!r}")
+    if filename is not None:
+        _validate_extension(filename)
+        return filename
+    url_filename = pathlib.PurePosixPath(parsed.path).name
+    if url_filename:
+        ext = pathlib.Path(url_filename).suffix.lower()
+        if ext and ext not in ALLOWED_EXTENSIONS:
+            raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
+    return url_filename or None
+
+
+def _upload(
     *,
     client: SignNowAPIClient,
     token: str,
-    file_path: str | None = None,
-    file_url: str | None = None,
-    resource_bytes: bytes | None = None,
-    filename: str | None = None,
-) -> UploadDocumentResponse:
-    """Upload a document to SignNow from a local path, public URL, or pre-read MCP resource bytes.
+    file_path: str | None,
+    file_url: str | None,
+    resource_bytes: bytes | None,
+    filename: str | None,
+    make_template: bool,
+) -> tuple[str, str | None, Literal["local_file", "url", "resource"]]:
+    """Shared upload flow for :func:`_upload_document` and :func:`_upload_template`.
 
     Exactly one of ``file_path``, ``file_url``, or ``resource_bytes`` must be provided.
     If ``filename`` is omitted, it is derived from the path or URL (required when resource_bytes used).
@@ -118,11 +206,12 @@ def _upload_document(
         file_path: Absolute or ~ path to a local file
         file_url: Publicly accessible URL to the file
         resource_bytes: Raw file bytes read from an MCP resource (caller resolves resource_uri)
-        filename: Custom name for the document in SignNow.
+        filename: Custom name for the entity in SignNow.
                   Required when resource_bytes provided; otherwise derived from path/URL.
+        make_template: Store the upload as a reusable template instead of a regular document.
 
     Returns:
-        UploadDocumentResponse with document_id, filename, and source
+        Tuple of (entity_id, effective_filename, source).
 
     Raises:
         ValueError: Multiple or no sources provided, unsupported extension, file too large,
@@ -135,70 +224,121 @@ def _upload_document(
         raise ValueError("Provide one of: resource_uri, file_path, or file_url")
 
     if resource_bytes is not None:
-        if filename is None:
-            raise ValueError("filename is required when uploading from a resource URI")
-        _validate_extension(filename)
-        if len(resource_bytes) > MAX_FILE_SIZE_BYTES:
-            raise ValueError(f"File too large ({len(resource_bytes)} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES} bytes (40 MB)")
-        response = client.upload_document(token=token, file_content=resource_bytes, filename=filename, check_fields=True)
-        return UploadDocumentResponse(
-            document_id=response.id,
-            filename=filename,
-            source="resource",
-            next_steps=_build_upload_next_steps(response.id),
-            agent_guidance=_UPLOAD_AGENT_GUIDANCE,
-        )
+        file_content, effective_filename = _resolve_resource_upload(resource_bytes, filename)
+        response = client.upload_document(token=token, file_content=file_content, filename=effective_filename, check_fields=True, make_template=make_template)
+        return response.id, effective_filename, "resource"
 
     if file_path is not None:
-        path = pathlib.Path(file_path).expanduser().resolve()
-        # C-1/C-2: Directory containment — prevent path traversal and symlink attacks
-        try:
-            path.relative_to(SAFE_UPLOAD_BASE)
-        except ValueError:
-            raise ValueError(f"file_path must be within the home directory ({SAFE_UPLOAD_BASE}). Resolved path '{path}' is outside the allowed root.") from None
-        if not path.exists():
-            raise ValueError(f"File not found: {path}")
-        if not path.is_file():
-            raise ValueError(f"Path is not a file: {path}")
-        _validate_extension(path.name if not filename else filename)
-        # H-4: Read first, then check size to eliminate TOCTOU race
-        file_content = path.read_bytes()
-        if len(file_content) > MAX_FILE_SIZE_BYTES:
-            raise ValueError(f"File too large ({len(file_content):,} bytes). Maximum allowed: {MAX_FILE_SIZE_BYTES:,} bytes (40 MB)")
-        effective_filename = filename if filename else path.name
-        response = client.upload_document(token=token, file_content=file_content, filename=effective_filename, check_fields=True)
-        return UploadDocumentResponse(
-            document_id=response.id,
-            filename=effective_filename,
-            source="local_file",
-            next_steps=_build_upload_next_steps(response.id),
-            agent_guidance=_UPLOAD_AGENT_GUIDANCE,
-        )
+        file_content, effective_filename = _resolve_local_file_upload(file_path, filename)
+        response = client.upload_document(token=token, file_content=file_content, filename=effective_filename, check_fields=True, make_template=make_template)
+        return response.id, effective_filename, "local_file"
 
     # file_url branch — provided == 1 guarantees file_url is not None at this point
     assert file_url is not None  # noqa: S101  # unreachable: provided==1 guarantees this
-    parsed = urlparse(file_url)
-    if parsed.scheme not in {"https", "http"}:
-        raise ValueError(f"URL must use http or https (got '{parsed.scheme}')")
-    if not parsed.netloc:
-        raise ValueError(f"URL must include a hostname: {file_url!r}")
-    url_filename = pathlib.PurePosixPath(parsed.path).name
-    url_effective_filename: str | None = filename if filename else (url_filename if url_filename else None)
-    if url_effective_filename:
-        ext = pathlib.Path(url_effective_filename).suffix.lower()
-        if ext and ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
-    request = CreateDocumentFromUrlRequest(url=file_url, check_fields=True)
+    url_effective_filename = _validate_url_upload(file_url, filename)
+    # An explicit caller-provided filename is transmitted as the entity name. A name
+    # inferred from the URL path is NOT sent — SignNow's own naming (URL path or
+    # Content-Disposition) stays authoritative, so the reported filename may differ then.
+    # Pass make_template only when True: model_dump(exclude_none=True) keeps False, and the
+    # API reads the flag with PHP's !empty(), so a transmitted "false" risks being treated
+    # as truthy — omit it entirely for plain-document uploads.
+    request = CreateDocumentFromUrlRequest(url=file_url, check_fields=True, make_template=make_template or None, name=filename)
     url_response = client.create_document_from_url(token=token, request_data=request)
-    # NOTE (H-2): CreateDocumentFromUrlRequest has no 'name' field — url_effective_filename
-    # is locally inferred and not transmitted to SignNow. The actual document name in
-    # SignNow may differ (set by SignNow from URL path or Content-Disposition header).
+    return url_response.id, url_effective_filename, "url"
+
+
+def _upload_document(
+    *,
+    client: SignNowAPIClient,
+    token: str,
+    file_path: str | None = None,
+    file_url: str | None = None,
+    resource_bytes: bytes | None = None,
+    filename: str | None = None,
+) -> UploadDocumentResponse:
+    """Upload a document to SignNow from a local path, public URL, or pre-read MCP resource bytes.
+
+    See :func:`_upload` for source resolution and validation details.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token for authentication
+        file_path: Absolute or ~ path to a local file
+        file_url: Publicly accessible URL to the file
+        resource_bytes: Raw file bytes read from an MCP resource (caller resolves resource_uri)
+        filename: Custom name for the document in SignNow.
+                  Required when resource_bytes provided; otherwise derived from path/URL.
+
+    Returns:
+        UploadDocumentResponse with document_id, filename, and source
+
+    Raises:
+        ValueError: Multiple or no sources provided, unsupported extension, file too large,
+                    file not found, filename missing for resource bytes
+    """
+    document_id, effective_filename, source = _upload(
+        client=client,
+        token=token,
+        file_path=file_path,
+        file_url=file_url,
+        resource_bytes=resource_bytes,
+        filename=filename,
+        make_template=False,
+    )
     return UploadDocumentResponse(
-        document_id=url_response.id,
-        filename=url_effective_filename,
-        source="url",
-        next_steps=_build_upload_next_steps(url_response.id),
+        document_id=document_id,
+        filename=effective_filename,
+        source=source,
+        next_steps=_build_upload_next_steps(document_id),
         agent_guidance=_UPLOAD_AGENT_GUIDANCE,
+    )
+
+
+def _upload_template(
+    *,
+    client: SignNowAPIClient,
+    token: str,
+    file_path: str | None = None,
+    file_url: str | None = None,
+    resource_bytes: bytes | None = None,
+    filename: str | None = None,
+) -> UploadTemplateResponse:
+    """Upload a file to SignNow as a reusable template.
+
+    Behaves like :func:`_upload_document` but sends ``make_template=true`` so SignNow stores
+    the upload as a template rather than a regular document. See :func:`_upload` for source
+    resolution and validation details.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token for authentication
+        file_path: Absolute or ~ path to a local file
+        file_url: Publicly accessible URL to the file
+        resource_bytes: Raw file bytes read from an MCP resource (caller resolves resource_uri)
+        filename: Custom name for the template in SignNow. Required when resource_bytes provided.
+
+    Returns:
+        UploadTemplateResponse with template_id, filename, and source
+
+    Raises:
+        ValueError: Multiple or no sources provided, unsupported extension, file too large,
+                    file not found, filename missing for resource bytes
+    """
+    template_id, effective_filename, source = _upload(
+        client=client,
+        token=token,
+        file_path=file_path,
+        file_url=file_url,
+        resource_bytes=resource_bytes,
+        filename=filename,
+        make_template=True,
+    )
+    return UploadTemplateResponse(
+        template_id=template_id,
+        filename=effective_filename,
+        source=source,
+        next_steps=_build_template_upload_next_steps(template_id),
+        agent_guidance=_UPLOAD_TEMPLATE_AGENT_GUIDANCE,
     )
 
 

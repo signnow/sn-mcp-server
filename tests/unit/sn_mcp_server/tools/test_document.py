@@ -11,12 +11,14 @@ from sn_mcp_server.tools.document import (
     _get_full_document,
     _update_document_fields,
     _upload_document,
+    _upload_template,
 )
 from sn_mcp_server.tools.models import (
     FieldToUpdate,
     UpdateDocumentFields,
     UpdateDocumentFieldsResponse,
     UploadDocumentResponse,
+    UploadTemplateResponse,
 )
 
 
@@ -94,6 +96,7 @@ class TestUploadDocument:
             file_content=b"pdf content",
             filename="contract.pdf",
             check_fields=True,
+            make_template=False,
         )
 
     def test_upload_response_includes_next_steps(self, mock_client: MagicMock) -> None:
@@ -153,15 +156,41 @@ class TestUploadDocument:
             file_content=b"pdf bytes",
             filename="My Contract.pdf",
             check_fields=True,
+            make_template=False,
         )
 
     def test_upload_url_custom_filename(self, mock_client: MagicMock) -> None:
-        """Custom filename overrides URL-derived filename."""
+        """Custom filename overrides URL-derived filename and is transmitted as the document name."""
         mock_client.create_document_from_url.return_value = MagicMock(id="doc_url")
 
         result = _upload_document(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/f?id=1", filename="invoice.pdf")
 
         assert result.filename == "invoice.pdf"
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.name == "invoice.pdf"
+
+    def test_upload_url_inferred_filename_not_transmitted(self, mock_client: MagicMock) -> None:
+        """A URL-path-inferred filename is NOT sent as name — SignNow's own naming stays authoritative."""
+        mock_client.create_document_from_url.return_value = MagicMock(id="doc_url")
+
+        result = _upload_document(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/contract.pdf")
+
+        assert result.filename == "contract.pdf"
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.name is None
+
+    def test_upload_url_make_template_omitted_for_document(self, mock_client: MagicMock) -> None:
+        """Document URL uploads must leave make_template unset (None) so it is excluded from the body.
+
+        The API reads the flag with PHP's !empty(); a transmitted "false" could be treated as
+        truthy and silently create a template. Only template uploads set it (see TestUploadTemplate).
+        """
+        mock_client.create_document_from_url.return_value = MagicMock(id="doc_url")
+
+        _upload_document(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/contract.pdf")
+
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.make_template is None
 
     def test_resource_bytes_no_filename_raises(self, mock_client: MagicMock) -> None:
         """resource_bytes without filename raises ValueError."""
@@ -303,6 +332,134 @@ class TestUploadDocument:
         no_ext.write_bytes(b"data")
         with pytest.raises(ValueError, match="Cannot determine file type for 'contract'"):
             _upload_document(client=mock_client, token=FAKE_TOKEN, file_path=str(no_ext))
+
+
+class TestUploadTemplate:
+    """Test cases for _upload_template."""
+
+    @pytest.fixture(autouse=True)
+    def _allow_tmp_path(self, tmp_path: pathlib.Path) -> None:  # type: ignore[misc]
+        """Patch SAFE_UPLOAD_BASE to tmp_path so file-based tests pass containment."""
+        with patch("sn_mcp_server.tools.document.SAFE_UPLOAD_BASE", tmp_path):
+            yield  # type: ignore[misc]
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        """Create a mock SignNowAPIClient."""
+        return MagicMock()
+
+    def test_upload_from_resource_happy(self, mock_client: MagicMock) -> None:
+        """Resource bytes branch calls upload_document with make_template=True."""
+        mock_client.upload_document.return_value = MagicMock(id="tpl_res")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, resource_bytes=b"pdf content", filename="contract.pdf")
+
+        assert isinstance(result, UploadTemplateResponse)
+        assert result.template_id == "tpl_res"
+        assert result.filename == "contract.pdf"
+        assert result.source == "resource"
+        mock_client.upload_document.assert_called_once_with(
+            token=FAKE_TOKEN,
+            file_content=b"pdf content",
+            filename="contract.pdf",
+            check_fields=True,
+            make_template=True,
+        )
+
+    def test_upload_from_local_path_happy(self, mock_client: MagicMock, tmp_path: pathlib.Path) -> None:
+        """Local file path branch returns correct UploadTemplateResponse."""
+        pdf_file = tmp_path / "blueprint.pdf"
+        pdf_file.write_bytes(b"pdf bytes")
+        mock_client.upload_document.return_value = MagicMock(id="tpl_123")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, file_path=str(pdf_file))
+
+        assert result.template_id == "tpl_123"
+        assert result.filename == "blueprint.pdf"
+        assert result.source == "local_file"
+
+    def test_upload_from_url_happy(self, mock_client: MagicMock) -> None:
+        """URL branch delegates to create_document_from_url with make_template=True."""
+        mock_client.create_document_from_url.return_value = MagicMock(id="tpl_url")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/nda.pdf")
+
+        assert result.template_id == "tpl_url"
+        assert result.filename == "nda.pdf"
+        assert result.source == "url"
+        mock_client.upload_document.assert_not_called()
+        # The URL request must carry make_template=True so SignNow stores a template, not a document.
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.make_template is True
+        # Inferred name is NOT transmitted — SignNow's own naming stays authoritative.
+        assert request.name is None
+
+    def test_upload_from_url_custom_filename_transmitted(self, mock_client: MagicMock) -> None:
+        """An explicit filename is transmitted as the template name for URL uploads."""
+        mock_client.create_document_from_url.return_value = MagicMock(id="tpl_url_named")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/f?id=1", filename="NDA Template.pdf")
+
+        assert result.filename == "NDA Template.pdf"
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.name == "NDA Template.pdf"
+
+    def test_upload_custom_filename(self, mock_client: MagicMock, tmp_path: pathlib.Path) -> None:
+        """Custom filename overrides the derived filename."""
+        pdf_file = tmp_path / "raw.pdf"
+        pdf_file.write_bytes(b"pdf bytes")
+        mock_client.upload_document.return_value = MagicMock(id="tpl_789")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, file_path=str(pdf_file), filename="NDA Template.pdf")
+
+        assert result.filename == "NDA Template.pdf"
+        mock_client.upload_document.assert_called_once_with(
+            token=FAKE_TOKEN,
+            file_content=b"pdf bytes",
+            filename="NDA Template.pdf",
+            check_fields=True,
+            make_template=True,
+        )
+
+    def test_response_includes_template_next_steps(self, mock_client: MagicMock) -> None:
+        """Successful upload surfaces template-specific next_steps and agent_guidance."""
+        mock_client.upload_document.return_value = MagicMock(id="tpl_next")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, resource_bytes=b"pdf", filename="contract.pdf")
+
+        tools_called = [step.tool for step in result.next_steps]
+        assert tools_called == ["create_from_template", "create_embedded_editor"]
+        for step in result.next_steps:
+            assert step.intent
+            assert step.description
+        assert result.agent_guidance
+        assert "next_steps" in result.agent_guidance
+
+    def test_no_source_raises(self, mock_client: MagicMock) -> None:
+        """No source provided raises a clear error and hits no API."""
+        with pytest.raises(ValueError, match="Provide one of: resource_uri, file_path, or file_url"):
+            _upload_template(client=mock_client, token=FAKE_TOKEN)
+        mock_client.upload_document.assert_not_called()
+
+    def test_multiple_sources_raises(self, mock_client: MagicMock, tmp_path: pathlib.Path) -> None:
+        """Providing both sources raises a clear error and hits no API."""
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"pdf")
+        with pytest.raises(ValueError, match="not multiple"):
+            _upload_template(client=mock_client, token=FAKE_TOKEN, file_path=str(pdf_file), resource_bytes=b"pdf")
+        mock_client.upload_document.assert_not_called()
+
+    def test_resource_bytes_requires_filename(self, mock_client: MagicMock) -> None:
+        """resource_bytes without filename raises a clear error."""
+        with pytest.raises(ValueError, match="filename is required"):
+            _upload_template(client=mock_client, token=FAKE_TOKEN, resource_bytes=b"pdf")
+        mock_client.upload_document.assert_not_called()
+
+    def test_unsupported_extension_raises(self, mock_client: MagicMock) -> None:
+        """Unsupported file type raises before any API call."""
+        with pytest.raises(ValueError, match="Unsupported file type"):
+            _upload_template(client=mock_client, token=FAKE_TOKEN, resource_bytes=b"data", filename="payload.exe")
+        mock_client.upload_document.assert_not_called()
 
 
 class TestGetFullDocument:

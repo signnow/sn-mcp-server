@@ -75,6 +75,7 @@ _V2_TOOLS_WITH_V1_COMPAT = {
 # Tools that only exist in v2.0 (new since v1.0.1)
 _V2_ONLY_TOOLS = {
     "upload_document",
+    "upload_template",
     "create_template",
     "send_invite_reminder",
     "view_document",

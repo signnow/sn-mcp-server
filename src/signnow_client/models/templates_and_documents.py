@@ -245,6 +245,8 @@ class CreateDocumentFromUrlRequest(BaseModel):
 
     url: str = Field(..., description="URL of the file to create document from")
     check_fields: bool | None = Field(True, description="Whether to check for fields in the document")
+    make_template: bool | None = Field(None, description="Store the upload as a reusable template instead of a document")
+    name: str | None = Field(None, description="Custom name for the created entity; when omitted, SignNow derives it from the URL path or Content-Disposition header")
 
 
 class CreateDocumentFromUrlResponse(BaseModel):
