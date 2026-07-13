@@ -169,6 +169,20 @@ class TestUploadDocument:
         request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
         assert request.name == "invoice.pdf"
 
+    def test_upload_url_custom_filename_no_extension_allowed(self, mock_client: MagicMock) -> None:
+        """A caller-supplied URL filename without an extension is allowed (SignNow types the fetched file).
+
+        The name is only a display name for URL uploads, so it need not carry an extension —
+        matching the lenient handling of URL-path-inferred names.
+        """
+        mock_client.create_document_from_url.return_value = MagicMock(id="doc_noext")
+
+        result = _upload_document(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/f?id=1", filename="My Invoice")
+
+        assert result.filename == "My Invoice"
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.name == "My Invoice"
+
     def test_upload_url_inferred_filename_not_transmitted(self, mock_client: MagicMock) -> None:
         """A URL-path-inferred filename is NOT sent as name — SignNow's own naming stays authoritative."""
         mock_client.create_document_from_url.return_value = MagicMock(id="doc_url")
@@ -403,6 +417,22 @@ class TestUploadTemplate:
         assert result.filename == "NDA Template.pdf"
         request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
         assert request.name == "NDA Template.pdf"
+
+    def test_upload_from_url_custom_filename_no_extension_allowed(self, mock_client: MagicMock) -> None:
+        """A caller-supplied URL template name without an extension is allowed (regression for SN-33253).
+
+        SignNow fetches the file and types it server-side for URL uploads, so an extension-less
+        display name (e.g. one an agent generates) must not raise 'Cannot determine file type'.
+        """
+        mock_client.create_document_from_url.return_value = MagicMock(id="tpl_noext")
+
+        result = _upload_template(client=mock_client, token=FAKE_TOKEN, file_url="https://example.com/f?id=1", filename="New uploaded template by MCP")
+
+        assert result.filename == "New uploaded template by MCP"
+        mock_client.upload_document.assert_not_called()
+        request = mock_client.create_document_from_url.call_args.kwargs["request_data"]
+        assert request.name == "New uploaded template by MCP"
+        assert request.make_template is True
 
     def test_upload_custom_filename(self, mock_client: MagicMock, tmp_path: pathlib.Path) -> None:
         """Custom filename overrides the derived filename."""

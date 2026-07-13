@@ -143,14 +143,28 @@ def _resolve_local_file_upload(file_path: str, filename: str | None) -> tuple[by
     return file_content, effective_filename
 
 
+def _reject_unsupported_extension(name: str) -> None:
+    """Reject a *present* unsupported extension; a missing extension is allowed.
+
+    Used for URL uploads, where SignNow fetches the file and determines its type from the
+    fetched content — the filename is only a display name, so it need not carry an extension.
+    Contrast with :func:`_validate_extension`, which requires an extension for multipart
+    uploads (resource/local file) whose type is derived from the filename.
+    """
+    ext = pathlib.Path(name).suffix.lower()
+    if ext and ext not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
+
+
 def _validate_url_upload(file_url: str, filename: str | None) -> str | None:
     """Validate a public file URL for a server-side (SignNow-fetches) upload.
 
-    Checks scheme and hostname. A caller-provided filename is transmitted to SignNow as the
-    document/template name, so it is validated with the same strict rule as the other upload
-    paths (extension required). A filename inferred from the URL path is never transmitted —
-    SignNow names the entity from the URL path / Content-Disposition — so it is checked
-    leniently and may lack an extension.
+    Checks scheme and hostname. For URL uploads SignNow fetches the file itself and determines
+    its type from the fetched content, so a filename here — whether caller-supplied (transmitted
+    as the entity name) or inferred from the URL path — is only a display name and need not
+    carry an extension. Both are validated leniently: a present extension must be supported, but
+    a missing extension is allowed. This keeps parity with plain document uploads, which allowed
+    extension-less URL-upload names.
     """
     parsed = urlparse(file_url)
     if parsed.scheme not in {"https", "http"}:
@@ -158,13 +172,11 @@ def _validate_url_upload(file_url: str, filename: str | None) -> str | None:
     if not parsed.netloc:
         raise ValueError(f"URL must include a hostname: {file_url!r}")
     if filename is not None:
-        _validate_extension(filename)
+        _reject_unsupported_extension(filename)
         return filename
     url_filename = pathlib.PurePosixPath(parsed.path).name
     if url_filename:
-        ext = pathlib.Path(url_filename).suffix.lower()
-        if ext and ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"Unsupported file type '{ext}'. Allowed: {sorted(ALLOWED_EXTENSIONS)}")
+        _reject_unsupported_extension(url_filename)
     return url_filename or None
 
 
