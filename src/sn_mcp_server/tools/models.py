@@ -935,11 +935,11 @@ class SuggestedStep(BaseModel):
 class UploadDocumentResponse(BaseModel):
     """Response model for the upload_document tool.
 
-    Backs both a regular document upload and a template upload (make_template=True); in the
+    Backs both a regular document upload and a template upload (kind='template'); in the
     template case ``document_id`` carries the template ID and ``next_steps`` are template steps.
     """
 
-    document_id: str = Field(..., description="ID of the uploaded entity in SignNow — a document ID, or a template ID when the upload was made with make_template=True")
+    document_id: str = Field(..., description="ID of the uploaded entity in SignNow — a document ID, or a template ID when the upload was made with kind='template'")
     filename: str | None = Field(
         ...,
         description=(

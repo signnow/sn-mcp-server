@@ -8,13 +8,13 @@ serves the highest registered version by default, so clients transparently get
 v3.0 while a client pinning v2.0 keeps the older contract.
 
 v3.0 tools registered here:
-  - upload_document  (adds the make_template flag to the v2.0 upload_document contract)
+  - upload_document  (adds the kind parameter — document|template — to the v2.0 upload_document contract)
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastmcp import Context
 from mcp.types import ToolAnnotations
@@ -36,11 +36,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         version="3.0",
         description=(
             "Upload a file to SignNow from a local file path, public URL, or MCP resource attachment. "
-            "By default the file is uploaded as a regular document; set make_template=true to upload it as a "
-            "reusable template instead (a blueprint you clone into documents via create_from_template). "
+            "By default (kind='document') the file is uploaded as a regular document; set kind='template' to "
+            "upload it as a reusable template instead (a blueprint you clone into documents via create_from_template). "
             "Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB. "
-            "On success the response includes a 'document_id' (a template ID when make_template=true), a "
-            "'next_steps' array, and an 'agent_guidance' string — the next_steps adapt to make_template "
+            "On success the response includes a 'document_id' (a template ID when kind='template'), a "
+            "'next_steps' array, and an 'agent_guidance' string — the next_steps adapt to kind "
             "(document: prepare invite / send for signing / self-sign; template: create a document from it / "
             "edit its fields and roles). Present those options to the user and wait for them to choose before "
             "calling any follow-up tool. "
@@ -93,18 +93,19 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
                 ),
             ),
         ] = None,
-        make_template: Annotated[
-            bool,
+        kind: Annotated[
+            Literal["document", "template"],
             Field(
                 description=(
-                    "When true, store the upload as a reusable template instead of a regular document. "
-                    "The returned document_id is then a template ID, and next_steps switch to the template "
-                    "follow-ups (create_from_template / create_embedded_editor). Defaults to false."
+                    "What to create from the uploaded file: 'document' (default) for a regular document, "
+                    "or 'template' for a reusable template. With 'template' the returned document_id is a "
+                    "template ID, and next_steps switch to the template follow-ups "
+                    "(create_from_template / create_embedded_editor)."
                 ),
             ),
-        ] = False,
+        ] = "document",
     ) -> UploadDocumentResponse:
-        """Upload a document — or, with make_template=true, a reusable template — to SignNow.
+        """Upload a document — or, with kind='template', a reusable template — to SignNow.
 
         Provide exactly one of: resource_uri, file_path, or file_url.
         Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG. Max file size: 40 MB.
@@ -115,11 +116,11 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         3. file_url — if the user provided a public URL
 
         After upload, present the returned next_steps to the user and wait for them to choose.
-        For a document (make_template=false):
+        For a document (kind='document'):
         1. Prepare a role-based invite (create_embedded_sending)
         2. Send for signing as a freeform invite (send_invite with recipient email)
         3. Sign the document yourself (send_invite with self_sign=True)
-        For a template (make_template=true):
+        For a template (kind='template'):
         1. Create a document from this template (create_from_template)
         2. Edit the template's fields and roles (create_embedded_editor)
 
@@ -129,7 +130,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             file_path: Local file path (absolute or ~-relative)
             file_url: Public URL to the file
             filename: Optional custom entity name in SignNow
-            make_template: Upload as a reusable template instead of a regular document
+            kind: 'document' (default) for a regular document, or 'template' for a reusable template
         """
         token, client = _get_token_and_client(token_provider)
 
@@ -151,5 +152,5 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             file_path=file_path,
             file_url=file_url,
             filename=filename,
-            make_template=make_template,
+            make_template=kind == "template",
         )

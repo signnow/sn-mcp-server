@@ -85,7 +85,7 @@ _V2_ONLY_TOOLS = {
 
 # Tools with a frozen v2.0 contract and a v3.0 contract change (new args go to v3.0 per AGENTS.md)
 _V3_TOOLS_WITH_V2_COMPAT = {
-    "upload_document",  # v3.0 adds the make_template flag
+    "upload_document",  # v3.0 adds the kind parameter (document|template)
 }
 
 # Compound tools removed in v2 — preserved only as v1.0 in signnow_v1.py

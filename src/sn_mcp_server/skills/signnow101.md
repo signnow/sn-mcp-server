@@ -59,10 +59,10 @@ When a user wants to upload a document to SignNow:
 
 ### 3.1 Uploading a Template
 
-When the user wants to upload a file as a **reusable template** (a blueprint they will clone into documents), call the same `upload_document` tool with `make_template=true`:
+When the user wants to upload a file as a **reusable template** (a blueprint they will clone into documents), call the same `upload_document` tool with `kind='template'`:
 
 - Sources are unchanged: an `@`-attached file (`resource_uri`), a local file path (`file_path`), or a public URL (`file_url`).
-- With `make_template=true` the returned `document_id` is a **template** ID and the `next_steps` switch to the template follow-ups. Present them and let the user choose:
+- With `kind='template'` the returned `document_id` is a **template** ID and the `next_steps` switch to the template follow-ups. Present them and let the user choose:
 
   | # | User intent | What to do |
   |---|-------------|------------|
