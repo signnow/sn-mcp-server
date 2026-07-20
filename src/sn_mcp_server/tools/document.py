@@ -230,9 +230,9 @@ def _upload(
     """
     provided = sum(x is not None for x in (file_path, file_url, resource_bytes))
     if provided > 1:
-        raise ValueError("Provide exactly one of resource_uri, file_path, or file_url — not multiple")
+        raise ValueError("Provide exactly one of resource_bytes, file_path, or file_url — not multiple")
     if provided == 0:
-        raise ValueError("Provide one of: resource_uri, file_path, or file_url")
+        raise ValueError("Provide one of: resource_bytes, file_path, or file_url")
 
     if resource_bytes is not None:
         file_content, effective_filename = _resolve_resource_upload(resource_bytes, filename)
@@ -281,7 +281,8 @@ def _upload_document(
         file_path: Absolute or ~ path to a local file
         file_url: Publicly accessible URL to the file
         resource_bytes: Raw file bytes read from an MCP resource (caller resolves resource_uri)
-        filename: Custom name for the document in SignNow.
+        filename: Custom name for the entity (document or template) in SignNow. For URL uploads
+                  an explicitly provided name is transmitted as the created entity's name.
                   Required when resource_bytes provided; otherwise derived from path/URL.
         make_template: Store the upload as a reusable template instead of a regular document.
 

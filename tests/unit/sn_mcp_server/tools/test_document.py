@@ -218,7 +218,7 @@ class TestUploadDocument:
 
     def test_no_source_raises(self, mock_client: MagicMock) -> None:
         """Providing no source raises ValueError."""
-        with pytest.raises(ValueError, match="Provide one of: resource_uri, file_path, or file_url"):
+        with pytest.raises(ValueError, match="Provide one of: resource_bytes, file_path, or file_url"):
             _upload_document(client=mock_client, token=FAKE_TOKEN)
 
     def test_file_not_found_raises(self, mock_client: MagicMock, tmp_path: pathlib.Path) -> None:
