@@ -625,6 +625,39 @@ class TestGetDocumentFolderResolution:
         assert result.entity_type == "template_group"
         assert [d.folder_name for d in result.documents] == ["Folder 1", "Folder 1"]
 
+    def test_document_group_folder_from_group_response_members_may_differ(self, mock_client: MagicMock) -> None:
+        """The group folder comes from the group's own API response (data.folder_id),
+        while each member keeps its own folder (legacy: members may differ)."""
+        from signnow_client.models.document_groups import (
+            DocumentGroupV2Data,
+            DocumentGroupV2Document,
+            GetDocumentGroupV2Response,
+        )
+
+        data = DocumentGroupV2Data.model_construct(
+            id="dg",
+            name="DG",
+            folder_id="folder2",
+            created=0,
+            state="pending",
+            invite_id=None,
+            pending_step_id=None,
+            last_invite_id=None,
+            documents=[DocumentGroupV2Document.model_construct(id="m1", field_invites=[]), DocumentGroupV2Document.model_construct(id="m2", field_invites=[])],
+            freeform_invite=None,
+        )
+        mock_client.get_document_group_v2.return_value = GetDocumentGroupV2Response.model_construct(data=data)
+        mock_client.get_document.return_value = _make_document_response(parent_id="deep1")
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        result = _get_document(mock_client, "tok", "dg", "document_group", resolve_folder_names=True)
+
+        assert result.entity_type == "document_group"
+        assert result.folder_name == "Folder 2"  # group-level, from data.folder_id
+        assert [d.folder_name for d in result.documents] == ["Deep One", "Deep One"]  # member parent_id
+        # members are fetched with is_custom_folder to get their real (immediate) folder
+        assert mock_client.get_document.call_args_list[0].kwargs == {"is_custom_folder": True}
+
     def test_single_document_flow_requests_immediate_folder_and_resolves_nested_name(self, mock_client: MagicMock) -> None:
         """End-to-end: the document fetch asks for the immediate folder (is_custom_folder),
         and its nested folder_id resolves to the real subfolder name via the tree."""
