@@ -56,6 +56,19 @@ When a user wants to upload a document to SignNow:
    **Secondary option** (mention only if the user hints at reuse, not by default): "Turn it into a template" — call `create_embedded_editor(entity_id=<id>)` so the user can prepare the template in SignNow.
 
 5. **If the user doesn't specify intent,** default to asking: *"What would you like to do with this document?"* and present the three primary options above.
+
+### 3.1 Uploading a Template
+
+When the user wants to upload a file as a **reusable template** (a blueprint they will clone into documents), call the same `upload_document` tool with `kind='template'`:
+
+- Sources are unchanged: an `@`-attached file (`resource_uri`), a local file path (`file_path`), or a public URL (`file_url`).
+- With `kind='template'` the returned `document_id` is a **template** ID and the `next_steps` switch to the template follow-ups. Present them and let the user choose:
+
+  | # | User intent | What to do |
+  |---|-------------|------------|
+  | 1 | "Create a document from this template" | Call `create_from_template(entity_id=<template_id>)` to generate a ready-to-send document copy. |
+  | 2 | "Edit the template's fields and roles" | Call `create_embedded_editor(entity_id=<template_id>)` to open the template in SignNow and set up fields/roles. |
+
 ## 4. Sending for Signing
 
 ### 4.1 Signing Link Etiquette
