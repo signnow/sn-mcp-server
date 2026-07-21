@@ -546,7 +546,7 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
             if isinstance(candidate, str) and candidate:
                 freeform_invite_id = candidate
 
-    # Create DocumentGroup with single document.
+    # Create DocumentGroup with single document
     return DocumentGroup(
         last_updated=0,  # Not available for single documents
         entity_id=document_id,
