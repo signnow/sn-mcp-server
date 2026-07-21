@@ -9,6 +9,7 @@ v3.0 while a client pinning v2.0 keeps the older contract.
 
 v3.0 tools registered here:
   - upload_document  (adds the kind parameter — document|template — to the v2.0 upload_document contract)
+  - get_document     (adds entity-level folder info — folder_id/folder_name — to the v2.0 get_document contract)
 """
 
 from __future__ import annotations
@@ -22,8 +23,9 @@ from pydantic import Field
 
 from sn_mcp_server.token_provider import TokenProvider
 
-from .document import _upload_document
+from .document import _get_document_v3, _upload_document
 from .models import UploadDocumentResponse
+from .models_v3 import DocumentGroupV3
 from .signnow import _get_token_and_client, _resolve_upload_resource
 
 
@@ -154,3 +156,45 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             filename=filename,
             make_template=kind == "template",
         )
+
+    @mcp.tool(
+        name="get_document",
+        version="3.0",
+        description=(
+            "Get full document, template, template group or document group information with "
+            "field values, including the folder the entity is stored in (folder_id and "
+            "folder_name). Always returns the current server-side state; call it again to pick "
+            "up edits made in the SignNow editor after an earlier fetch."
+        ),
+        annotations=ToolAnnotations(
+            title="Get document or group details",
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=True,
+        ),
+        tags=["document", "document_group", "template", "template_group", "get", "fields", "folder"],
+    )
+    def get_document(
+        ctx: Context,
+        entity_id: Annotated[str, Field(description="ID of the document, template, template group or document group to retrieve")],
+        entity_type: Annotated[
+            Literal["document", "document_group", "template", "template_group"] | None,
+            Field(description="Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional). If not provided, will be determined automatically"),
+        ] = None,
+    ) -> DocumentGroupV3:
+        """Get full document/template/group information with field values and folder info (v3.0).
+
+        Same input contract as v2.0; the response additionally carries the entity-level
+        folder_id and folder_name. Returns a unified DocumentGroupV3 even for a single document.
+
+        Args:
+            ctx: FastMCP context (injected)
+            entity_id: ID of the document, template, template group or document group to retrieve
+            entity_type: Type of entity: 'document', 'template', 'template_group' or 'document_group' (optional)
+
+        Returns:
+            DocumentGroupV3 with complete information including field values and entity-level folder info
+        """
+        token, client = _get_token_and_client(token_provider)
+        return _get_document_v3(client, token, entity_id, entity_type)

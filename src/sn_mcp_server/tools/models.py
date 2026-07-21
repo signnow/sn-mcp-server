@@ -110,8 +110,6 @@ class DocumentGroupDocument(BaseModel):
 
     id: str = Field(..., description="Document ID")
     name: str = Field(..., description="Document name")
-    folder_id: str | None = Field(None, description="ID of the folder this document is stored in, if any")
-    folder_name: str | None = Field(None, description="Name of the folder this document is stored in, if it could be resolved")
     roles: list[str] = Field(..., description="Roles defined for this document")
     fields: list[DocumentField] = Field(default=[], description="Fields defined in this document")
 
@@ -123,8 +121,6 @@ class DocumentGroup(BaseModel):
     entity_id: str = Field(..., description="Document group ID")
     group_name: str = Field(..., description="Name of the document group")
     entity_type: str = Field(..., description="Type of entity: 'document' or 'document_group'")
-    folder_id: str | None = Field(None, description="ID of the folder this entity is stored in, if any")
-    folder_name: str | None = Field(None, description="Name of the folder this entity is stored in, if it could be resolved")
     invite: SimplifiedInvite | None = Field(None, description="Unified invite info")
     freeform_invite_id: str | None = Field(None, description="Freeform invite ID, if a freeform invite exists on this entity")
     documents: list[DocumentGroupDocument] = Field(..., description="List of documents in this group")

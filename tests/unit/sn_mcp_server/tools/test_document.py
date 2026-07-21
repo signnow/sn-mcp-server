@@ -10,9 +10,11 @@ import pytest
 
 from signnow_client.models.folders_lite import FolderLite, GetFoldersResponseLite
 from sn_mcp_server.tools.document import (
+    _entity_folder_id,
     _get_document,
+    _get_document_v3,
     _get_full_document,
-    _resolve_folder_names,
+    _resolve_folder_name,
     _update_document_fields,
     _upload_document,
 )
@@ -24,6 +26,7 @@ from sn_mcp_server.tools.models import (
     UpdateDocumentFieldsResponse,
     UploadDocumentResponse,
 )
+from sn_mcp_server.tools.models_v3 import DocumentGroupV3
 
 
 def _make_document_field(
@@ -607,170 +610,50 @@ def _folder_tree() -> GetFoldersResponseLite:
     )
 
 
-def _doc(doc_id: str = "d1", folder_id: str | None = None) -> DocumentGroupDocument:
-    """Minimal DocumentGroupDocument with an optional folder_id."""
-    return DocumentGroupDocument(id=doc_id, name=f"Doc {doc_id}", folder_id=folder_id, roles=[])
+def _doc(doc_id: str = "d1") -> DocumentGroupDocument:
+    """Minimal folder-free DocumentGroupDocument (frozen v2 member shape)."""
+    return DocumentGroupDocument(id=doc_id, name=f"Doc {doc_id}", roles=[])
 
 
-def _grp(documents: list[DocumentGroupDocument], folder_id: str | None = None) -> DocumentGroup:
-    """Wrap documents in a DocumentGroup with an optional group-level folder_id."""
+def _grp(documents: list[DocumentGroupDocument]) -> DocumentGroup:
+    """Wrap documents in a folder-free DocumentGroup (frozen v2 shape)."""
     return DocumentGroup(
         last_updated=0,
         entity_id="grp",
         group_name="G",
         entity_type="document_group",
-        folder_id=folder_id,
         invite=None,
         documents=documents,
     )
 
 
-class TestResolveFolderNames:
-    """Tests for _resolve_folder_names."""
+class TestGetDocumentV2Frozen:
+    """Guards that the frozen v2 base does zero folder work after the revert."""
 
     @pytest.fixture
     def mock_client(self) -> MagicMock:
         return MagicMock()
 
-    def test_noop_when_no_document_has_folder(self, mock_client: MagicMock) -> None:
-        """No document carries a folder_id: skip the folder-tree call entirely."""
-        documents = [_doc("d1"), _doc("d2")]
+    def test_get_document_signature_has_no_folder_flag(self) -> None:
+        """_get_document must not expose a resolve_folder_names parameter (guards the revert)."""
+        import inspect
 
-        _resolve_folder_names(mock_client, "tok", _grp(documents))
+        params = inspect.signature(_get_document).parameters
+        assert "resolve_folder_names" not in params
+
+    def test_v2_single_document_no_folder_calls(self, mock_client: MagicMock) -> None:
+        """A single-document fetch makes no folder-tree call and no is_custom_folder request."""
+        mock_client.get_document.return_value = _make_document_response(doc_id="docid", parent_id="deep1")
+
+        result = _get_document(mock_client, "tok", "docid", "document")
 
         mock_client.get_folder_tree.assert_not_called()
-        assert all(doc.folder_name is None for doc in documents)
+        mock_client.get_document.assert_called_once_with("tok", "docid")
+        assert not hasattr(result, "folder_id")
+        assert not hasattr(result, "folder_name")
 
-    def test_resolves_root_and_top_level(self, mock_client: MagicMock) -> None:
-        """Root and top-level folder ids resolve from the single tree call."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        documents = [_doc("d1", folder_id="root_folder_id"), _doc("d2", folder_id="folder2")]
-
-        _resolve_folder_names(mock_client, "tok", _grp(documents))
-
-        mock_client.get_folder_tree.assert_called_once_with("tok")
-        assert documents[0].folder_name == "Root Folder"
-        assert documents[1].folder_name == "Folder 2"
-
-    def test_resolves_deeply_nested_subfolder(self, mock_client: MagicMock) -> None:
-        """A subfolder several levels deep resolves from the nested tree."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        documents = [_doc("d1", folder_id="deep1"), _doc("d2", folder_id="folder1")]
-
-        _resolve_folder_names(mock_client, "tok", _grp(documents))
-
-        assert documents[0].folder_name == "Deep One"
-        assert documents[1].folder_name == "Folder 1"
-
-    def test_single_tree_call_regardless_of_folder_count(self, mock_client: MagicMock) -> None:
-        """Any number of folders at any depth is covered by exactly one tree call."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        documents = [_doc("d1", folder_id="nested1"), _doc("d2", folder_id="deep1"), _doc("d3", folder_id="folder2")]
-
-        _resolve_folder_names(mock_client, "tok", _grp(documents))
-
-        mock_client.get_folder_tree.assert_called_once_with("tok")
-        assert [d.folder_name for d in documents] == ["Nested One", "Deep One", "Folder 2"]
-
-    def test_resolves_team_subfolder_from_tree(self, mock_client: MagicMock) -> None:
-        """Team-folder subfolders (present in the /v1/folder tree) resolve like any other."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        documents = [_doc("d1", folder_id="team_nested")]
-
-        _resolve_folder_names(mock_client, "tok", _grp(documents))
-
-        assert documents[0].folder_name == "Team Nested"
-
-    def test_unknown_folder_keeps_name_none(self, mock_client: MagicMock) -> None:
-        """A folder absent from the tree leaves folder_name None but retains folder_id."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        documents = [_doc("d1", folder_id="ghost"), _doc("d2", folder_id="folder1")]
-
-        _resolve_folder_names(mock_client, "tok", _grp(documents))
-
-        assert documents[0].folder_name is None
-        assert documents[0].folder_id == "ghost"
-        assert documents[1].folder_name == "Folder 1"
-
-    def test_resolves_group_level_folder(self, mock_client: MagicMock) -> None:
-        """The entity-level folder_id resolves to folder_name on the group itself."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        group = _grp([_doc("d1", folder_id="deep1")], folder_id="folder2")
-
-        _resolve_folder_names(mock_client, "tok", group)
-
-        assert group.folder_name == "Folder 2"
-        assert group.documents[0].folder_name == "Deep One"
-
-    def test_group_folder_resolved_even_with_no_document_folders(self, mock_client: MagicMock) -> None:
-        """Group folder resolves even when no member document carries a folder_id."""
-        mock_client.get_folder_tree.return_value = _folder_tree()
-        group = _grp([_doc("d1")], folder_id="folder1")
-
-        _resolve_folder_names(mock_client, "tok", group)
-
-        assert group.folder_name == "Folder 1"
-
-
-class TestGetDocumentFolderResolution:
-    """Tests for the resolve_folder_names flag on _get_document."""
-
-    @pytest.fixture
-    def mock_client(self) -> MagicMock:
-        return MagicMock()
-
-    def _group(self) -> DocumentGroup:
-        return DocumentGroup(
-            last_updated=0,
-            entity_id="grp",
-            group_name="Group",
-            entity_type="document",
-            folder_id="folder2",
-            invite=None,
-            documents=[_doc("d1", folder_id="deep1")],
-        )
-
-    def test_resolves_folder_names_when_flag_true(self, mock_client: MagicMock) -> None:
-        mock_client.get_folder_tree.return_value = _folder_tree()
-
-        with patch("sn_mcp_server.tools.document._resolve_entity_group", return_value=self._group()):
-            result = _get_document(mock_client, "tok", "grp", "document", resolve_folder_names=True)
-
-        assert result.folder_name == "Folder 2"
-        assert result.documents[0].folder_name == "Deep One"
-        mock_client.get_folder_tree.assert_called_once_with("tok")
-
-    def test_skips_folder_resolution_when_flag_false(self, mock_client: MagicMock) -> None:
-        with patch("sn_mcp_server.tools.document._resolve_entity_group", return_value=self._group()):
-            result = _get_document(mock_client, "tok", "grp", "document")
-
-        assert result.folder_name is None
-        assert result.documents[0].folder_name is None
-        mock_client.get_folder_tree.assert_not_called()
-
-    def test_template_group_surfaces_group_folder_on_members(self, mock_client: MagicMock) -> None:
-        """A template group's members carry no folder of their own, so the group folder
-        (from the DGT response) is surfaced on each and resolved to its name."""
-        from signnow_client.models.document_groups import GetDocumentGroupTemplateResponse, TemplateShort
-
-        tg = GetDocumentGroupTemplateResponse.model_construct(
-            id="tg",
-            group_name="TG",
-            folder_id="folder1",
-            templates=[TemplateShort.model_construct(id="t1"), TemplateShort.model_construct(id="t2")],
-        )
-        mock_client.get_document_group_template.return_value = tg
-        mock_client.get_document.return_value = _make_document_response(parent_id=None)
-        mock_client.get_folder_tree.return_value = _folder_tree()
-
-        result = _get_document(mock_client, "tok", "tg", "template_group", resolve_folder_names=True)
-
-        assert result.entity_type == "template_group"
-        assert [d.folder_name for d in result.documents] == ["Folder 1", "Folder 1"]
-
-    def test_document_group_folder_from_group_response_members_may_differ(self, mock_client: MagicMock) -> None:
-        """The group folder comes from the group's own API response (data.folder_id),
-        while each member keeps its own folder (legacy: members may differ)."""
+    def test_v2_document_group_has_no_folder_fields(self, mock_client: MagicMock) -> None:
+        """A document group fetch is folder-free: no tree call, members fetched without is_custom_folder."""
         from signnow_client.models.document_groups import (
             DocumentGroupV2Data,
             DocumentGroupV2Document,
@@ -786,81 +669,315 @@ class TestGetDocumentFolderResolution:
             invite_id=None,
             pending_step_id=None,
             last_invite_id=None,
-            documents=[DocumentGroupV2Document.model_construct(id="m1", field_invites=[]), DocumentGroupV2Document.model_construct(id="m2", field_invites=[])],
+            documents=[DocumentGroupV2Document.model_construct(id="m1", field_invites=[])],
             freeform_invite=None,
         )
         mock_client.get_document_group_v2.return_value = GetDocumentGroupV2Response.model_construct(data=data)
-        mock_client.get_document.return_value = _make_document_response(parent_id="deep1")
-        mock_client.get_folder_tree.return_value = _folder_tree()
+        mock_client.get_document.return_value = _make_document_response(doc_id="m1", parent_id="deep1")
 
-        result = _get_document(mock_client, "tok", "dg", "document_group", resolve_folder_names=True)
+        result = _get_document(mock_client, "tok", "dg", "document_group")
 
-        assert result.entity_type == "document_group"
-        assert result.folder_name == "Folder 2"  # group-level, from data.folder_id
-        assert [d.folder_name for d in result.documents] == ["Deep One", "Deep One"]  # member parent_id
-        # members are fetched with is_custom_folder to get their real (immediate) folder
-        assert mock_client.get_document.call_args_list[0].kwargs == {"is_custom_folder": True}
+        mock_client.get_folder_tree.assert_not_called()
+        mock_client.get_document.assert_called_once_with("tok", "m1")
+        assert not hasattr(result, "folder_id")
+        assert not any(hasattr(doc, "folder_id") for doc in result.documents)
 
-    def test_single_document_flow_requests_immediate_folder_and_resolves_nested_name(self, mock_client: MagicMock) -> None:
-        """End-to-end: the document fetch asks for the immediate folder (is_custom_folder),
-        and its nested folder_id resolves to the real subfolder name via the tree."""
+    def test_v2_auto_detect_single_document_folder_free(self, mock_client: MagicMock) -> None:
+        """Auto-detect (entity_type=None) resolves a document without any folder work."""
         mock_client.get_document.return_value = _make_document_response(doc_id="docid", parent_id="deep1")
-        mock_client.get_folder_tree.return_value = _folder_tree()
 
-        # entity_type=None exercises the auto-detect probe (the common get_document path).
-        result = _get_document(mock_client, "tok", "docid", None, resolve_folder_names=True)
+        result = _get_document(mock_client, "tok", "docid", None)
 
-        mock_client.get_document.assert_called_once_with("tok", "docid", is_custom_folder=True)
-        assert result.documents[0].folder_id == "deep1"
-        assert result.documents[0].folder_name == "Deep One"
+        mock_client.get_document.assert_called_once_with("tok", "docid")
+        mock_client.get_folder_tree.assert_not_called()
+        assert result.entity_type == "document"
 
-
-def _capture_get_document_tool() -> Any:
-    """Register the signnow tools and return the get_document tool function."""
-    from fastmcp import FastMCP
-
-    from sn_mcp_server.tools import signnow
-
-    mcp: Any = FastMCP("test-get-document")
-    captured: dict[str, Any] = {}
-    original_tool = mcp.tool
-
-    def recording_tool(*args: Any, **kwargs: Any) -> Any:
-        decorator = original_tool(*args, **kwargs)
-        tool_name: str = kwargs.get("name", "")
-
-        def wrap(fn: Any) -> Any:
-            captured[tool_name] = fn
-            return decorator(fn)
-
-        return wrap
-
-    mcp.tool = recording_tool
-    signnow.bind(mcp, None)
-    return captured["get_document"]
-
-
-class TestGetDocumentTool:
-    """Tests for the get_document MCP tool wrapper."""
-
-    async def test_requests_folder_name_resolution(self) -> None:
-        """The tool delegates to _get_document with resolve_folder_names=True."""
-        tool = _capture_get_document_tool()
-        ctx = AsyncMock()
-        expected = DocumentGroup(
-            last_updated=0,
-            entity_id="grp",
-            group_name="Group",
-            entity_type="document",
-            invite=None,
-            documents=[],
+    def test_v2_auto_detect_document_group_folder_free(self, mock_client: MagicMock) -> None:
+        """Auto-detect falls back to the document-group probe without is_custom_folder."""
+        from signnow_client.exceptions import SignNowAPINotFoundError
+        from signnow_client.models.document_groups import (
+            DocumentGroupV2Data,
+            DocumentGroupV2Document,
+            GetDocumentGroupV2Response,
         )
 
+        def _get_document_side_effect(token: str, doc_id: str, **kwargs: Any) -> Any:
+            if doc_id == "dg":
+                raise SignNowAPINotFoundError("not a document")
+            return _make_document_response(doc_id=doc_id, parent_id="deep1")
+
+        mock_client.get_document.side_effect = _get_document_side_effect
+        data = DocumentGroupV2Data.model_construct(
+            id="dg",
+            name="DG",
+            folder_id="folder2",
+            created=0,
+            state="pending",
+            invite_id=None,
+            pending_step_id=None,
+            last_invite_id=None,
+            documents=[DocumentGroupV2Document.model_construct(id="m1", field_invites=[])],
+            freeform_invite=None,
+        )
+        mock_client.get_document_group_v2.return_value = GetDocumentGroupV2Response.model_construct(data=data)
+
+        result = _get_document(mock_client, "tok", "dg", None)
+
+        mock_client.get_folder_tree.assert_not_called()
+        assert result.entity_type == "document_group"
+        assert mock_client.get_document.call_args_list[-1] == (("tok", "m1"), {})
+
+    def test_v2_template_group_folder_free(self, mock_client: MagicMock) -> None:
+        """A template group base fetch pulls members without is_custom_folder and sets no folder."""
+        tg = MagicMock()
+        tg.id = "tg"
+        tg.group_name = "TG"
+        tg.folder_id = "folder1"
+        member = MagicMock()
+        member.id = "t1"
+        tg.templates = [member]
+        mock_client.get_document_group_template.return_value = tg
+        mock_client.get_document.return_value = _make_document_response(doc_id="t1", parent_id="deep1")
+
+        result = _get_document(mock_client, "tok", "tg", "template_group")
+
+        mock_client.get_folder_tree.assert_not_called()
+        mock_client.get_document.assert_called_once_with("tok", "t1")
+        assert result.entity_type == "template_group"
+        assert not hasattr(result, "folder_id")
+
+    def test_v2_tool_delegates_without_folder_flag(self) -> None:
+        """The v2 get_document tool resolves the token then calls _get_document with no folder flag."""
+        tool = _capture_get_document_tools()["2.0"]
+        ctx = AsyncMock()
+        client = MagicMock()
+        expected = DocumentGroup(last_updated=0, entity_id="grp", group_name="G", entity_type="document", invite=None, documents=[])
+
         with (
-            patch("sn_mcp_server.tools.signnow._get_token_and_client", return_value=("tok", MagicMock())),
+            patch("sn_mcp_server.tools.signnow._get_token_and_client", return_value=("tok", client)),
             patch("sn_mcp_server.tools.signnow._get_document", return_value=expected) as mock_get,
         ):
             result = tool(ctx, "grp", "document")
 
         assert result == expected
-        assert mock_get.call_args.kwargs["resolve_folder_names"] is True
+        mock_get.assert_called_once_with(client, "tok", "grp", "document")
+
+
+class TestResolveFolderName:
+    """Tests for the v3 _resolve_folder_name helper."""
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        return MagicMock()
+
+    def test_none_skips_tree_call(self, mock_client: MagicMock) -> None:
+        """folder_id=None returns None and makes no get_folder_tree call."""
+        assert _resolve_folder_name(mock_client, "tok", None) is None
+        mock_client.get_folder_tree.assert_not_called()
+
+    def test_resolves_deeply_nested(self, mock_client: MagicMock) -> None:
+        """A subfolder several levels deep resolves from the single nested tree call."""
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        assert _resolve_folder_name(mock_client, "tok", "deep1") == "Deep One"
+        mock_client.get_folder_tree.assert_called_once_with("tok")
+
+    def test_resolves_root_and_team(self, mock_client: MagicMock) -> None:
+        """Root folder and team-folder subfolders resolve from the tree."""
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        assert _resolve_folder_name(mock_client, "tok", "root_folder_id") == "Root Folder"
+        assert _resolve_folder_name(mock_client, "tok", "team_nested") == "Team Nested"
+
+    def test_absent_returns_none(self, mock_client: MagicMock) -> None:
+        """A folder absent from the tree returns None (caller keeps the raw folder_id)."""
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        assert _resolve_folder_name(mock_client, "tok", "ghost") is None
+
+
+class TestEntityFolderId:
+    """Tests for the v3 _entity_folder_id helper (dispatch on resolved entity_type)."""
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        return MagicMock()
+
+    def test_single_document(self, mock_client: MagicMock) -> None:
+        """'document' re-reads via get_document(is_custom_folder=True) and returns parent_id."""
+        mock_client.get_document.return_value = _make_document_response(doc_id="doc", parent_id="deep1")
+
+        assert _entity_folder_id(mock_client, "tok", "doc", "document") == "deep1"
+        mock_client.get_document.assert_called_once_with("tok", "doc", is_custom_folder=True)
+
+    def test_document_group(self, mock_client: MagicMock) -> None:
+        """'document_group' returns the group's data.folder_id."""
+        mock_client.get_document_group_v2.return_value.data.folder_id = "folder2"
+
+        assert _entity_folder_id(mock_client, "tok", "dg", "document_group") == "folder2"
+        mock_client.get_document_group_v2.assert_called_once_with("tok", "dg")
+
+    def test_template_group(self, mock_client: MagicMock) -> None:
+        """'template_group' returns the template group's folder_id."""
+        mock_client.get_document_group_template.return_value.folder_id = "folder1"
+
+        assert _entity_folder_id(mock_client, "tok", "tg", "template_group") == "folder1"
+        mock_client.get_document_group_template.assert_called_once_with("tok", "tg")
+
+
+def _v3_base_group(entity_type: str, entity_id: str = "e1", documents: list[DocumentGroupDocument] | None = None) -> DocumentGroup:
+    """A folder-free base DocumentGroup as the shared base returns it."""
+    return DocumentGroup(
+        last_updated=7,
+        entity_id=entity_id,
+        group_name="Entity",
+        entity_type=entity_type,
+        invite=None,
+        documents=documents if documents is not None else [_doc("m1")],
+    )
+
+
+class TestGetDocumentV3:
+    """Tests for _get_document_v3 (frozen base + entity-level folder info)."""
+
+    @pytest.fixture
+    def mock_client(self) -> MagicMock:
+        return MagicMock()
+
+    def test_single_document_resolves_entity_folder(self, mock_client: MagicMock) -> None:
+        """A single document resolves entity folder_id/name; members carry no folder fields."""
+        mock_client.get_document.return_value = _make_document_response(doc_id="docid", parent_id="deep1")
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        with patch("sn_mcp_server.tools.document._get_document", return_value=_v3_base_group("document", "docid", [_doc("docid")])):
+            result = _get_document_v3(mock_client, "tok", "docid", None)
+
+        assert isinstance(result, DocumentGroupV3)
+        assert result.folder_id == "deep1"
+        assert result.folder_name == "Deep One"
+        assert not hasattr(result.documents[0], "folder_id")
+
+    def test_document_group_entity_level_only(self, mock_client: MagicMock) -> None:
+        """A document group resolves folder at entity level only; members are not re-fetched."""
+        mock_client.get_document_group_v2.return_value.data.folder_id = "folder2"
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        with patch("sn_mcp_server.tools.document._get_document", return_value=_v3_base_group("document_group", "dg", [_doc("m1"), _doc("m2")])):
+            result = _get_document_v3(mock_client, "tok", "dg", "document_group")
+
+        assert result.folder_id == "folder2"
+        assert result.folder_name == "Folder 2"
+        assert all(isinstance(doc, DocumentGroupDocument) for doc in result.documents)
+        mock_client.get_document.assert_not_called()
+
+    def test_template_group_entity_level(self, mock_client: MagicMock) -> None:
+        """A template group resolves folder at entity level."""
+        mock_client.get_document_group_template.return_value.folder_id = "folder1"
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        with patch("sn_mcp_server.tools.document._get_document", return_value=_v3_base_group("template_group", "tg")):
+            result = _get_document_v3(mock_client, "tok", "tg", "template_group")
+
+        assert result.folder_id == "folder1"
+        assert result.folder_name == "Folder 1"
+        assert result.entity_type == "template_group"
+
+    def test_no_folder_skips_tree(self, mock_client: MagicMock) -> None:
+        """parent_id=None yields null folder fields and skips the tree call."""
+        mock_client.get_document.return_value = _make_document_response(doc_id="docid", parent_id=None)
+
+        with patch("sn_mcp_server.tools.document._get_document", return_value=_v3_base_group("document", "docid", [_doc("docid")])):
+            result = _get_document_v3(mock_client, "tok", "docid", "document")
+
+        assert result.folder_id is None
+        assert result.folder_name is None
+        mock_client.get_folder_tree.assert_not_called()
+
+    def test_folder_absent_keeps_id_null_name(self, mock_client: MagicMock) -> None:
+        """A folder_id absent from the tree keeps the id but leaves folder_name None."""
+        mock_client.get_document.return_value = _make_document_response(doc_id="docid", parent_id="ghost")
+        mock_client.get_folder_tree.return_value = _folder_tree()
+
+        with patch("sn_mcp_server.tools.document._get_document", return_value=_v3_base_group("document", "docid", [_doc("docid")])):
+            result = _get_document_v3(mock_client, "tok", "docid", "document")
+
+        assert result.folder_id == "ghost"
+        assert result.folder_name is None
+
+    def test_entity_not_found_raises(self, mock_client: MagicMock) -> None:
+        """A not-found ValueError from the base propagates and no folder calls are made."""
+        with patch(
+            "sn_mcp_server.tools.document._get_document",
+            side_effect=ValueError("Entity with ID missing not found as either document, template, template group or document group"),
+        ):
+            with pytest.raises(ValueError, match="not found as either document"):
+                _get_document_v3(mock_client, "tok", "missing", None)
+
+        mock_client.get_folder_tree.assert_not_called()
+        mock_client.get_document.assert_not_called()
+        mock_client.get_document_group_v2.assert_not_called()
+        mock_client.get_document_group_template.assert_not_called()
+
+
+def _capture_get_document_tools() -> dict[str, Any]:
+    """Register all tool versions and return {version: fn} for the get_document tool."""
+    from fastmcp import FastMCP
+
+    from sn_mcp_server.tools import register_tools
+
+    mcp: Any = FastMCP("test-get-document-versions")
+    captured: dict[str, Any] = {}
+    original_tool = mcp.tool
+
+    def recording_tool(*args: Any, **kwargs: Any) -> Any:
+        decorator = original_tool(*args, **kwargs)
+        name: str = kwargs.get("name", "")
+        version: str = kwargs.get("version", "")
+
+        def wrap(fn: Any) -> Any:
+            if name == "get_document":
+                captured[version] = fn
+            return decorator(fn)
+
+        return wrap
+
+    mcp.tool = recording_tool
+
+    class _StubCfg:
+        pass
+
+    register_tools(mcp, _StubCfg())  # type: ignore[arg-type]
+    return captured
+
+
+def _return_annotation_name(fn: Any) -> str:
+    """Return the name of a function's return annotation (handles string annotations)."""
+    ann = fn.__annotations__["return"]
+    return ann if isinstance(ann, str) else ann.__name__
+
+
+class TestGetDocumentV3Tool:
+    """Tests for the get_document@3.0 MCP tool wrapper and per-version return types."""
+
+    def test_tool_delegates_to_get_document_v3(self) -> None:
+        """The v3 tool resolves the token then calls _get_document_v3 and returns its result."""
+        tool = _capture_get_document_tools()["3.0"]
+        ctx = AsyncMock()
+        client = MagicMock()
+        expected = DocumentGroupV3(last_updated=0, entity_id="grp", group_name="G", entity_type="document", documents=[])
+
+        with (
+            patch("sn_mcp_server.tools.signnow_v3._get_token_and_client", return_value=("tok", client)),
+            patch("sn_mcp_server.tools.signnow_v3._get_document_v3", return_value=expected) as mock_v3,
+        ):
+            result = tool(ctx, "grp", "document")
+
+        assert result == expected
+        mock_v3.assert_called_once_with(client, "tok", "grp", "document")
+
+    def test_return_types_per_version(self) -> None:
+        """v1 → DocumentGroupV1, v2 → DocumentGroup, v3 → DocumentGroupV3."""
+        tools = _capture_get_document_tools()
+        assert _return_annotation_name(tools["1.0"]) == "DocumentGroupV1"
+        assert _return_annotation_name(tools["2.0"]) == "DocumentGroup"
+        assert _return_annotation_name(tools["3.0"]) == "DocumentGroupV3"
