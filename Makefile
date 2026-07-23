@@ -6,3 +6,7 @@ PORT ?= 8001
 up:
 	pip install -e .
 	sn-mcp http --host $(HOST) --port $(PORT)
+
+uv-up:
+	uv pip install -e .
+	uv run sn-mcp http --host $(HOST) --port $(PORT)

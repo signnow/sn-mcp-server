@@ -91,6 +91,43 @@ def _get_token_and_client(token_provider: TokenProvider) -> tuple[str, SignNowAP
     return token, client
 
 
+async def _resolve_upload_resource(ctx: Context, resource_uri: str | None, filename: str | None) -> tuple[bytes | None, str | None]:
+    """Read an MCP resource attachment for the upload_document tool.
+
+    No-op (returns ``(None, filename)``) when ``resource_uri`` is None — the caller is using
+    file_path or file_url instead. Otherwise reads the resource, validates it carries binary
+    content, and infers ``filename`` from the URI when the caller didn't supply one.
+
+    Returns:
+        Tuple of (resource_bytes, effective_filename).
+
+    Raises:
+        ValueError: resource_uri is empty, the resource has no/text content, or filename
+                    cannot be inferred and was not provided.
+    """
+    if resource_uri is None:
+        return None, filename
+
+    # L-5: Validate resource_uri is not empty/whitespace
+    if not resource_uri.strip():
+        raise ValueError("resource_uri must not be empty. Provide a valid MCP resource URI.")
+    result: ResourceResult = await ctx.read_resource(resource_uri)
+    # H-1: Guard against empty contents list
+    if not result.contents:
+        raise ValueError(f"Resource at {resource_uri!r} returned no content. Ensure the URI points to a valid binary file.")
+    first: ResourceContent = result.contents[0]
+    if not isinstance(first.content, bytes):
+        raise ValueError(f"Resource at {resource_uri} returned text, expected binary file content. Ensure the resource provides raw file bytes.")
+    resource_bytes = first.content
+    if filename is None:
+        parsed_name = pathlib.PurePosixPath(urlparse(str(resource_uri)).path).name
+        # M-5: Raise explicit error when filename cannot be inferred from URI
+        if not parsed_name:
+            raise ValueError(f"Cannot infer filename from resource URI {resource_uri!r}. Provide the 'filename' parameter explicitly.")
+        filename = parsed_name
+    return resource_bytes, filename
+
+
 def _normalize_order_field(raw: list[Any]) -> list[Any]:
     """Ensure each element has an 'order' field, defaulting to position+1 if missing."""
     for idx, item in enumerate(raw):
@@ -931,8 +968,8 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             "On success the response includes a 'next_steps' array (prepare invite / send for signing / self-sign) "
             "and an 'agent_guidance' string — present those options to the user and wait for them to choose "
             "before calling any follow-up tool. "
-            "NOTE: For URL uploads, the returned filename is locally inferred and may differ from "
-            "how SignNow names the document."
+            "NOTE: For URL uploads without an explicit filename, the returned filename is locally inferred "
+            "and may differ from how SignNow names the document; pass filename to set the name explicitly."
         ),
         annotations=ToolAnnotations(
             title="Upload document",
@@ -1016,25 +1053,7 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
         if provided == 0:
             raise ValueError("Provide one of: resource_uri, file_path, or file_url")
 
-        resource_bytes: bytes | None = None
-        if resource_uri is not None:
-            # L-5: Validate resource_uri is not empty/whitespace
-            if not resource_uri.strip():
-                raise ValueError("resource_uri must not be empty. Provide a valid MCP resource URI.")
-            result: ResourceResult = await ctx.read_resource(resource_uri)
-            # H-1: Guard against empty contents list
-            if not result.contents:
-                raise ValueError(f"Resource at {resource_uri!r} returned no content. Ensure the URI points to a valid binary file.")
-            first: ResourceContent = result.contents[0]
-            if not isinstance(first.content, bytes):
-                raise ValueError(f"Resource at {resource_uri} returned text, expected binary file content. Ensure the resource provides raw file bytes.")
-            resource_bytes = first.content
-            if filename is None:
-                parsed_name = pathlib.PurePosixPath(urlparse(str(resource_uri)).path).name
-                # M-5: Raise explicit error when filename cannot be inferred from URI
-                if not parsed_name:
-                    raise ValueError(f"Cannot infer filename from resource URI {resource_uri!r}. Provide the 'filename' parameter explicitly.")
-                filename = parsed_name
+        resource_bytes, filename = await _resolve_upload_resource(ctx, resource_uri, filename)
 
         # H-3: Run synchronous _upload_document off the async event loop
         return await asyncio.to_thread(

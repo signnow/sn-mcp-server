@@ -74,7 +74,6 @@ _V2_TOOLS_WITH_V1_COMPAT = {
 
 # Tools that only exist in v2.0 (new since v1.0.1)
 _V2_ONLY_TOOLS = {
-    "upload_document",
     "create_template",
     "send_invite_reminder",
     "view_document",
@@ -82,6 +81,11 @@ _V2_ONLY_TOOLS = {
     "cancel_invite",
     "update_invite_recipient",
     "rename_entity",
+}
+
+# Tools with a frozen v2.0 contract and a v3.0 contract change (new args go to v3.0 per AGENTS.md)
+_V3_TOOLS_WITH_V2_COMPAT = {
+    "upload_document",  # v3.0 adds the kind parameter (document|template)
 }
 
 # Compound tools removed in v2 — preserved only as v1.0 in signnow_v1.py
@@ -131,6 +135,14 @@ def test_changed_tools_have_both_versions(tool_name: str) -> None:
     assert tool_name in _TOOL_VERSIONS, f"Tool {tool_name!r} not registered at all."
     versions = sorted(_TOOL_VERSIONS[tool_name])
     assert versions == ["1.0", "2.0"], f"Tool {tool_name!r}: expected ['1.0', '2.0'], got {versions}"
+
+
+@pytest.mark.parametrize("tool_name", sorted(_V3_TOOLS_WITH_V2_COMPAT))
+def test_v3_contract_changes_keep_v2_frozen(tool_name: str) -> None:
+    """A v3.0 contract change keeps the frozen v2.0 registration alongside it (no v1.0 predecessor)."""
+    assert tool_name in _TOOL_VERSIONS, f"Tool {tool_name!r} not registered at all."
+    versions = sorted(_TOOL_VERSIONS[tool_name])
+    assert versions == ["2.0", "3.0"], f"Tool {tool_name!r}: expected ['2.0', '3.0'], got {versions}"
 
 
 @pytest.mark.parametrize("tool_name", sorted(_COMPOUND_V1_ONLY_TOOLS))

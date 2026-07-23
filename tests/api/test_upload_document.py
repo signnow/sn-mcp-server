@@ -51,6 +51,41 @@ class TestUploadDocumentAPI:
         assert "a.pdf" in body
         assert "check_fields" in body
         assert "true" in body
+        # make_template must be ABSENT by default — the API reads it with PHP's !empty(),
+        # so even the string "false" would be truthy and silently create a template.
+        assert "make_template" not in body
+
+        assert result.id == fixture["id"]
+
+    def test_upload_document_make_template_request(
+        self,
+        client: SignNowAPIClient,
+        mock_api: respx.MockRouter,
+        token: str,
+        load_fixture: Callable[[str], dict[str, Any]],
+    ) -> None:
+        """POST /document with make_template=True → flag present in multipart body."""
+        # ARRANGE
+        fixture = load_fixture("post_upload_document__success")
+        route = mock_api.post("/document").respond(200, json=fixture)
+
+        # ACT
+        result = client.upload_document(token=token, file_content=b"pdf", filename="a.pdf", check_fields=True, make_template=True)
+
+        # ASSERT — call was made
+        assert route.called
+        request = route.calls.last.request
+
+        assert request.method == "POST"
+        assert request.url.path == "/document"
+        assert request.headers["authorization"] == f"Bearer {token}"
+
+        # Assert multipart body contains file part, check_fields, and make_template flag
+        body = request.content.decode("latin-1")
+        assert "a.pdf" in body
+        assert "check_fields" in body
+        assert "make_template" in body
+        assert "true" in body
 
         assert result.id == fixture["id"]
 
@@ -83,7 +118,35 @@ class TestUploadDocumentAPI:
         body = json.loads(request.content)
         assert body["url"] == "https://x.com/f.pdf"
         assert body["check_fields"] is True
+        # Optional fields must NOT be sent when unset — they are excluded when None.
+        assert "make_template" not in body
+        assert "name" not in body
 
+        assert result.id == fixture["id"]
+
+    def test_create_from_url_make_template_request(
+        self,
+        client: SignNowAPIClient,
+        mock_api: respx.MockRouter,
+        token: str,
+        load_fixture: Callable[[str], dict[str, Any]],
+    ) -> None:
+        """POST /v2/documents/url with make_template=True and name → both present in JSON body."""
+        # ARRANGE
+        fixture = load_fixture("post_create_document_from_url__success")
+        route = mock_api.post("/v2/documents/url").respond(200, json=fixture)
+
+        # ACT
+        result = client.create_document_from_url(
+            token=token,
+            request_data=CreateDocumentFromUrlRequest(url="https://x.com/f.pdf", check_fields=True, make_template=True, name="My Template.pdf"),
+        )
+
+        # ASSERT
+        assert route.called
+        body = json.loads(route.calls.last.request.content)
+        assert body["make_template"] is True
+        assert body["name"] == "My Template.pdf"
         assert result.id == fixture["id"]
 
     def test_upload_document_not_found(
