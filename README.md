@@ -440,7 +440,7 @@ Each tool is described concisely; use an MCP client (e.g., Inspector) to view ex
 * **`get_invite_status`** — Current invite status/steps for document or group. Covers field invites and freeform invites (field path preferred when both exist). Response includes `invite_mode` (`field` or `freeform`). For freeform document groups, signer emails come from the group `documents` list (`signature_requests`).
 * **`get_document_download_link`** — Direct download link (merged output for groups).
 * **`get_signing_link`** — Get signing link for a document or document group.
-* **`get_document`** — Normalized document/group structure with field values.
+* **`get_document`** — Normalized document/group structure with field values, plus the folder the entity is stored in (`folder_id`/`folder_name`) at v3.0.
 * **`update_document_fields`** — Prefill text fields in individual documents.
 * **`upload_document`** — Upload a file from a local file path (`file_path`), public URL (`file_url`), or MCP resource attachment (`resource_uri`). Set `kind='template'` (default `'document'`) to store it as a reusable template instead of a regular document (the returned `document_id` is then a template ID and `next_steps` switch to the template follow-ups). For `file_path`, the resolved path must stay within the configured safe base directory (by default, the user's home directory); paths outside that base fail validation. Supported: PDF, DOC, DOCX, PNG, JPG, JPEG. Max 40 MB. Returns `document_id`, `filename`, `source`.
 * **`send_invite_reminder`** — Send a signing reminder to pending signers on a document or document group.

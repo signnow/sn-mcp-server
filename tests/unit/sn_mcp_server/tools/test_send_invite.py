@@ -345,7 +345,7 @@ class TestSendDocumentFreeformInvite:
             MagicMock(id="inv_c"),
         ]
         mock_client.cfg.app_base = "https://app.test.signnow.com"
-        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc", roles=[])
+        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc", roles=[], parent_id=None)
         orders = [
             InviteOrder(
                 order=1,
@@ -587,7 +587,7 @@ class TestSendInviteSelfSign:
 
     async def test_self_sign_builds_synthetic_orders_from_user_info(self, mock_client: MagicMock) -> None:
         """When self_sign=True and entity has no fields, the tool fills in the user as sole recipient and returns a SendInviteResponse whose link is populated."""
-        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc")
+        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc", parent_id=None)
         mock_client.get_user_info.return_value = MagicMock(primary_email="me@co.com")
         mock_client.create_document_freeform_invite.return_value = MagicMock(id="self_inv")
 
@@ -617,7 +617,7 @@ class TestSendInviteSelfSign:
         # is already empty (the wrapper passes []).
         mock_client = MagicMock()
         mock_client.cfg.app_base = "https://app.test.signnow.com"
-        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc")
+        mock_client.get_document.return_value = MagicMock(fields=[], template=False, id="doc1", document_name="doc", parent_id=None)
         mock_client.get_user_info.return_value = MagicMock(primary_email="me@co.com")
         mock_client.create_document_freeform_invite.return_value = MagicMock(id="inv")
 

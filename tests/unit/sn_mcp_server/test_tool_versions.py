@@ -69,7 +69,11 @@ _V2_TOOLS_WITH_V1_COMPAT = {
     "create_embedded_invite",
     "create_embedded_sending",
     "create_embedded_editor",
-    "get_document",
+}
+
+# Tools with all three versions: v1.0 (compat) + frozen v2.0 + v3.0 contract change
+_V1_V2_V3_TOOLS = {
+    "get_document",  # v3.0 adds entity-level folder info (folder_id/folder_name)
 }
 
 # Tools that only exist in v2.0 (new since v1.0.1)
@@ -143,6 +147,14 @@ def test_v3_contract_changes_keep_v2_frozen(tool_name: str) -> None:
     assert tool_name in _TOOL_VERSIONS, f"Tool {tool_name!r} not registered at all."
     versions = sorted(_TOOL_VERSIONS[tool_name])
     assert versions == ["2.0", "3.0"], f"Tool {tool_name!r}: expected ['2.0', '3.0'], got {versions}"
+
+
+@pytest.mark.parametrize("tool_name", sorted(_V1_V2_V3_TOOLS))
+def test_registered_at_v1_v2_v3(tool_name: str) -> None:
+    """Tools carrying a v3.0 contract change over a v1.0-compat + frozen v2.0 base have all three versions."""
+    assert tool_name in _TOOL_VERSIONS, f"Tool {tool_name!r} not registered at all."
+    versions = sorted(_TOOL_VERSIONS[tool_name])
+    assert versions == ["1.0", "2.0", "3.0"], f"Tool {tool_name!r}: expected ['1.0', '2.0', '3.0'], got {versions}"
 
 
 @pytest.mark.parametrize("tool_name", sorted(_COMPOUND_V1_ONLY_TOOLS))

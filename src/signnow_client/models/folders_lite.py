@@ -328,6 +328,11 @@ class FolderLite(SNBaseModel):
     team_id: str | None = None
     team_type: str | None = None
 
+    # Nested subfolders — populated only when the folder listing is requested with
+    # subfolder-data=1 & include_documents_subfolders=1, which returns the hierarchy
+    # recursively. Empty on the plain get_folders listing.
+    sub_folders: list[FolderLite] = Field(default_factory=list)
+
 
 class GetFoldersResponseLite(SNBaseModel):
     id: str

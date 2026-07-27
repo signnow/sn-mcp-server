@@ -14,6 +14,7 @@ from signnow_client.models.document_groups import (
     GetDocumentGroupTemplateResponse,
     GetDocumentGroupV2Response,
 )
+from signnow_client.models.folders_lite import FolderLite
 from signnow_client.models.templates_and_documents import (
     CreateDocumentFromUrlRequest,
     DocumentResponse,
@@ -30,6 +31,7 @@ from .models import (
     UpdateDocumentFieldsResult,
     UploadDocumentResponse,
 )
+from .models_v3 import DocumentGroupV3
 
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"})
 MAX_FILE_SIZE_BYTES: int = 40 * 1024 * 1024  # SignNow API limit
@@ -354,7 +356,12 @@ def _get_full_document(client: SignNowAPIClient, token: str, document_id: str, d
                 )
             )
 
-    return DocumentGroupDocument(id=document_response.id, name=document_response.document_name, roles=[role.name for role in document_response.roles], fields=document_fields)
+    return DocumentGroupDocument(
+        id=document_response.id,
+        name=document_response.document_name,
+        roles=[role.name for role in document_response.roles],
+        fields=document_fields,
+    )
 
 
 def _get_full_document_group(client: SignNowAPIClient, token: str, group_data: GetDocumentGroupV2Response) -> DocumentGroup:
@@ -441,7 +448,20 @@ def _get_full_template_group(client: SignNowAPIClient, token: str, template_grou
     )
 
 
-def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_type: Literal["document", "document_group", "template", "template_group"] | None = None) -> DocumentGroup:
+def _index_folder_tree(folders: list[FolderLite], name_by_id: dict[str, str]) -> None:
+    """Record ``id → name`` for every folder in a nested listing, recursing into ``sub_folders``."""
+    for folder in folders:
+        name_by_id[folder.id] = folder.name
+        if folder.sub_folders:
+            _index_folder_tree(folder.sub_folders, name_by_id)
+
+
+def _get_document(
+    client: SignNowAPIClient,
+    token: str,
+    entity_id: str,
+    entity_type: Literal["document", "document_group", "template", "template_group"] | None = None,
+) -> DocumentGroup:
     """
     Get document or document group information with full field values.
 
@@ -460,6 +480,12 @@ def _get_document(client: SignNowAPIClient, token: str, entity_id: str, entity_t
     Raises:
         ValueError: If entity not found as either document or document group
     """
+
+    return _resolve_entity_group(client, token, entity_id, entity_type)
+
+
+def _resolve_entity_group(client: SignNowAPIClient, token: str, entity_id: str, entity_type: Literal["document", "document_group", "template", "template_group"] | None = None) -> DocumentGroup:
+    """Dispatch to the correct fetcher based on entity_type, auto-detecting when absent."""
 
     # Auto-detect entity type when not provided by probing document → document_group → template_group.
     # Each fallback swallows the prior probe's error because "not found as this type" is the
@@ -529,6 +555,106 @@ def _get_single_document_as_group(client: SignNowAPIClient, token: str, document
         invite=invite,
         freeform_invite_id=freeform_invite_id,
         documents=[full_document],
+    )
+
+
+def _entity_folder_id(
+    client: SignNowAPIClient,
+    token: str,
+    entity_id: str,
+    entity_type: str,
+) -> str | None:
+    """Resolve the folder_id of an already-resolved entity from its top-level response.
+
+    Dispatches on the entity_type that the base ``_get_document`` resolved:
+      - "document"        (single document OR single template)
+                          → client.get_document(token, entity_id, is_custom_folder=True).parent_id
+      - "document_group"  → client.get_document_group_v2(token, entity_id).data.folder_id
+      - "template_group"  → client.get_document_group_template(token, entity_id).folder_id
+
+    This RE-READS the entity's top-level response the base fetch already read
+    (+1 top-level API call — accepted tradeoff). Member documents are NOT re-fetched.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token for authentication
+        entity_id: ID of the already-resolved entity
+        entity_type: Resolved entity type ('document', 'document_group', or 'template_group')
+
+    Returns:
+        The folder_id, or None when the entity has no folder.
+    """
+    if entity_type == "document_group":
+        return client.get_document_group_v2(token, entity_id).data.folder_id
+    if entity_type == "template_group":
+        return client.get_document_group_template(token, entity_id).folder_id
+    # entity_type == "document" (single document or single template)
+    return client.get_document(token, entity_id, is_custom_folder=True).parent_id
+
+
+def _resolve_folder_name(client: SignNowAPIClient, token: str, folder_id: str | None) -> str | None:
+    """Resolve a folder_id to its display name via a single get_folder_tree call.
+
+    Returns None and makes NO API call when folder_id is None. Otherwise fetches the
+    full nested hierarchy (personal + team folders) once, indexes it recursively via
+    ``_index_folder_tree``, and returns the matching name — or None when the folder is
+    absent from the tree (deleted/inaccessible), while the caller keeps the raw folder_id.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token for authentication
+        folder_id: Folder ID to resolve, or None
+
+    Returns:
+        The folder's display name, or None when folder_id is None or absent from the tree.
+    """
+    if folder_id is None:
+        return None
+
+    tree = client.get_folder_tree(token)
+    name_by_id: dict[str, str] = {tree.id: tree.name}
+    _index_folder_tree(tree.folders, name_by_id)
+    return name_by_id.get(folder_id)
+
+
+def _get_document_v3(
+    client: SignNowAPIClient,
+    token: str,
+    entity_id: str,
+    entity_type: Literal["document", "document_group", "template", "template_group"] | None = None,
+) -> DocumentGroupV3:
+    """Get document/template/group info (frozen v2 base) PLUS entity-level folder info.
+
+    Receives ``token`` as a parameter (business logic never resolves tokens). Calls the
+    shared folder-free base, then layers folder resolution on top and projects into
+    DocumentGroupV3.
+
+    Args:
+        client: SignNow API client instance
+        token: Access token for authentication
+        entity_id: ID of the document, template, template group or document group
+        entity_type: Type of entity (optional; auto-detected when absent)
+
+    Returns:
+        DocumentGroupV3 with the frozen v2 fields plus entity-level folder_id/folder_name
+
+    Raises:
+        ValueError: entity not found as document, template, template group, or document
+            group (propagated unchanged from the shared base ``_get_document``).
+    """
+    group = _get_document(client, token, entity_id, entity_type)
+    folder_id = _entity_folder_id(client, token, group.entity_id, group.entity_type)
+    folder_name = _resolve_folder_name(client, token, folder_id)
+    return DocumentGroupV3(
+        last_updated=group.last_updated,
+        entity_id=group.entity_id,
+        group_name=group.group_name,
+        entity_type=group.entity_type,
+        folder_id=folder_id,
+        folder_name=folder_name,
+        invite=group.invite,
+        freeform_invite_id=group.freeform_invite_id,
+        documents=group.documents,
     )
 
 

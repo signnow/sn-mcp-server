@@ -155,7 +155,7 @@ class DocumentClientMixin(SignNowAPIClientBase):
         except Exception as e:
             raise SignNowAPIError(f"Unexpected error in prefill_text_fields request: {e}") from e
 
-    def get_document(self, token: str, document_id: str) -> DocumentResponse:
+    def get_document(self, token: str, document_id: str, is_custom_folder: bool = False) -> DocumentResponse:
         """
         Get document details.
 
@@ -165,15 +165,17 @@ class DocumentClientMixin(SignNowAPIClientBase):
         Args:
             token: Access token for authentication
             document_id: ID of the document to retrieve
-            include_integration_objects: Include smart fields in response
+            is_custom_folder: When True, ``parent_id`` is the document's immediate
+                (possibly nested) folder instead of the top-level system folder.
 
         Returns:
             Validated DocumentResponse model with complete document information
         """
 
         headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
+        params = {"is_custom_folder": "true"} if is_custom_folder else None
 
-        return self._get(f"/document/{document_id}", headers=headers, validate_model=DocumentResponse)
+        return self._get(f"/document/{document_id}", headers=headers, params=params, validate_model=DocumentResponse)
 
     def merge_documents(self, token: str, request_data: MergeDocumentsRequest) -> MergeDocumentsResponse:
         """
