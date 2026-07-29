@@ -820,7 +820,12 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
     @mcp.tool(
         name="get_signing_link",
         version="1.0",
-        description="Get signing link for a document or document group",
+        description=(
+            "Get a signing link for the CURRENT (authenticated) user to sign a document or document group themselves. "
+            "Use this only when the user wants to sign the document on their own. "
+            "This is NOT for sending a document to someone else for signature — for that, use send_invite "
+            "(email invite) or the embedded invite tools instead."
+        ),
         annotations=ToolAnnotations(
             title="Get signing link",
             readOnlyHint=True,
@@ -838,7 +843,10 @@ def bind(mcp: Any, cfg: Any) -> None:  # noqa: ANN401
             Field(description="Type of entity: 'document' or 'document_group' (optional). If you're passing it, make sure you know what type you have. If it's not found, try using a different type."),
         ] = None,
     ) -> SigningLinkResponse:
-        """Get signing link for a document or document group.
+        """Get a signing link for the current (authenticated) user to sign a document or document group.
+
+        Use this only when the user wants to sign the document themselves. It is NOT for sending a
+        document to another person for signature — use send_invite or the embedded invite tools for that.
 
         Args:
             entity_id: ID of the document or document group
